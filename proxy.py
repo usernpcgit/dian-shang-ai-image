@@ -1,72 +1,242 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-电商AI Image —— 本地小代理
-只做一件事：在浏览器（standalone.html）和 redfox gpt-image-2 之间转发请求，
-并补上 CORS 头，让纯前端页面能调用远程生图接口。不存任何业务数据。
+电商AI Image —— 本地小代理（多服务商版）
+在浏览器（standalone.html）和各家生图接口之间转发请求，并补 CORS 头。
 
-用法：
-  双击「启动.command」即可（它会启动本脚本并打开浏览器）。
-  或手动： python3 proxy.py  （默认端口 8765，可用 WB_PORT 环境变量改）
+支持的服务商（provider）：
+  pollinations  —— 免 Key、免注册，直接出图（仅文生图，图生图能力弱，适合快速试）
+  gemini        —— Google Gemini（Nano Banana）免费层，支持图生图/文生图，需 AI Studio Key
+  openai        —— OpenAI gpt-image-2，新号有试用金，支持图生图/文生图
+  redfox        —— redfox.hk 转发 gpt-image-2（原默认）
+  custom        —— 自部署模型 / 任意 OpenAI 兼容端点（付费或自建入口）
 
 接口：
-  GET  /             -> 返回 standalone.html
-  GET  /health       -> ok
-  POST /api/gen      -> 图生图：白底产品图 + 提示词 -> gpt-image-2 -> 返回 base64 图数组
-       body(JSON): {image_b64, prompt, key, fidelity?, size?, quality?, n?}
-       返回: {"images":["data:image/png;base64,....", ...]} 或 {"error":"原因"}
+  GET  /              -> 返回 standalone.html
+  GET  /health        -> ok
+  GET  /api/providers -> 返回可选服务商及配置（前端下拉框用）
+  POST /api/gen       -> 生图：{provider, key, image_b64, prompt, size, quality, n, fidelity, endpoint?}
+                         返回 {"images":["data:image/png;base64,..."]} 或 {"error":"原因"}
 """
-import os, sys, json, base64, time
+import os, json, base64, time, io
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import requests
 
 PORT = int(os.environ.get("PORT") or os.environ.get("WB_PORT", "8765"))
 HERE = os.path.dirname(os.path.abspath(__file__))
 HTML = os.path.join(HERE, "standalone.html")
-# Render 等 PaaS 可能工作目录和脚本目录不一致，多找几个候选路径
 for _p in [HTML, os.path.join(os.getcwd(), "standalone.html"), "/opt/render/project/src/standalone.html"]:
     if os.path.exists(_p):
         HTML = _p
         break
 
-SUBMIT_URL = "https://redfox.hk/story/api/parseWork/imageGen/submitSkill"
-RESULT_URL = "https://redfox.hk/story/api/parseWork/imageGen/result"
-UPLOAD_URL = "https://redfox.hk/story/api/parseWork/imageGen/uploadImage"
-SOURCE = "GPT image2-SkillHub"
 POLL = 3
 MAX_TRY = 80
 
-# 绕过系统/环境变量里的 http 代理，直连 redfox（否则会被公司代理拦截）
+# 绕过系统/环境变量里的 http 代理，直连（否则会被公司代理拦截）
 S = requests.Session()
 S.trust_env = False
 
 
+# ─────────── 服务商静态配置（前端下拉框用） ───────────
+PROVIDERS = [
+    {
+        "id": "pollinations",
+        "name": "Pollinations（免 Key 免费）",
+        "needsKey": False,
+        "imageEdit": False,
+        "desc": "完全免费、免注册、免 Key，直接出图。适合快速试效果；仅文生图，图生图能力弱，且不稳定（无 SLA）。",
+        "getKey": "无需 Key",
+    },
+    {
+        "id": "gemini",
+        "name": "Gemini（Google 免费层）",
+        "needsKey": True,
+        "imageEdit": True,
+        "desc": "Google AI Studio 免费层（Nano Banana），每日约 500 张，支持图生图。需去 aistudio.google.com 拿 Key。免费层带隐形水印、商业用途受限。",
+        "getKey": "https://aistudio.google.com/apikey",
+    },
+    {
+        "id": "openai",
+        "name": "OpenAI（gpt-image-2）",
+        "needsKey": True,
+        "imageEdit": True,
+        "desc": "OpenAI 官方 gpt-image-2，新号有约 $5 试用金，支持图生图/文生图。需能访问 api.openai.com。",
+        "getKey": "https://platform.openai.com/api-keys",
+    },
+    {
+        "id": "redfox",
+        "name": "redfox.hk（gpt-image-2 转发）",
+        "needsKey": True,
+        "imageEdit": True,
+        "desc": "redfox.hk 转发 gpt-image-2，国内访问友好，需注册 Key（现多为付费）。",
+        "getKey": "https://redfox.hk/settings/api-keys?source=skillhub",
+    },
+    {
+        "id": "custom",
+        "name": "自部署 / 自定义端点",
+        "needsKey": True,
+        "imageEdit": True,
+        "desc": "对接你自己部署的模型（如本地 ComfyUI、自建 OpenAI 兼容服务、或任意充值付费的兼容端点）。需填 Base URL。",
+        "getKey": "取决于你的部署；留空或填对应鉴权 Token",
+    },
+]
+
+
 def detect_fmt(b):
     if b[:8] == b"\x89PNG\r\n\x1a\n":
-        return "png"
+        return "png", "image/png"
     if b[:3] == b"\xff\xd8\xff":
-        return "jpeg"
+        return "jpeg", "image/jpeg"
     if b[:4] == b"RIFF" and b[8:12] == b"WEBP":
-        return "webp"
-    return "png"
+        return "webp", "image/webp"
+    return "png", "image/png"
 
 
-def gen_image(key, image_b64, prompt, fidelity, size, quality, n=1):
+def b64_to_bytes(image_b64):
+    if not image_b64:
+        return None
+    if "," in image_b64:
+        image_b64 = image_b64.split(",", 1)[1]
+    return base64.b64decode(image_b64)
+
+
+# ─────────── 各服务商实现 ───────────
+
+def gen_pollinations(prompt, size, n):
+    """免 Key 文生图。size 形如 1024x1536 -> 取宽高。"""
+    try:
+        w, h = (size or "1024x1536").split("x")
+    except Exception:
+        w, h = "1024", "1536"
+    # 去除提示词里的中文标点风险，做 url 转义
+    from urllib.parse import quote
+    safe = quote(prompt[:400], safe="")
+    try:
+        out = []
+        count = max(1, min(4, int(n) if str(n).isdigit() else 1))
+        for _ in range(count):
+            url = f"https://image.pollinations.ai/prompt/{safe}?width={w}&height={h}&nologo=true"
+            r = S.get(url, timeout=120)
+            out.append("data:image/jpeg;base64," + base64.b64encode(r.content).decode())
+        return out, None
+    except Exception as e:
+        return None, "Pollinations 生图失败：" + str(e)
+
+
+def gen_gemini(key, image_b64, prompt, size, n):
+    """Google Gemini（Nano Banana）。支持图生图（传 image_b64）与文生图。"""
+    if not key:
+        return None, "缺少 Gemini API Key"
+    model = "gemini-2.5-flash-image"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
+    try:
+        count = max(1, min(4, int(n) if str(n).isdigit() else 1))
+    except Exception:
+        count = 1
+    contents = {"parts": []}
+    if image_b64:
+        raw = b64_to_bytes(image_b64)
+        if not raw:
+            return None, "白底产品图解码失败"
+        fmt, mime = detect_fmt(raw)
+        contents["parts"].append({"inline_data": {"mime_type": mime, "data": base64.b64encode(raw).decode()}})
+    contents["parts"].append({"text": prompt})
+    payload = {
+        "contents": [contents],
+        "generationConfig": {"responseModalities": ["IMAGE"], "imageConfig": {"aspectRatio": "3:4"}},
+    }
+    try:
+        r = S.post(url, json=payload, timeout=120)
+        j = r.json()
+    except Exception as e:
+        return None, "Gemini 请求失败：" + str(e)
+    if "error" in j:
+        return None, "Gemini 错误：" + str(j["error"].get("message", j["error"]))
+    try:
+        parts = (j.get("candidates", [{}])[0].get("content", {}).get("parts", []))
+        out = []
+        for p in parts:
+            if "inline_data" in p:
+                b = p["inline_data"]["data"]
+                mime = p["inline_data"].get("mime_type", "image/png")
+                out.append("data:%s;base64,%s" % (mime, b))
+                if len(out) >= count:
+                    break
+        if not out:
+            return None, "Gemini 未返回图片（可能触发安全过滤或提示词被拒）"
+        return out, None
+    except Exception as e:
+        return None, "Gemini 结果解析失败：" + str(e)
+
+
+def gen_openai(key, image_b64, prompt, size, n):
+    """OpenAI gpt-image-2。图生图走 /v1/images/edits，文生图走 /v1/images/generations。"""
+    if not key:
+        return None, "缺少 OpenAI API Key"
+    try:
+        count = max(1, min(4, int(n) if str(n).isdigit() else 1))
+    except Exception:
+        count = 1
+    if image_b64:
+        raw = b64_to_bytes(image_b64)
+        if not raw:
+            return None, "白底产品图解码失败"
+        fmt, mime = detect_fmt(raw)
+        try:
+            r = S.post(
+                "https://api.openai.com/v1/images/edits",
+                headers={"Authorization": f"Bearer {key}"},
+                files={"image": ("product." + fmt, raw, mime)},
+                data={"model": "gpt-image-2", "prompt": prompt, "n": count, "size": size or "1024x1536"},
+                timeout=180,
+            )
+            j = r.json()
+        except Exception as e:
+            return None, "OpenAI 请求失败：" + str(e)
+    else:
+        try:
+            r = S.post(
+                "https://api.openai.com/v1/images/generations",
+                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                json={"model": "gpt-image-2", "prompt": prompt, "n": count, "size": size or "1024x1536", "quality": "high"},
+                timeout=180,
+            )
+            j = r.json()
+        except Exception as e:
+            return None, "OpenAI 请求失败：" + str(e)
+    if "error" in j:
+        return None, "OpenAI 错误：" + str(j["error"].get("message", j["error"]))
+    out = []
+    for it in j.get("data", []):
+        if it.get("b64_json"):
+            out.append("data:image/png;base64," + it["b64_json"])
+        elif it.get("url"):
+            try:
+                d = S.get(it["url"], timeout=120)
+                out.append("data:image/png;base64," + base64.b64encode(d.content).decode())
+            except Exception:
+                pass
+    if not out:
+        return None, "OpenAI 未返回图片"
+    return out, None
+
+
+def gen_redfox(key, image_b64, prompt, fidelity, size, quality, n):
+    """redfox.hk 转发 gpt-image-2（原逻辑）。"""
     if not key:
         return None, "缺少 redfox API Key"
     if not image_b64:
         return None, "缺少白底产品图"
-    if "," in image_b64:
-        image_b64 = image_b64.split(",", 1)[1]
     try:
-        raw = base64.b64decode(image_b64)
+        raw = b64_to_bytes(image_b64)
     except Exception as e:
         return None, "图片解码失败：" + str(e)
-    fmt = detect_fmt(raw)
+    fmt, mime = detect_fmt(raw)
     try:
         up = S.post(
-            UPLOAD_URL,
-            files={"file": ("product." + fmt, raw, "image/" + fmt)},
+            "https://redfox.hk/story/api/parseWork/imageGen/uploadImage",
+            files={"file": ("product." + fmt, raw, mime)},
             data={"format": fmt},
             headers={"X-API-KEY": key},
             timeout=60,
@@ -79,7 +249,6 @@ def gen_image(key, image_b64, prompt, fidelity, size, quality, n=1):
     image_url = (upj.get("data") or {}).get("imageUrl")
     if not image_url:
         return None, "上传成功但未返回图片地址"
-
     params = {
         "modelName": "gpt-image-2",
         "n": max(1, min(10, int(n) if str(n).isdigit() else 1)),
@@ -93,8 +262,8 @@ def gen_image(key, image_b64, prompt, fidelity, size, quality, n=1):
         params["inputFidelity"] = fidelity
     try:
         r = S.post(
-            SUBMIT_URL,
-            json={"prompt": prompt, "source": SOURCE, "operation": "edit",
+            "https://redfox.hk/story/api/parseWork/imageGen/submitSkill",
+            json={"prompt": prompt, "source": "GPT image2-SkillHub", "operation": "edit",
                   "images": [{"url": image_url}], "parameters": params},
             headers={"X-API-KEY": key, "Content-Type": "application/json"},
             timeout=30,
@@ -107,18 +276,17 @@ def gen_image(key, image_b64, prompt, fidelity, size, quality, n=1):
     task_id = (sj.get("data") or {}).get("taskId")
     if not task_id:
         return None, "接口未返回 taskId"
-
     for _ in range(MAX_TRY):
         time.sleep(POLL)
         try:
             rr = S.post(
-                RESULT_URL,
+                "https://redfox.hk/story/api/parseWork/imageGen/result",
                 json={"taskId": task_id},
                 headers={"X-API-KEY": key, "Content-Type": "application/json"},
                 timeout=15,
             )
             rj = rr.json()
-        except Exception as e:
+        except Exception:
             continue
         if not str(rj.get("code", "")).startswith("2"):
             return None, "查询结果失败：" + str(rj.get("msg", ""))
@@ -129,7 +297,7 @@ def gen_image(key, image_b64, prompt, fidelity, size, quality, n=1):
                 return None, "生图成功但未返回图片"
             try:
                 out = []
-                for p in paths[: int(n) if str(n).isdigit() else 1]:
+                for p in paths[: max(1, min(4, int(n) if str(n).isdigit() else 1))]:
                     d = S.get(p, timeout=120)
                     out.append("data:image/png;base64," + base64.b64encode(d.content).decode())
                 return out, None
@@ -138,6 +306,89 @@ def gen_image(key, image_b64, prompt, fidelity, size, quality, n=1):
         elif st == "failed":
             return None, "生图失败：" + str((rj.get("data") or {}).get("failReason", "未知原因"))
     return None, "等待超时（约 %d 秒）" % (POLL * MAX_TRY)
+
+
+def gen_custom(key, image_b64, prompt, size, n, endpoint):
+    """自部署 / 任意 OpenAI 兼容端点。endpoint 形如 https://your.host/v1/images/generations"""
+    if not endpoint:
+        return None, "自定义端点需填写 Base URL"
+    try:
+        count = max(1, min(4, int(n) if str(n).isdigit() else 1))
+    except Exception:
+        count = 1
+    if image_b64:
+        raw = b64_to_bytes(image_b64)
+        if not raw:
+            return None, "白底产品图解码失败"
+        fmt, mime = detect_fmt(raw)
+        try:
+            r = S.post(
+                endpoint,
+                headers={"Authorization": f"Bearer {key}"} if key else {},
+                files={"image": ("product." + fmt, raw, mime)},
+                data={"prompt": prompt, "n": count, "size": size or "1024x1536"},
+                timeout=180,
+            )
+            j = r.json()
+        except Exception as e:
+            return None, "自定义端点请求失败：" + str(e)
+    else:
+        try:
+            r = S.post(
+                endpoint,
+                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"} if key else {"Content-Type": "application/json"},
+                json={"prompt": prompt, "n": count, "size": size or "1024x1536"},
+                timeout=180,
+            )
+            j = r.json()
+        except Exception as e:
+            return None, "自定义端点请求失败：" + str(e)
+    if "error" in j:
+        return None, "自定义端点错误：" + str(j["error"].get("message", j["error"]))
+    out = []
+    for it in j.get("data", []):
+        if it.get("b64_json"):
+            out.append("data:image/png;base64," + it["b64_json"])
+        elif it.get("url"):
+            try:
+                d = S.get(it["url"], timeout=120)
+                out.append("data:image/png;base64," + base64.b64encode(d.content).decode())
+            except Exception:
+                pass
+    if not out:
+        return None, "自定义端点未返回图片"
+    return out, None
+
+
+def gen_image(data):
+    provider = (data.get("provider") or "redfox").lower()
+    key = data.get("key", "")
+    image_b64 = data.get("image_b64", "")
+    prompt = data.get("prompt", "")
+    size = data.get("size") or "1024x1536"
+    quality = data.get("quality") or "high"
+    n = data.get("n") or 1
+    fidelity = data.get("fidelity") or ""
+    endpoint = data.get("endpoint") or ""
+
+    if provider == "pollinations":
+        if not prompt:
+            return None, "缺少提示词"
+        return gen_pollinations(prompt, size, n)
+    if provider == "gemini":
+        if not prompt:
+            return None, "缺少提示词"
+        return gen_gemini(key, image_b64, prompt, size, n)
+    if provider == "openai":
+        if not prompt:
+            return None, "缺少提示词"
+        return gen_openai(key, image_b64, prompt, size, n)
+    if provider == "custom":
+        if not prompt:
+            return None, "缺少提示词"
+        return gen_custom(key, image_b64, prompt, size, n, endpoint)
+    # 默认 redfox
+    return gen_redfox(key, image_b64, prompt, fidelity, size, quality, n)
 
 
 class H(BaseHTTPRequestHandler):
@@ -173,6 +424,9 @@ class H(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b"ok")
             return
+        if self.path == "/api/providers":
+            self._send_json(200, {"providers": PROVIDERS})
+            return
         self.send_response(404)
         self._cors()
         self.end_headers()
@@ -190,15 +444,8 @@ class H(BaseHTTPRequestHandler):
         except Exception as e:
             self._send_json(400, {"error": "请求解析失败：" + str(e)})
             return
-        image_b64 = data.get("image_b64", "")
-        prompt = data.get("prompt", "")
-        key = data.get("key", "")
-        fidelity = data.get("fidelity") or ""
-        size = data.get("size") or "1024x1536"
-        quality = data.get("quality") or "high"
-        n = data.get("n") or 1
         try:
-            imgs, err = gen_image(key, image_b64, prompt, fidelity, size, quality, n)
+            imgs, err = gen_image(data)
         except Exception as e:
             self._send_json(200, {"error": "代理内部错误：" + str(e)})
             return
@@ -229,7 +476,7 @@ if __name__ == "__main__":
         lan = socket.gethostbyname(socket.gethostname())
     except Exception:
         lan = "本机局域网IP"
-    print("电商AI Image 已启动（页面 + 生图代理一体）")
+    print("电商AI Image 已启动（页面 + 多服务商生图代理一体）")
     print("  本机打开  : http://localhost:%d/" % PORT)
     print("  手机/同网络: http://%s:%d/   （手机浏览器打开即可直接用 AI 生图）" % (lan, PORT))
     print("按 Ctrl+C 停止")

@@ -307,9 +307,19 @@
           </div>
           <div class="func-panel" data-func="api">
             <div class="api-panel">
-              <p class="muted" style="margin-top:0"><b>图生图流程</b>：顶部「白底产品图」＋ 这屏提示词 → 调 gpt-image-2 → 生成场景图 → 自动叠字导出。</p>
-              <label>redfox API Key（去 redfox.hk 免费注册获取）</label>
-              <input type="text" id="apiKey" placeholder="粘贴你的 redfox API Key">
+              <p class="muted" style="margin-top:0"><b>图生图流程</b>：顶部「白底产品图」＋ 这屏提示词 → 选服务商生图 → 生成场景图 → 自动叠字导出。</p>
+              <label>生图服务商</label>
+              <select id="apiProvider"></select>
+              <div id="providerDesc" class="muted" style="font-size:12px;margin:6px 0"></div>
+              <div id="keyWrap">
+                <label id="keyLabel">API Key</label>
+                <input type="text" id="apiKey" placeholder="粘贴 API Key">
+                <a id="keyLink" href="#" target="_blank" rel="noopener" style="font-size:12px;display:inline-block;margin-top:4px">去哪拿 Key？</a>
+              </div>
+              <div id="endpointWrap" style="display:none">
+                <label>自定义端点 Base URL（兼容 OpenAI 的 /images/generations 或 /images/edits）</label>
+                <input type="text" id="apiEndpoint" placeholder="https://your-host/v1/images/generations">
+              </div>
               <div class="row">
                 <div><label>保真度（图生图）</label><select id="apiFidelity"><option value="high">高保真（保留产品细节）</option><option value="low">低保真（可大幅改场景）</option></select></div>
                 <div><label>画质</label><select id="apiQuality"><option value="high">高</option><option value="medium">中</option><option value="low">低</option></select></div>
@@ -321,7 +331,7 @@
                 <option value="3">3 张</option>
                 <option value="4">4 张</option>
               </select>
-              <p class="warn" style="margin-top:10px">⚠️ 必须先双击「启动.command」开启本地代理，工具才能联网调 gpt-image-2（纯前端直连会被跨域拦截）。代理只转发请求，不存你的图和数据。</p>
+              <p class="warn" style="margin-top:10px">⚠️ 必须先双击「启动.command」开启本地代理（公网版已自带代理则不用）。代理只转发请求，不存你的图和数据。Pollinations 免 Key 可直接试，其余需填对应 Key；付费/自部署入口在服务商下拉里选「自部署 / 自定义端点」。</p>
               <button class="btn sm" id="btnGenOne" style="margin-top:6px">用白底图生成这张屏</button>
             </div>
           </div>
@@ -406,15 +416,23 @@
       <li>用法：把这库的提示词复制到任意 AI 生图工具（比如对话里让我生图、或你自己的生图平台）去生成图片，再把图回到「做详情页」上传叠字。</li>
     </ol>
 
-    <h2>五、怎么让工具自己调 gpt-image-2 生图（图生图）</h2>
-    <p>本工具用 <strong>图生图</strong>：把你上传的<b>白底产品图</b>当作底图，加上每屏的提示词，调用 gpt-image-2 生成电商场景图，再自动叠字。流程：</p>
+    <h2>五、怎么让工具自己调图生图（图生图）</h2>
+    <p>本工具用 <strong>图生图</strong>：把你上传的<b>白底产品图</b>当作底图，加上每屏的提示词，调用生图接口生成电商场景图，再自动叠字。在「做详情页」的「API」面板里：</p>
     <ol>
-      <li>去 <a href="https://redfox.hk/settings/api-keys?source=skillhub" target="_blank" rel="noopener">redfox.hk</a> 免费注册，拿到 <b>API Key</b>。</li>
-      <li>第一次用，<b>双击本目录里的「启动.command」</b> —— 它会开一个本地小代理并自动打开工具（纯前端直连 redfox 会被跨域拦截，必须经过这个代理；代理只转发请求，不存你的图）。</li>
-      <li>在「做详情页」的「API」面板把 Key 填进去（会自动记住），选好保真度/画质。</li>
-      <li>回到内容面板点「🤖 AI 生成这张屏」，工具自动完成：上传白底图 → 调 gpt-image-2 → 生成场景图 → 叠字预览。</li>
+      <li>先选<strong>生图服务商</strong>下拉框：
+        <ul>
+          <li><b>Pollinations（免 Key）</b>：完全免费、不用注册，直接试文生图（图生图能力弱）。</li>
+          <li><b>Gemini（Google 免费层）</b>：去 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com</a> 拿 Key，每日约 500 张，支持图生图。</li>
+          <li><b>OpenAI（gpt-image-2）</b>：去 <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com</a> 拿 Key，新号有试用金，支持图生图。</li>
+          <li><b>redfox.hk</b>：去 <a href="https://redfox.hk/settings/api-keys?source=skillhub" target="_blank" rel="noopener">redfox.hk</a> 拿 Key（现多为付费）。</li>
+          <li><b>自部署 / 自定义端点</b>：对接你自己的模型（本地 ComfyUI、自建 OpenAI 兼容服务，或任意充值付费的兼容端点），填 Base URL 即可。</li>
+        </ul>
+      </li>
+      <li>按所选服务商填 Key（Pollinations 不用填；自定义端点填 Base URL）。Key 会自动记住。</li>
+      <li>第一次用本地版，<b>双击本目录里的「启动.command」</b> —— 它会开一个本地小代理并自动打开工具（纯前端直连各家接口会被跨域拦截，必须经过这个代理；代理只转发请求，不存你的图）。公网版已经自带代理，不用这一步。</li>
+      <li>回到内容面板点「🤖 AI 生成这张屏」，工具自动完成：上传白底图 → 调所选接口 → 生成场景图 → 叠字预览。</li>
     </ol>
-    <div class="warn">⚠️ 说明：白底产品图是<strong>必填</strong>的（图生图必须有底图）。如果暂时不想接 API，也可以手动在每屏「上传这张屏的底图」放一张现成图，照样能叠字导出。代理关掉后，纯前端模式只能做"手动传图 + 叠字"，不能联网生图。</div>
+    <div class="warn">⚠️ 说明：白底产品图是<strong>必填</strong>的（图生图必须有底图；Pollinations 仅文生图可免图）。如果暂时不想接 API，也可以手动在每屏「上传这张屏的底图」放一张现成图，照样能叠字导出。代理关掉后，纯前端模式只能做"手动传图 + 叠字"，不能联网生图。</div>
 
     <h2>六、常见问题</h2>
     <ul>
@@ -674,11 +692,15 @@ function showImageChooser(imgs,sc){
 }
 function genOne(){
   const sc=curScreen();
+  const provider=$('#apiProvider').value;
   const key=$('#apiKey').value.trim();
-  if(!PRODUCT_IMG){toast('请先在顶部第 0 步上传白底产品图');switchTab('detail');$('#fProduct').scrollIntoView({behavior:'smooth'});return;}
-  if(!key){toast('请先在「API」面板填 redfox Key');switchFunc('api');return;}
+  const endpoint=$('#apiEndpoint').value.trim();
+  if(!PRODUCT_IMG && provider!=='pollinations' && provider!=='custom'){toast('请先在顶部第 0 步上传白底产品图');switchTab('detail');$('#fProduct').scrollIntoView({behavior:'smooth'});return;}
+  if(provider==='pollinations'){/* 免 Key，图生图弱，仅文生图 */}
+  else if(!key && provider!=='custom'){toast('请先在「API」面板填对应 Key');switchFunc('api');return;}
+  else if(provider==='custom' && !endpoint){toast('自定义端点需填写 Base URL');switchFunc('api');return;}
   const prompt=getStyle().prefix+'。'+sc.prompt+'，画面不要出现任何文字';
-  const payload={image_b64:PRODUCT_IMG,prompt,key,fidelity:$('#apiFidelity').value,quality:$('#apiQuality').value,size:sc.size||'1024x1536',n:$('#apiCount').value||'1'};
+  const payload={provider,key,endpoint,image_b64:PRODUCT_IMG,prompt,fidelity:$('#apiFidelity').value,quality:$('#apiQuality').value,size:sc.size||'1024x1536',n:$('#apiCount').value||'1'};
   const hint=$('#genHint');hint.style.display='block';hint.textContent='⏳ 正在用白底图生成场景图（约 10–40 秒）…';
   $('#genChoices').style.display='none';
   toast('正在生图…');
@@ -696,9 +718,53 @@ function genOne(){
 }
 $('#btnGenOne').onclick=genOne;
 $('#btnGenContent').onclick=genOne;
+/* ============ 服务商下拉 + 动态 UI ============ */
+const PROVIDER_KEY='wb_provider';
+const ENDPOINT_KEY='wb_endpoint';
+function applyProviderUI(p){
+  const desc=$('#providerDesc'),keyWrap=$('#keyWrap'),endpointWrap=$('#endpointWrap'),keyLabel=$('#keyLabel'),keyLink=$('#keyLink');
+  desc.textContent=p.desc||'';
+  if(p.needsKey){
+    keyWrap.style.display='';
+    keyLabel.textContent=p.id==='custom'?'鉴权 Token（可选）':'API Key（'+p.name+'）';
+    keyLink.href=p.getKey&&p.getKey.startsWith('http')?p.getKey:'#';
+    keyLink.style.display=p.getKey&&p.getKey.startsWith('http')?'inline-block':'none';
+  }else{
+    keyWrap.style.display='none';
+  }
+  endpointWrap.style.display=p.id==='custom'?'':'none';
+}
+function loadProviders(){
+  const sel=$('#apiProvider');
+  fetch(location.origin.startsWith('http')?'/api/providers':'http://localhost:8765/api/providers')
+    .then(r=>r.json().catch(()=>null))
+    .then(j=>{
+      const list=(j&&j.providers)||[
+        {id:'redfox',name:'redfox.hk（gpt-image-2 转发）',needsKey:true,desc:'redfox.hk 转发 gpt-image-2',getKey:'https://redfox.hk/settings/api-keys?source=skillhub'}
+      ];
+      sel.innerHTML='';
+      list.forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=p.name;sel.appendChild(o);});
+      let saved=null;
+      try{saved=localStorage.getItem(PROVIDER_KEY);}catch(e){}
+      if(saved&&list.some(p=>p.id===saved))sel.value=saved;
+      applyProviderUI(list.find(p=>p.id===sel.value)||list[0]);
+    })
+    .catch(()=>{ /* 离线/无代理时给个最小兜底 */ sel.innerHTML='<option value="redfox">redfox.hk（gpt-image-2 转发）</option>'; });
+}
+const PROVIDERS_LOCAL=[
+  {id:'pollinations',name:'Pollinations（免 Key 免费）',needsKey:false,desc:'完全免费、免注册、免 Key，直接出图。适合快速试效果；仅文生图，图生图能力弱，且不稳定（无 SLA）。',getKey:''},
+  {id:'gemini',name:'Gemini（Google 免费层）',needsKey:true,desc:'Google AI Studio 免费层（Nano Banana），每日约 500 张，支持图生图。需去 aistudio.google.com 拿 Key。免费层带隐形水印、商业用途受限。',getKey:'https://aistudio.google.com/apikey'},
+  {id:'openai',name:'OpenAI（gpt-image-2）',needsKey:true,desc:'OpenAI 官方 gpt-image-2，新号有约 $5 试用金，支持图生图/文生图。需能访问 api.openai.com。',getKey:'https://platform.openai.com/api-keys'},
+  {id:'redfox',name:'redfox.hk（gpt-image-2 转发）',needsKey:true,desc:'redfox.hk 转发 gpt-image-2，国内访问友好，需注册 Key（现多为付费）。',getKey:'https://redfox.hk/settings/api-keys?source=skillhub'},
+  {id:'custom',name:'自部署 / 自定义端点',needsKey:true,desc:'对接你自己部署的模型（如本地 ComfyUI、自建 OpenAI 兼容服务、或任意充值付费的兼容端点）。需填 Base URL。',getKey:''}
+];
+$('#apiProvider').onchange=e=>{const p=PROVIDERS_LOCAL.find(x=>x.id===e.target.value)||PROVIDERS_LOCAL[0];try{localStorage.setItem(PROVIDER_KEY,e.target.value);}catch(x){}applyProviderUI(p);};
+$('#apiEndpoint').oninput=e=>{try{localStorage.setItem(ENDPOINT_KEY,e.target.value.trim());}catch(x){}};
 /* API Key 记忆 */
 try{const k=localStorage.getItem('wb_apikey');if(k)$('#apiKey').value=k;}catch(e){}
 $('#apiKey').oninput=e=>{try{localStorage.setItem('wb_apikey',e.target.value.trim());}catch(x){}};
+try{const ep=localStorage.getItem(ENDPOINT_KEY);if(ep)$('#apiEndpoint').value=ep;}catch(e){}
+loadProviders();
 buildStylePick();buildScreenList();refreshDetail();showProductPreview();
 
 /* ============ 提示词库 ============ */
