@@ -23,6 +23,11 @@ import requests
 PORT = int(os.environ.get("PORT") or os.environ.get("WB_PORT", "8765"))
 HERE = os.path.dirname(os.path.abspath(__file__))
 HTML = os.path.join(HERE, "standalone.html")
+# Render 等 PaaS 可能工作目录和脚本目录不一致，多找几个候选路径
+for _p in [HTML, os.path.join(os.getcwd(), "standalone.html"), "/opt/render/project/src/standalone.html"]:
+    if os.path.exists(_p):
+        HTML = _p
+        break
 
 SUBMIT_URL = "https://redfox.hk/story/api/parseWork/imageGen/submitSkill"
 RESULT_URL = "https://redfox.hk/story/api/parseWork/imageGen/result"
@@ -217,6 +222,8 @@ class H(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     import socket
+    print("[启动] PORT=%s, HTML=%s, exists=%s" % (PORT, HTML, os.path.exists(HTML)))
+    print("[启动] cwd=%s, files=%s" % (os.getcwd(), os.listdir(os.getcwd())[:10]))
     srv = ThreadingHTTPServer(("0.0.0.0", PORT), H)
     try:
         lan = socket.gethostbyname(socket.gethostname())

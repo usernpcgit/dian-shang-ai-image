@@ -11,7 +11,7 @@ services:
     region: oregon
     branch: main
     buildCommand: pip install -r requirements.txt
-    startCommand: python proxy.py
+    startCommand: python3 proxy.py
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
