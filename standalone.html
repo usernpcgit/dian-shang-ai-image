@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>电商AI Image</title>
+<style>
+  :root{
+    --bg:#EFF6FD; --panel:#FFFFFF; --panel2:#E6F2FC; --line:#D4E6F6;
+    --ink:#173A5E; --muted:#6A86A3; --brand:#2E9BE6; --brand2:#5BC0F2;
+    --ok:#23B08A; --danger:#E5484D; --chip:#E4F1FC;
+    --shadow:0 8px 24px rgba(30,80,140,.10);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{color:var(--ink);font-family:"PingFang SC","Heiti SC","Microsoft YaHei",system-ui,sans-serif;font-size:15px;line-height:1.6}
+  /* 天空渐变底层 */
+  body::before{content:"";position:fixed;inset:0;z-index:-2;pointer-events:none;
+    background:linear-gradient(180deg, #BFE4FB 0%, #DCEFFB 45%, #EFF6FD 100%);
+    transition:opacity .5s;
+  }
+  body.night::before{
+    background:linear-gradient(180deg, #091A36 0%, #0F2C52 55%, #15335D 100%);
+  }
+  /* 动态天空层：云朵 / 月亮 / 星星 */
+  #skyLayer{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
+  .cloud{position:absolute;background:rgba(255,255,255,.96);border-radius:60px;opacity:.95;animation:cloudDrift linear infinite;box-shadow:0 6px 24px rgba(120,170,210,.18)}
+  .cloud::before,.cloud::after{content:"";position:absolute;background:inherit;border-radius:50%}
+  .cloud::before{width:55%;height:130%;top:-55%;left:12%}
+  .cloud::after{width:42%;height:110%;top:-45%;right:12%}
+  @keyframes cloudDrift{
+    from{transform:translateX(-120vw)}
+    to{transform:translateX(120vw)}
+  }
+  .moon{position:absolute;top:9%;right:11%;width:86px;height:86px;border-radius:50%;background:#FFFBE8;box-shadow:0 0 28px 8px rgba(255,248,220,.55), inset -10px -6px 18px rgba(200,180,130,.25);opacity:0;transform:translateY(-20px);transition:opacity .6s, transform .6s}
+  .moon::after{content:"";position:absolute;top:22%;left:18%;width:16px;height:16px;border-radius:50%;background:rgba(210,190,140,.18)}
+  .moon::before{content:"";position:absolute;top:55%;left:55%;width:10px;height:10px;border-radius:50%;background:rgba(210,190,140,.13)}
+  .star{position:absolute;background:#fff;border-radius:50%;opacity:0;box-shadow:0 0 4px rgba(255,255,255,.8)}
+  body.night #skyLayer .star{opacity:.9;animation:twinkle linear infinite}
+  @keyframes twinkle{
+    0%,100%{opacity:.25;transform:scale(.8)}
+    50%{opacity:1;transform:scale(1.3)}
+  }
+  body.night #skyLayer .cloud{opacity:0;transition:opacity .5s}
+  body.night #skyLayer .moon{opacity:1;transform:translateY(0)}
+  /* 顶栏 */
+  header.top{display:flex;align-items:center;gap:14px;padding:16px 24px;background:linear-gradient(120deg,#fff 0%,#fff 60%,#E6F2FC 100%);border-bottom:1px solid var(--line)}
+  header.top .logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--brand),var(--brand2));display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:var(--shadow)}
+  header.top h1{font-size:18px;margin:0;font-weight:800;letter-spacing:.5px}
+  header.top .sub{color:var(--muted);font-size:12.5px}
+  /* 导航：iOS 风格滑动分段控制器 */
+  nav.tabs{position:relative;display:flex;gap:4px;max-width:760px;margin:18px auto 6px;padding:5px;flex-wrap:nowrap;background:rgba(255,255,255,.70);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.55);border-radius:999px;box-shadow:var(--shadow)}
+  nav.tabs .tab-indicator{position:absolute;top:5px;bottom:5px;background:rgba(255,255,255,.40);backdrop-filter:blur(15px) saturate(165%);-webkit-backdrop-filter:blur(15px) saturate(165%);border:1px solid rgba(255,255,255,.72);border-radius:999px;box-shadow:0 2px 14px rgba(30,80,140,.12), inset 0 1px 2px rgba(255,255,255,.6);transition:left .58s cubic-bezier(.16,1,.3,1), width .58s cubic-bezier(.16,1,.3,1), background .32s;z-index:0}
+  nav.tabs button{position:relative;flex:1;min-width:0;background:transparent;border:none;border-radius:999px;padding:10px 12px;cursor:pointer;text-align:center;color:var(--muted);z-index:1;transition:color .42s cubic-bezier(.16,1,.3,1);display:flex;flex-direction:column;align-items:center;gap:2px}
+  nav.tabs button .ic{font-size:20px;line-height:1;filter:grayscale(.35);transition:filter .42s cubic-bezier(.16,1,.3,1), transform .42s cubic-bezier(.16,1,.3,1)}
+  nav.tabs button .t{font-weight:700;color:var(--muted);font-size:13.5px;display:block;white-space:nowrap;transition:color .42s cubic-bezier(.16,1,.3,1), font-weight .42s}
+  nav.tabs button .d{font-size:11px;color:var(--muted);display:block;white-space:nowrap;opacity:.85;transition:color .42s cubic-bezier(.16,1,.3,1), opacity .42s}
+  nav.tabs button.active{color:var(--brand)}
+  nav.tabs button.active .ic{filter:grayscale(0);transform:translateY(-1px)}
+  nav.tabs button.active .t{font-weight:800;color:var(--brand)}
+  nav.tabs button.active .d{color:var(--brand);opacity:.9}
+  @media (max-width:560px){ nav.tabs button .d{display:none} nav.tabs button .t{font-size:12.5px} nav.tabs{max-width:calc(100% - 24px)} }
+  /* 视图 */
+  .view{display:none;max-width:1080px;margin:0 auto;padding:22px 20px 60px}
+  .view.active{display:block}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;margin-bottom:18px;box-shadow:var(--shadow)}
+  .card h3{margin:0 0 6px;font-size:16px}
+  .card .desc{color:var(--muted);font-size:13px;margin:0 0 14px}
+  /* 引导卡 */
+  .guide{background:linear-gradient(120deg,#EAF4FE,#EAF7FB);border:1px solid #D4E6F6;border-radius:16px;padding:16px 18px;margin-bottom:18px}
+  .guide h4{margin:0 0 10px;font-size:14.5px;color:var(--brand)}
+  .steps{display:flex;gap:10px;flex-wrap:wrap}
+  .step{flex:1;min-width:130px;background:#fff;border:1px solid #D4E6F6;border-radius:12px;padding:12px}
+  .step b{color:var(--brand);font-size:13px}
+  .step span{display:block;font-size:12.5px;color:var(--muted);margin-top:3px}
+  /* 表单 */
+  label{display:block;color:var(--muted);font-size:12.5px;margin:12px 0 5px;font-weight:600}
+  input[type=text],textarea,select{width:100%;background:#fff;border:1.5px solid var(--line);color:var(--ink);border-radius:10px;padding:10px 12px;font-size:14px;font-family:inherit}
+  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--brand)}
+  textarea{resize:vertical;min-height:70px}
+  .row{display:flex;gap:14px;flex-wrap:wrap}
+  .row>*{flex:1;min-width:170px}
+  button.btn{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;border:none;padding:11px 20px;border-radius:11px;cursor:pointer;font-size:14px;font-weight:700;box-shadow:var(--shadow)}
+  button.ghost{background:#fff;color:var(--ink);border:1.5px solid var(--line);padding:10px 18px;border-radius:11px;cursor:pointer;font-size:14px;font-weight:600}
+  button.danger{background:#fff;color:var(--danger);border:1.5px solid var(--danger);padding:7px 14px;border-radius:10px;cursor:pointer;font-size:13px}
+  button.sm{font-size:12.5px;padding:7px 13px}
+  /* 详情页 */
+  .style-pick{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 4px}
+  .style-pick button{background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:8px 12px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:7px}
+  .style-pick button.active{border-color:var(--brand);box-shadow:0 0 0 2px var(--chip)}
+  .swatch{width:18px;height:18px;border-radius:6px;border:1px solid rgba(0,0,0,.1)}
+  .work-area{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+  .left-col{flex:0 0 320px;display:flex;flex-direction:column;gap:14px;position:sticky;top:20px;align-self:flex-start}
+  .right-col{flex:1;min-width:300px}
+  #previewCanvas{width:100%;border-radius:12px;box-shadow:var(--shadow);background:#fff}
+  .ios-pill{position:relative;display:flex;gap:4px;padding:5px;background:rgba(255,255,255,.70);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.55);border-radius:999px;box-shadow:var(--shadow)}
+  .screen-tabs{width:100%;justify-content:space-between}
+  .screen-tabs button{position:relative;flex:1;min-width:0;background:transparent;border:none;border-radius:999px;padding:8px 4px;cursor:pointer;text-align:center;color:var(--muted);z-index:1;transition:color .42s cubic-bezier(.16,1,.3,1);font-weight:700;font-size:13px}
+  .screen-tabs button.active{color:var(--brand)}
+  .func-tabs{width:100%;margin-bottom:10px}
+  .func-tabs button{position:relative;flex:1;background:transparent;border:none;border-radius:999px;padding:8px 12px;cursor:pointer;text-align:center;color:var(--muted);z-index:1;transition:color .42s cubic-bezier(.16,1,.3,1);font-weight:700;font-size:14px}
+  .func-tabs button.active{color:var(--brand)}
+  .pill-indicator{position:absolute;top:5px;bottom:5px;background:rgba(255,255,255,.40);backdrop-filter:blur(15px) saturate(165%);-webkit-backdrop-filter:blur(15px) saturate(165%);border:1px solid rgba(255,255,255,.72);border-radius:999px;box-shadow:0 2px 14px rgba(30,80,140,.12), inset 0 1px 2px rgba(255,255,255,.6);transition:left .58s cubic-bezier(.16,1,.3,1), width .58s cubic-bezier(.16,1,.3,1), background .32s;z-index:0;pointer-events:none}
+  .func-panels{position:relative}
+  .func-panel{display:none}
+  .func-panel.active{display:block}
+  .api-panel{margin-top:4px;border:1px dashed var(--brand);border-radius:12px;padding:14px;background:#F2F9FE}
+  .tag-input{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .tag-chip{background:var(--chip);border:1px solid #CFE3F5;border-radius:16px;padding:4px 10px;font-size:12.5px;display:flex;gap:6px;align-items:center}
+  .tag-chip b{cursor:pointer;color:var(--danger)}
+  @media (max-width:720px){ .left-col{flex:1 1 100%;position:static} .right-col{flex:1 1 100%} }
+  /* 提示词 */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+  .pitem{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px}
+  .pitem .pt{font-weight:800;margin-bottom:2px}
+  .pitem .pc{color:var(--brand);font-size:12.5px;margin-bottom:8px;font-weight:700}
+  .pitem .pcon{color:var(--muted);font-size:13px;white-space:pre-wrap;max-height:140px;overflow:auto}
+  .ptag{display:inline-block;background:var(--chip);border:1px solid #CFE3F5;border-radius:12px;padding:2px 9px;font-size:11.5px;color:#2C7FB8;margin:8px 5px 0 0}
+  /* 画廊 */
+  .gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;margin-top:4px}
+  .gitem{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;cursor:pointer;box-shadow:var(--shadow)}
+  .gitem img{width:100%;height:150px;object-fit:cover;display:block}
+  .gitem .meta{padding:9px;font-size:11.5px;color:var(--muted)}
+  .gitem .meta .gtags{color:var(--brand);font-weight:700}
+  /* 帮助 */
+  .help h2{font-size:17px;margin:18px 0 8px}
+  .help p,.help li{font-size:14px;color:#3d3a44}
+  .help code{background:var(--panel2);padding:2px 6px;border-radius:6px;font-size:13px}
+  .help .warn{background:#FFF6E9;border:1px solid #F4D9A8;color:#8a5a00;padding:11px 14px;border-radius:12px;font-size:13px}
+  .help ol{padding-left:20px}
+  .help li{margin:6px 0}
+  .gen-choices{flex-wrap:wrap;gap:10px;margin-top:10px}
+  .gc-thumb{position:relative;width:84px;height:84px;border-radius:12px;overflow:hidden;border:2px solid var(--line);background:#fff;cursor:pointer;padding:0}
+  .gc-thumb:hover{border-color:var(--brand)}
+  .gc-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+  .gc-thumb span{position:absolute;left:4px;top:4px;background:rgba(0,0,0,.55);color:#fff;font-size:11px;padding:1px 7px;border-radius:10px}
+  body.night .gc-thumb{background:#0F2C52}
+  #previewCanvas{height:auto}
+  /* 弹窗 */
+  .modal{position:fixed;inset:0;background:rgba(40,30,35,.55);display:none;align-items:center;justify-content:center;z-index:50;padding:24px}
+  .modal.show{display:flex}
+  .modal .box{background:#fff;border-radius:16px;max-width:640px;width:100%;max-height:90vh;overflow:auto;padding:20px}
+  .modal img{max-width:100%;border-radius:10px}
+  .toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);background:var(--ok);color:#063;padding:11px 20px;border-radius:10px;font-size:14px;font-weight:700;display:none;z-index:99;box-shadow:var(--shadow)}
+  .toast.show{display:block}
+  .muted{color:var(--muted);font-size:12.5px}
+  /* ============ 日间/夜间切换按钮 ============ */
+  header.top .theme-toggle{margin-left:auto;background:rgba(255,255,255,.75);border:1px solid var(--line);color:var(--ink);border-radius:20px;padding:8px 15px;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap}
+  header.top .theme-toggle:hover{background:#fff}
+  /* ============ 深蓝夜间模式 ============ */
+  body.night{
+    --bg:#0E2440; --panel:#13294A; --panel2:#0F2C52; --line:#2A5689;
+    --ink:#F4F8FE; --muted:#A8C0DD; --brand:#5BBAF4; --brand2:#8AD6F7;
+    --chip:#16335C; --shadow:0 8px 24px rgba(0,0,0,.45);
+  }
+  /* 夜间字体层次区分：标题更亮更重、正文清晰、次要文字明显弱化但可读 */
+  body.night h1,body.night h3,body.night .card h3,body.night nav.tabs button .t{
+    color:#FBFDFF; text-shadow:0 1px 0 rgba(0,0,0,.4); font-weight:800;
+  }
+  body.night label{color:#CFE0F4; font-weight:700}
+  body.night .card .desc{color:#BFD2EA}
+  body.night .muted,body.night nav.tabs button .d,body.night .help .tip{color:#94AFD0}
+  body.night header.top{background:linear-gradient(120deg,#0E2440 0%,#0E2440 60%,#102A4E 100%);border-bottom-color:var(--line)}
+  body.night header.top .theme-toggle{background:rgba(255,255,255,.10);border-color:var(--line);color:var(--ink)}
+  body.night header.top .theme-toggle:hover{background:rgba(255,255,255,.18)}
+  body.night nav.tabs{background:rgba(19,41,74,.68);border-color:rgba(255,255,255,.10)}
+  body.night nav.tabs .tab-indicator{background:rgba(125,205,248,.20);border-color:rgba(160,210,250,.40);box-shadow:0 2px 14px rgba(0,0,0,.30), inset 0 1px 2px rgba(255,255,255,.15)}
+  body.night nav.tabs button{color:#8DB4DA}
+  body.night nav.tabs button.active{color:var(--brand)}
+  body.night .guide{background:linear-gradient(120deg,#13294A,#0F2C52);border-color:var(--line)}
+  body.night .step{background:var(--panel);border-color:var(--line)}
+  body.night .tag-chip{border-color:var(--line)}
+  body.night .api-panel{background:#0F2C52}
+  body.night .ptag{border-color:var(--line);color:#7FD0F5}
+  body.night input[type=text],body.night textarea,body.night select{background:#0F2C52;color:var(--ink);border-color:var(--line)}
+  body.night .pitem{background:var(--panel);border-color:var(--line)}
+  body.night .gitem{background:var(--panel);border-color:var(--line)}
+  body.night .style-pick button{background:var(--panel);border-color:var(--line)}
+  body.night .ios-pill{background:rgba(19,41,74,.68);border-color:rgba(255,255,255,.10)}
+  body.night .pill-indicator{background:rgba(125,205,248,.20);border-color:rgba(160,210,250,.40);box-shadow:0 2px 14px rgba(0,0,0,.30), inset 0 1px 2px rgba(255,255,255,.15)}
+  body.night .screen-tabs button,body.night .func-tabs button{color:#8DB4DA}
+  body.night .screen-tabs button.active,body.night .func-tabs button.active{color:var(--brand)}
+  body.night button.ghost{background:var(--panel);color:var(--ink);border-color:var(--line)}
+  body.night .modal .box{background:var(--panel)}
+  body.night .help p,body.night .help li{color:#CBD9EA}
+  body.night .help .warn{background:#3a2e10;border-color:#6b531f;color:#f0c674}
+</style>
+</head>
+<body>
+<div id="skyLayer"></div>
+<header class="top">
+  <div class="logo">🛍️</div>
+  <div>
+    <h1>电商AI Image</h1>
+  </div>
+  <button class="theme-toggle" id="themeToggle" title="点击循环切换：自动→日间→夜间">🌗 自动</button>
+</header>
+
+<nav class="tabs">
+  <div class="tab-indicator" id="tabIndicator"></div>
+  <button data-tab="detail" class="active"><span class="ic">🎨</span><span class="t">做详情页</span><span class="d">传图·填字</span></button>
+  <button data-tab="prompts"><span class="ic">📝</span><span class="t">提示词库</span><span class="d">收藏文案</span></button>
+  <button data-tab="gallery"><span class="ic">🖼️</span><span class="t">素材库</span><span class="d">看图下载</span></button>
+  <button data-tab="help"><span class="ic">❓</span><span class="t">使用说明</span><span class="d">先看这里</span></button>
+</nav>
+
+<!-- ============ 做详情页 ============ -->
+<section class="view active" id="view-detail">
+  <div class="guide">
+    <h4>👋 第一次用？照着 4 步走就行</h4>
+    <div class="steps">
+      <div class="step"><b>① 传白底图</b><span>上传产品白底图（AI 生图底图，只需传一次）</span></div>
+      <div class="step"><b>② 选屏填字</b><span>选第几屏，填标题/文案，右边看效果</span></div>
+      <div class="step"><b>③ AI 生图</b><span>点「AI 生成这张屏」，白底图+提示词变场景图</span></div>
+      <div class="step"><b>④ 导出</b><span>点「导出这张」或「全部 10 张」</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>先挑一个风格</h3>
+    <p class="desc">风格决定整体配色和"生图时的画面调性"。想换风格，点这里切换即可，所有屏一起变。</p>
+    <div class="style-pick" id="stylePick"></div>
+    <label>当前风格的生图提示词前缀（给 AI 生图用，可改）</label>
+    <input type="text" id="stylePrefix" placeholder="例如：清新梦幻、浅粉浅蓝、仙气高级感">
+  </div>
+
+  <div class="card">
+    <h3>第 0 步：上传白底产品图（AI 生图底图）</h3>
+    <p class="desc">上传一张<b>产品白底图</b>（图上只有产品、背景纯白/透明最好）。AI 会基于它在每一屏生成不同场景图——只需传一次，10 屏共用。想让电脑自动生图，这张必须有。</p>
+    <input type="file" id="fProduct" accept="image/*">
+    <div id="productPrev" style="margin-top:10px;display:none;align-items:center;gap:12px">
+      <img id="productThumb" src="" alt="产品图" style="width:90px;height:90px;object-fit:cover;border-radius:10px;border:1px solid var(--line)">
+      <div>
+        <div class="muted" id="productName" style="margin-bottom:6px"></div>
+        <button class="ghost sm" id="btnProductClear">移除重传</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>制作这一屏</h3>
+    <div class="work-area">
+      <div class="left-col">
+        <div class="ios-pill screen-tabs" id="screenList">
+          <div class="pill-indicator" id="screenIndicator"></div>
+        </div>
+        <canvas id="previewCanvas" width="1024" height="1536"></canvas>
+      </div>
+      <div class="right-col">
+        <div class="ios-pill func-tabs" id="funcTabs">
+          <button data-func="content" class="active"><span class="t">内容</span></button>
+          <button data-func="font"><span class="t">字体</span></button>
+          <button data-func="bg"><span class="t">背景</span></button>
+          <button data-func="api"><span class="t">API</span></button>
+          <div class="pill-indicator" id="funcIndicator"></div>
+        </div>
+        <div class="func-panels">
+          <div class="func-panel active" data-func="content">
+            <label>文字放上面还是下面</label>
+            <select id="fLayout">
+              <option value="top">文字在上方</option>
+              <option value="bottom">文字在下方</option>
+            </select>
+            <label>画幅（输出尺寸）</label>
+            <select id="fSize">
+              <option value="1024x1536">详情页竖版 1024×1536</option>
+              <option value="1024x1024">主图 1:1 1024×1024</option>
+              <option value="1536x1024">横版 3:2 1536×1024</option>
+            </select>
+            <label>标题</label>
+            <input type="text" id="fTitle" placeholder="例如：仙气独角兽，为你而来">
+            <label>副标题（文字在上方时才用）</label>
+            <input type="text" id="fSubtitle" placeholder="例如：仿水晶猫眼石手串 / 满钻吊坠">
+            <label>正文（文字在下方时才用，支持换行）</label>
+            <textarea id="fBody" placeholder="每行一段，可写 1. 2. 3. 列点"></textarea>
+            <label>标签（输入后回车添加）</label>
+            <div class="tag-input" id="tagInput">
+              <input type="text" id="fTag" placeholder="输入标签后回车" style="flex:1;min-width:150px">
+            </div>
+            <button class="btn" id="btnGenContent" style="width:100%">🤖 AI 生成这张屏（白底图 + 提示词）</button>
+            <div class="gen-choices" id="genChoices" style="display:none"></div>
+            <p class="warn" id="genHint" style="margin:8px 0 0;display:none"></p>
+            <label style="margin-top:14px">手动替换这张屏的底图（可选，不传就用 AI 生成的图）</label>
+            <input type="file" id="fImg" accept="image/*">
+            <div class="row" style="margin-top:16px">
+              <button class="btn" id="btnExportOne">导出这张 PNG</button>
+              <button class="ghost" id="btnExportAll">导出全部 10 张</button>
+            </div>
+          </div>
+          <div class="func-panel" data-func="font">
+            <div class="sg">
+              <div style="font-weight:800;color:var(--brand);font-size:13px;margin-bottom:8px">字体调节</div>
+              <label style="margin-top:6px">字体行间距 <span class="muted" id="valLine">1.0</span></label>
+              <input type="range" id="fLine" min="0.6" max="2.0" step="0.1" value="1">
+              <label style="margin-top:8px">字体间距（字左右疏密） <span class="muted" id="valBlock">1.0</span></label>
+              <input type="range" id="fBlock" min="0.6" max="2.0" step="0.1" value="1">
+              <label style="margin-top:8px">字体大小（标题/副标题/正文/标签） <span class="muted" id="valFont">1.00</span></label>
+              <input type="range" id="fFont" min="0.6" max="1.6" step="0.05" value="1">
+            </div>
+          </div>
+          <div class="func-panel" data-func="bg">
+            <div class="sg">
+              <div style="font-weight:800;color:var(--brand);font-size:13px;margin-bottom:8px">背景遮罩</div>
+              <label style="margin-top:6px">背景深浅（遮罩浓度） <span class="muted" id="valBg">1.00</span></label>
+              <input type="range" id="fBg" min="0.2" max="1.0" step="0.05" value="1">
+            </div>
+          </div>
+          <div class="func-panel" data-func="api">
+            <div class="api-panel">
+              <p class="muted" style="margin-top:0"><b>图生图流程</b>：顶部「白底产品图」＋ 这屏提示词 → 调 gpt-image-2 → 生成场景图 → 自动叠字导出。</p>
+              <label>redfox API Key（去 redfox.hk 免费注册获取）</label>
+              <input type="text" id="apiKey" placeholder="粘贴你的 redfox API Key">
+              <div class="row">
+                <div><label>保真度（图生图）</label><select id="apiFidelity"><option value="high">高保真（保留产品细节）</option><option value="low">低保真（可大幅改场景）</option></select></div>
+                <div><label>画质</label><select id="apiQuality"><option value="high">高</option><option value="medium">中</option><option value="low">低</option></select></div>
+              </div>
+              <label style="margin-top:10px">一次生成几张（出多张挑一张）</label>
+              <select id="apiCount">
+                <option value="1">1 张</option>
+                <option value="2">2 张</option>
+                <option value="3">3 张</option>
+                <option value="4">4 张</option>
+              </select>
+              <p class="warn" style="margin-top:10px">⚠️ 必须先双击「启动.command」开启本地代理，工具才能联网调 gpt-image-2（纯前端直连会被跨域拦截）。代理只转发请求，不存你的图和数据。</p>
+              <button class="btn sm" id="btnGenOne" style="margin-top:6px">用白底图生成这张屏</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 提示词库 ============ -->
+<section class="view" id="view-prompts">
+  <div class="guide">
+    <h4>📝 提示词库是干嘛的？</h4>
+    <p class="muted" style="margin:0">把平时打磨好的"生图文案 / 种草话术"存进来，下次直接复制用，不用每次重写。支持分类、标签、搜一搜。</p>
+  </div>
+  <div class="card">
+    <h3>新增 / 修改一条</h3>
+    <div class="row">
+      <div><label>标题</label><input type="text" id="pTitle" placeholder="例如：甜系详情页主图"></div>
+      <div><label>分类</label><input type="text" id="pCat" placeholder="详情页 / 海报 / 种草文"></div>
+    </div>
+    <label>标签（逗号分隔）</label>
+    <input type="text" id="pTags" placeholder="甜粉, 电商, 主图">
+    <label>正文（就是提示词内容）</label>
+    <textarea id="pContent" style="min-height:100px"></textarea>
+    <div class="row" style="margin-top:14px">
+      <button class="btn" id="btnSavePrompt">保存</button>
+      <button class="ghost" id="btnClearPrompt">清空</button>
+    </div>
+  </div>
+  <div class="card">
+    <h3>搜一搜 / 看看库里有什么</h3>
+    <input type="text" id="pSearch" placeholder="搜标题 / 正文 / 标签 / 分类">
+    <div class="grid" id="promptGrid" style="margin-top:14px"></div>
+  </div>
+</section>
+
+<!-- ============ 素材库 ============ -->
+<section class="view" id="view-gallery">
+  <div class="guide">
+    <h4>🖼️ 素材库是干嘛的？</h4>
+    <p class="muted" style="margin:0">把做好的图、参考图传进来，打标签、写备注、点开看大图、下载或删除。存在你浏览器里，关了再开还在。</p>
+  </div>
+  <div class="card">
+    <h3>上传素材（可一次选多张）</h3>
+    <input type="file" id="gUpload" accept="image/*" multiple>
+  </div>
+  <div class="card">
+    <h3>筛选</h3>
+    <div class="row">
+      <div><label>按标签筛选</label><input type="text" id="gFilterTag" placeholder="如：主图"></div>
+      <div><label>按备注关键词</label><input type="text" id="gFilterNote" placeholder="如：待修"></div>
+    </div>
+    <div class="gallery-grid" id="galleryGrid" style="margin-top:14px"></div>
+  </div>
+</section>
+
+<!-- ============ 使用说明 ============ -->
+<section class="view help" id="view-help">
+  <div class="card">
+    <h2 style="margin-top:0">一、这是什么</h2>
+    <p>一个<strong>双击就能打开</strong>的电商内容小工具，专门给做电商详情页、海报的运营小伙伴用。不用装软件、不用注册、不用联网（除非你要接生图 API）。所有数据都存在你自己的电脑浏览器里。</p>
+
+    <h2>二、第一次怎么用（做一张详情页）</h2>
+    <ol>
+      <li>打开「做详情页」页（默认就在这）。</li>
+      <li>最上方「<b>第 0 步</b>」上传一张<b>产品白底图</b>（图上只有产品、背景纯白/透明最好）。它是 AI 生图的底图，10 屏共用，只需传一次。</li>
+      <li>点「<b>先挑一个风格</b>」选一套配色（默认是<b>天空蓝</b>，还有甜粉梦幻 / 高级黑金 / 清新森系 / 国潮 / 简约白）。</li>
+      <li>上方点 <b>第几屏</b>，填标题/文案，右边<strong>实时预览</strong>效果。</li>
+      <li>点内容面板的「🤖 <b>AI 生成这张屏</b>」（或去「API」面板填好 redfox Key 后点生成）：工具把白底图 + 这屏提示词发给 gpt-image-2，<strong>生成场景图并自动叠字</strong>。</li>
+      <li>满意了点「<b>导出这张 PNG</b>」，或「<b>导出全部 10 张</b>」一次性出片。</li>
+    </ol>
+
+    <h2>三、怎么更换生图风格</h2>
+    <p>在「做详情页」页最上方有一个 <b>风格选择条</b>（默认是<b>天空蓝</b>，还有甜粉梦幻 / 高级黑金 / 清新森系 / 国潮 / 简约白）。点一下就切换，<strong>所有屏的配色立刻跟着变</strong>。</p>
+    <p>下面还有一行「<b>当前风格的生图提示词前缀</b>」——这是给 AI 生图用的"画面调性词"（比如"清新梦幻、浅粉浅蓝"）。你换风格时它会自动跟着改，也能自己手动改，让生出来的图更贴你的品类。</p>
+
+    <h2>四、提示词怎么用</h2>
+    <ol>
+      <li>切到「<b>提示词库</b>」页，写一条：填标题、分类（如"详情页/海报"）、标签、正文（就是提示词内容），点保存。</li>
+      <li>以后在上方搜索框搜关键词就能找到，点「编辑」可改、点「删除」可删。</li>
+      <li>用法：把这库的提示词复制到任意 AI 生图工具（比如对话里让我生图、或你自己的生图平台）去生成图片，再把图回到「做详情页」上传叠字。</li>
+    </ol>
+
+    <h2>五、怎么让工具自己调 gpt-image-2 生图（图生图）</h2>
+    <p>本工具用 <strong>图生图</strong>：把你上传的<b>白底产品图</b>当作底图，加上每屏的提示词，调用 gpt-image-2 生成电商场景图，再自动叠字。流程：</p>
+    <ol>
+      <li>去 <a href="https://redfox.hk/settings/api-keys?source=skillhub" target="_blank" rel="noopener">redfox.hk</a> 免费注册，拿到 <b>API Key</b>。</li>
+      <li>第一次用，<b>双击本目录里的「启动.command」</b> —— 它会开一个本地小代理并自动打开工具（纯前端直连 redfox 会被跨域拦截，必须经过这个代理；代理只转发请求，不存你的图）。</li>
+      <li>在「做详情页」的「API」面板把 Key 填进去（会自动记住），选好保真度/画质。</li>
+      <li>回到内容面板点「🤖 AI 生成这张屏」，工具自动完成：上传白底图 → 调 gpt-image-2 → 生成场景图 → 叠字预览。</li>
+    </ol>
+    <div class="warn">⚠️ 说明：白底产品图是<strong>必填</strong>的（图生图必须有底图）。如果暂时不想接 API，也可以手动在每屏「上传这张屏的底图」放一张现成图，照样能叠字导出。代理关掉后，纯前端模式只能做"手动传图 + 叠字"，不能联网生图。</div>
+
+    <h2>六、常见问题</h2>
+    <ul>
+      <li><b>数据会不会丢？</b> 提示词和素材存在你这台电脑的浏览器里，关掉再开还在；但<strong>清浏览器缓存/换浏览器会没</strong>，重要内容记得导出备份。</li>
+      <li><b>换电脑还能用吗？</b> 把这个 HTML 文件拷贝过去双击就行，但里面的数据不跟着文件走（存在原电脑浏览器）。</li>
+      <li><b>能批量导出 zip 吗？</b> 当前是逐张下载，已满足绝大多数场景；需要打包可后续加。</li>
+    </ul>
+  </div>
+</section>
+
+<div class="modal" id="modal">
+  <div class="box">
+    <img id="modalImg" src="">
+    <label>标签（逗号分隔）</label><input type="text" id="modalTags">
+    <label>备注</label><textarea id="modalNote"></textarea>
+    <div class="row" style="margin-top:14px">
+      <button class="btn" id="modalSave">保存标签/备注</button>
+      <a class="ghost btn" id="modalDl" download>下载</a>
+      <button class="danger" id="modalDel">删除</button>
+      <button class="ghost" id="modalClose">关闭</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ 通用 ============ */
+const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1900);}
+function updateTabIndicator(){
+  const ind=$('#tabIndicator'), active=$('nav.tabs button.active');
+  if(!ind||!active) return;
+  const rect=active.getBoundingClientRect(), parent=active.parentElement.getBoundingClientRect();
+  ind.style.left=(rect.left-parent.left)+'px';
+  ind.style.width=rect.width+'px';
+}
+function switchTab(n){
+  $$('nav.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===n));
+  $$('.view').forEach(v=>v.classList.toggle('active',v.id==='view-'+n));
+  requestAnimationFrame(updateTabIndicator);
+}
+$$('nav.tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+function updateScreenIndicator(){
+  const ind=$('#screenIndicator'), active=$('#screenList button.active');
+  if(!ind||!active) return;
+  const rect=active.getBoundingClientRect(), parent=active.parentElement.getBoundingClientRect();
+  ind.style.left=(rect.left-parent.left)+'px';
+  ind.style.width=rect.width+'px';
+}
+function updateFuncIndicator(){
+  const ind=$('#funcIndicator'), active=$('#funcTabs button.active');
+  if(!ind||!active) return;
+  const rect=active.getBoundingClientRect(), parent=active.parentElement.getBoundingClientRect();
+  ind.style.left=(rect.left-parent.left)+'px';
+  ind.style.width=rect.width+'px';
+}
+function switchFunc(n){
+  $$('#funcTabs button').forEach(b=>b.classList.toggle('active',b.dataset.func===n));
+  $$('.func-panel').forEach(p=>p.classList.toggle('active',p.dataset.func===n));
+  requestAnimationFrame(updateFuncIndicator);
+}
+$$('#funcTabs button').forEach(b=>b.onclick=()=>switchFunc(b.dataset.func));
+function updateAllIndicators(){updateTabIndicator();updateScreenIndicator();updateFuncIndicator();}
+window.addEventListener('resize',updateAllIndicators);
+
+/* ============ 日间 / 夜间模式 ============ */
+const TT=$('#themeToggle');
+const SKY=$('#skyLayer');
+const mq=window.matchMedia('(prefers-color-scheme: dark)');
+function effNight(mode){ return mode==='night' || (mode==='auto' && mq.matches); }
+function applyTheme(mode){
+  try{localStorage.setItem('wb_theme',mode);}catch(e){}
+  const night=effNight(mode);
+  document.body.classList.toggle('night',night);
+  TT.textContent = mode==='auto' ? '🌗 自动' : (night ? '☀️ 日间' : '🌙 夜间');
+  TT.title = '当前：'+(mode==='auto'?'跟随系统':(night?'夜间':'日间'))+'（点击循环切换：自动→日间→夜间）';
+  requestAnimationFrame(updateAllIndicators);
+}
+const TM_ORDER=['auto','day','night'];
+TT.onclick=()=>{ const cur=(function(){try{return localStorage.getItem('wb_theme')||'auto';}catch(e){return 'auto';}})(); const next=TM_ORDER[(TM_ORDER.indexOf(cur)+1)%TM_ORDER.length]; applyTheme(next); };
+try{ if(mq.addEventListener) mq.addEventListener('change',()=>{ if((localStorage.getItem('wb_theme')||'auto')==='auto') applyTheme('auto'); }); }catch(e){}
+function buildSky(){
+  if(!SKY) return;
+  for(let i=0;i<12;i++){
+    const c=document.createElement('div'); c.className='cloud';
+    const w=90+Math.random()*160; const h=w*(0.38+Math.random()*0.18);
+    c.style.width=w+'px'; c.style.height=h+'px';
+    c.style.top=(4+Math.random()*32)+'%';
+    c.style.left=(-20+Math.random()*120)+'%';
+    c.style.opacity=0.82+Math.random()*0.13;
+    c.style.animationDuration=(50+Math.random()*70)+'s';
+    c.style.animationDelay=(-Math.random()*60)+'s';
+    SKY.appendChild(c);
+  }
+  const moon=document.createElement('div'); moon.className='moon'; SKY.appendChild(moon);
+  for(let i=0;i<42;i++){
+    const s=document.createElement('div'); s.className='star';
+    const size=1.2+Math.random()*2.2;
+    s.style.width=size+'px'; s.style.height=size+'px';
+    s.style.top=(3+Math.random()*65)+'%';
+    s.style.left=(2+Math.random()*96)+'%';
+    s.style.animationDuration=(2.5+Math.random()*4)+'s';
+    s.style.animationDelay=(-Math.random()*5)+'s';
+    SKY.appendChild(s);
+  }
+}
+buildSky();
+try{ applyTheme((localStorage.getItem('wb_theme')||'auto')); }catch(e){}
+requestAnimationFrame(updateAllIndicators);
+window.addEventListener('load',updateAllIndicators);
+
+/* ============ 风格包 ============ */
+const STYLES=[
+  {id:'sky',name:'天空蓝',swatch:'#2E9BE6',
+   colors:{title:[26,90,140],subtitle:[46,120,170],body:[70,100,125],tag_bg:[232,243,253],tag_color:[40,120,180],gradient:[235,246,253]},
+   prefix:'清新通透的电商产品图：天空蓝色调、干净明亮、柔和自然光、清爽留白、轻盈高级感，画面不要出现任何文字'},
+  {id:'sweet',name:'甜粉梦幻',swatch:'#E8639B',
+   colors:{title:[199,92,153],subtitle:[214,120,170],body:[140,105,130],tag_bg:[255,244,250],tag_color:[214,110,165],gradient:[255,235,244]},
+   prefix:'清新梦幻的电商产品图：浅粉浅蓝色调、仙气高级感、柔和自然光、晶莹剔透、干净留白，画面不要出现任何文字'},
+  {id:'gold',name:'高级黑金',swatch:'#1A1A1A',
+   colors:{title:[212,175,110],subtitle:[200,170,120],body:[210,210,210],tag_bg:[30,30,30],tag_color:[220,180,110],gradient:[20,20,20]},
+   prefix:'轻奢高级感电商产品图：黑金配色、金属质感、光影层次、极简留白、低调奢华，画面不要出现任何文字'},
+  {id:'forest',name:'清新森系',swatch:'#5BA87C',
+   colors:{title:[58,110,78],subtitle:[90,140,110],body:[80,100,90],tag_bg:[240,248,242],tag_color:[60,130,95],gradient:[235,247,240]},
+   prefix:'清新森系电商产品图：自然绿白、日系干净、柔和 daylight、植物质感、大量留白，画面不要出现任何文字'},
+  {id:'guochao',name:'国潮复古',swatch:'#C0392B',
+   colors:{title:[176,40,30],subtitle:[200,90,60],body:[90,60,55],tag_bg:[250,242,235],tag_color:[180,50,40],gradient:[248,238,230]},
+   prefix:'国潮复古风电商产品图：中国红与金、传统纹样、喜庆典雅、质感厚重、留白构图，画面不要出现任何文字'},
+  {id:'minimal',name:'简约白底',swatch:'#EEEEEE',
+   colors:{title:[40,40,40],subtitle:[90,90,90],body:[70,70,70],tag_bg:[245,245,245],tag_color:[60,60,60],gradient:[255,255,255]},
+   prefix:'极简电商产品图：纯白背景、产品居中、干净专业、柔和阴影、商业摄影感，画面不要出现任何文字'}
+];
+let curStyle='sky';
+const getStyle=()=>STYLES.find(s=>s.id===curStyle)||STYLES[0];
+
+/* ============ 详情页叠文案 ============ */
+const F={title:48,title_main:56,subtitle:30,body:28,tag:24};
+const PAD=64,TITLE_LH=64,SUB_LH=40,BODY_LH=40,TAG_H=40;
+const SIZES={
+  '1024x1536':{w:1024,h:1536,label:'详情页竖版'},
+  '1024x1024':{w:1024,h:1024,label:'主图 1:1'},
+  '1536x1024':{w:1536,h:1024,label:'横版 3:2'}
+};
+const SCREENS=[
+ {id:1,layout:'top',title:'仙气独角兽，为你而来',subtitle:'仿水晶猫眼石手串 / 精致满钻吊坠',tags:['自带仙气','显白百搭','梦幻点缀'],img:null,lineSpacing:1,charSpacing:1,prompt:'将这张手串产品图重制为清新梦幻的电商主图：乳白色猫眼质感仿水晶圆珠手串，搭配满钻银色独角兽吊坠，木纹桌面背景，柔和自然光晕，浅粉浅蓝色调，晶莹剔透，干净留白'},
+ {id:2,layout:'bottom',title:'腕间一抹温柔，点亮气质',body:'莹润通透的仿水晶，自带温婉光泽。轻松百搭各种日常穿搭，举手投足间尽显温柔仙气。',tags:[],img:null,lineSpacing:1,charSpacing:1,prompt:'年轻女性白皙手腕特写，腕间佩戴乳白色猫眼手串与满钻独角兽吊坠，浅色毛衣背景，清新仙气，温柔显白'},
+ {id:3,layout:'bottom',title:'凝脂玉润，颗颗精选',body:'高品质仿水晶材质，圆润细腻不刮手。光线下呈现迷人光晕，仿佛一汪清泉凝结于腕间，质感十足。',tags:[],img:null,lineSpacing:1,charSpacing:1,prompt:'微距特写乳白色仿水晶圆珠表面，展现猫眼灵动光晕与半透明润泽质感，柔和光斑'},
+ {id:4,layout:'bottom',title:'宝藏独角兽，守护少女心',body:'精致金属烤漆工艺，镶嵌璀璨水钻。独角兽姿态灵动，寓意纯洁与好运，为整体增加一抹俏皮与梦幻。',tags:[],img:null,lineSpacing:1,charSpacing:1,prompt:'微距特写银色满钻独角兽吊坠，水钻璀璨闪耀，柔和甜粉色虚化光斑，梦幻少女感'},
+ {id:5,layout:'bottom',title:'精工细作，细节取胜',body:'1. 温润仿水晶珠\n2. 定制金属隔片\n3. 闪耀满钻吊坠\n4. 柔软高弹力绳\n多重品质交汇，成就精致手饰。',tags:[],img:null,lineSpacing:1,charSpacing:1,prompt:'电商产品部件平铺图：仿水晶圆珠、金属隔片、独角兽吊坠、弹力绳，整齐排列浅色背景，大量留白'},
+ {id:6,layout:'bottom',title:'柔韧无束缚，轻松戴取',body:'采用高弹力记忆绳，拉伸力强，不易变形，久戴不勒手。适合不同粗细的手腕，方便穿脱无压力。',tags:[],img:null,lineSpacing:1,charSpacing:1,prompt:'双手轻轻撑开乳白色仿水晶手串，展示高弹力绳柔韧延展性，浅色干净背景'},
+ {id:7,layout:'bottom',title:'甜美日常，治愈出街',body:'森系 / 日系少女感穿搭的完美点缀。让日常出游更具童话色彩，精致吸睛不撞款。',tags:[],img:null,lineSpacing:1,charSpacing:1,prompt:'清新甜美少女风场景：乳白色猫眼手串搭配 JK 裙与百褶裙，浅粉浅蓝色调，日系森系穿搭'},
+ {id:8,layout:'bottom',title:'知性通勤，温婉加分',body:'不需要繁琐的搭配，单戴就足够出彩。在职场中展现低调的优雅，保留一份灵气。',tags:[],img:null,lineSpacing:1,charSpacing:1,prompt:'知性通勤场景：乳白色猫眼手串搭配干练西装与白衬衫，优雅简约，温婉高级'},
+ {id:9,layout:'bottom',title:'一份好礼，送她一抹星光',body:'赠予闺蜜的友谊见证，送女友的浪漫信物，或是给自己的小奖励。把幸运戴在手上。',tags:[],img:null,lineSpacing:1,charSpacing:1,prompt:'礼物场景：乳白色猫眼独角兽手串放置精美礼盒与丝绒袋，旁边许愿卡，浅粉浅蓝色调，温馨浪漫'},
+ {id:10,layout:'bottom',title:'养护小贴士，美丽更持久',body:'1. 避免与硬物摩擦磕碰。\n2. 洗澡运动时建议摘下。\n3. 不佩戴时放回密封袋防氧化。\n4. 可用微湿软布擦拭。',tags:[],img:null,lineSpacing:1,charSpacing:1,prompt:'干净简约浅色背景，乳白色猫眼手串静置于整洁台面，旁边柔软布料与简洁卡片，清新养护主题'}
+];
+let cur=0; const curScreen=()=>SCREENS[cur];
+/* 白底产品图（项目级，AI 生图底图） */
+let PRODUCT_IMG=null;
+try{const p=localStorage.getItem('wb_product');if(p)PRODUCT_IMG=p;}catch(e){}
+function showProductPreview(){const box=$('#productPrev');if(PRODUCT_IMG){box.style.display='flex';$('#productThumb').src=PRODUCT_IMG;$('#productName').textContent='白底产品图已载入（10 屏共用）';}else{box.style.display='none';}}
+$('#fProduct').onchange=async e=>{const f=e.target.files[0];if(!f)return;
+  const u=await new Promise(r=>{const rd=new FileReader();rd.onload=()=>r(rd.result);rd.readAsDataURL(f);});
+  PRODUCT_IMG=u;try{localStorage.setItem('wb_product',u);}catch(e){}showProductPreview();toast('白底产品图已载入');};
+$('#btnProductClear').onclick=()=>{PRODUCT_IMG=null;try{localStorage.removeItem('wb_product');}catch(e){}showProductPreview();$('#fProduct').value='';toast('已移除白底图');};
+function wrapText(ctx,text,maxW,sp){const out=[];const wOf=s=>{let w=0;for(const ch of s)w+=ctx.measureText(ch).width+sp;return Math.max(0,w-sp);};for(const para of text.split('\n')){if(para===''){out.push('');continue;}let line='';for(const ch of para){if(wOf(line+ch)<=maxW)line+=ch;else{out.push(line);line=ch;}}out.push(line);}return out;}
+function drawLine(ctx,s,x,y,sp){let cx=x;for(const ch of s){ctx.fillText(ch,cx,y);cx+=ctx.measureText(ch).width+sp;}}
+function rgb(a,al){return `rgba(${a[0]},${a[1]},${a[2]},${al})`;}
+function renderScreenTo(canvas,sc,img){
+  const ctx=canvas.getContext('2d');const sz=SIZES[sc.size]||SIZES['1024x1536'];const W=sz.w,H=sz.h;canvas.width=W;canvas.height=H;ctx.clearRect(0,0,W,H);
+  if(img)ctx.drawImage(img,0,0,W,H);else{ctx.fillStyle='#eee';ctx.fillRect(0,0,W,H);}
+  ctx.textBaseline='top';const MAXW=W-PAD*2;const C=getStyle().colors;const grad=C.gradient;
+  const LS=(parseFloat(sc.lineSpacing)||1),CS=(parseFloat(sc.charSpacing)||1),BO=Math.min(1,Math.max(0.2,(parseFloat(sc.bgOpacity)||1))),FS=Math.min(1.6,Math.max(0.6,(parseFloat(sc.fontScale)||1)));
+  const tH=TITLE_LH*LS*FS,sH=SUB_LH*LS*FS,bH=BODY_LH*LS*FS,tgH=TAG_H*FS,tgF=F.tag*FS;const spOf=fs=>(CS-1)*fs*0.16;
+  if(sc.layout==='top'){
+    const tm=F.title_main*FS,sm=F.subtitle*FS;
+    ctx.font=`bold ${tm}px 'PingFang SC','Heiti SC',sans-serif`;const spT=spOf(tm);
+    const tl=wrapText(ctx,sc.title||'',MAXW,spT);
+    ctx.font=`${sm}px 'PingFang SC','Heiti SC',sans-serif`;const spS=spOf(sm);
+    const sl=wrapText(ctx,sc.subtitle||'',MAXW,spS);
+    const block=50+tl.length*tH+12+sl.length*sH+16+tgH+40;
+    for(let i=0;i<block;i++){const a=(245+(170-245)*(i/Math.max(block-1,1)))/255*BO;ctx.fillStyle=rgb(grad,a);ctx.fillRect(0,i,W,1);}
+    ctx.font=`bold ${tm}px 'PingFang SC','Heiti SC',sans-serif`;let y=50;
+    for(const ln of tl){ctx.fillStyle=rgb(C.title,1);drawLine(ctx,ln,PAD,y,spT);y+=tH;}y+=12;
+    ctx.font=`${sm}px 'PingFang SC','Heiti SC',sans-serif`;
+    for(const ln of sl){ctx.fillStyle=rgb(C.subtitle,1);drawLine(ctx,ln,PAD,y,spS);y+=sH;}y+=16;drawTags(ctx,sc.tags,PAD,y,C,spS,tgF);
+  }else{
+    const tm=F.title*FS,bm=F.body*FS;
+    ctx.font=`bold ${tm}px 'PingFang SC','Heiti SC',sans-serif`;const spT=spOf(tm);
+    const tl=wrapText(ctx,sc.title||'',MAXW,spT);
+    ctx.font=`${bm}px 'PingFang SC','Heiti SC',sans-serif`;const spB=spOf(bm);
+    const bl=wrapText(ctx,sc.body||'',MAXW,spB);
+    const block=50+tl.length*tH+12+bl.length*bH+50;const top=H-block;
+    for(let i=0;i<block;i++){const a=(170+(245-170)*(i/Math.max(block-1,1)))/255*BO;ctx.fillStyle=rgb(grad,a);ctx.fillRect(0,top+i,W,1);}
+    ctx.font=`bold ${tm}px 'PingFang SC','Heiti SC',sans-serif`;let y=top+50;
+    for(const ln of tl){ctx.fillStyle=rgb(C.title,1);drawLine(ctx,ln,PAD,y,spT);y+=tH;}y+=12;
+    ctx.font=`${bm}px 'PingFang SC','Heiti SC',sans-serif`;
+    for(const ln of bl){if(ln===''){y+=bH*0.4;continue;}ctx.fillStyle=rgb(C.body,1);drawLine(ctx,ln,PAD,y,spB);y+=bH;}
+  }
+}
+function drawTags(ctx,tags,x,y,C,sp,tagFont){
+  ctx.font=`${tagFont}px 'PingFang SC','Heiti SC',sans-serif`;const padX=18,padY=8,gap=14,radius=22;let cx=x;
+  for(const t of (tags||[])){let tw=0;for(const ch of t)tw+=ctx.measureText(ch).width+sp;tw=Math.max(0,tw-sp)+padX*2;const th=tagFont+padY*2;
+    ctx.fillStyle=rgb(C.tag_bg,205/255);if(ctx.roundRect){ctx.beginPath();ctx.roundRect(cx,y,tw,th,radius);ctx.fill();}else ctx.fillRect(cx,y,tw,th);
+    ctx.fillStyle=rgb(C.tag_color,1);let tx=cx+padX;for(const ch of t){ctx.fillText(ch,tx,y+padY);tx+=ctx.measureText(ch).width+sp;}cx+=tw+gap;}
+}
+const canvas=$('#previewCanvas');
+function loadImg(u){return new Promise(r=>{const im=new Image();im.onload=()=>r(im);im.src=u;});}
+function refreshDetail(){
+  const sc=curScreen();$('#fLayout').value=sc.layout;$('#fSize').value=sc.size||'1024x1536';$('#fTitle').value=sc.title||'';
+  $('#fSubtitle').value=sc.subtitle||'';$('#fBody').value=sc.body||'';renderTags();
+  $('#genChoices').style.display='none';
+  $('#fLine').value=sc.lineSpacing||1;$('#fBlock').value=sc.charSpacing||1;$('#fBg').value=sc.bgOpacity||1;$('#fFont').value=sc.fontScale||1;
+  $('#valLine').textContent=(sc.lineSpacing||1).toFixed(1);$('#valBlock').textContent=(sc.charSpacing||1).toFixed(1);$('#valBg').textContent=(sc.bgOpacity||1).toFixed(2);$('#valFont').textContent=(sc.fontScale||1).toFixed(2);
+  if(sc.img)loadImg(sc.img).then(im=>renderScreenTo(canvas,sc,im));else renderScreenTo(canvas,sc,null);
+}
+function renderTags(){const box=$('#tagInput');$$('#tagInput .tag-chip').forEach(e=>e.remove());
+  curScreen().tags.forEach((t,i)=>{const c=document.createElement('span');c.className='tag-chip';
+    c.innerHTML=`${t} <b data-i="${i}">×</b>`;c.querySelector('b').onclick=()=>{curScreen().tags.splice(i,1);renderTags();refreshDetail();};box.appendChild(c);});}
+function buildScreenList(){const box=$('#screenList');const ind=$('#screenIndicator');box.innerHTML='';if(ind)box.appendChild(ind);
+  SCREENS.forEach((s,i)=>{const b=document.createElement('button');b.textContent=s.id;b.classList.toggle('active',i===cur);
+    b.onclick=()=>{cur=i;buildScreenList();refreshDetail();};box.appendChild(b);});
+  requestAnimationFrame(updateScreenIndicator);}
+function buildStylePick(){const box=$('#stylePick');box.innerHTML='';
+  STYLES.forEach(s=>{const b=document.createElement('button');b.classList.toggle('active',s.id===curStyle);
+    b.innerHTML=`<span class="swatch" style="background:${s.swatch}"></span>${s.name}`;
+    b.onclick=()=>{curStyle=s.id;buildStylePick();$('#stylePrefix').value=s.prefix;refreshDetail();};box.appendChild(b);});}
+$('#stylePrefix').value=getStyle().prefix;
+$('#fLayout').onchange=e=>{curScreen().layout=e.target.value;refreshDetail();};
+$('#fSize').onchange=e=>{curScreen().size=e.target.value;refreshDetail();};
+$('#fTitle').oninput=e=>{curScreen().title=e.target.value;refreshDetail();};
+$('#fSubtitle').oninput=e=>{curScreen().subtitle=e.target.value;refreshDetail();};
+$('#fBody').oninput=e=>{curScreen().body=e.target.value;refreshDetail();};
+$('#fLine').oninput=e=>{curScreen().lineSpacing=parseFloat(e.target.value);$('#valLine').textContent=curScreen().lineSpacing.toFixed(1);refreshDetail();};
+$('#fBlock').oninput=e=>{curScreen().charSpacing=parseFloat(e.target.value);$('#valBlock').textContent=curScreen().charSpacing.toFixed(1);refreshDetail();};
+$('#fBg').oninput=e=>{curScreen().bgOpacity=parseFloat(e.target.value);$('#valBg').textContent=curScreen().bgOpacity.toFixed(2);refreshDetail();};
+$('#fFont').oninput=e=>{curScreen().fontScale=parseFloat(e.target.value);$('#valFont').textContent=curScreen().fontScale.toFixed(2);refreshDetail();};
+$('#fTag').onkeydown=e=>{if(e.key==='Enter'){const v=e.target.value.trim();if(v){curScreen().tags.push(v);e.target.value='';renderTags();refreshDetail();}}};
+$('#fImg').onchange=async e=>{const f=e.target.files[0];if(!f)return;
+  const u=await new Promise(r=>{const rd=new FileReader();rd.onload=()=>r(rd.result);rd.readAsDataURL(f);});
+  curScreen().img=u;loadImg(u).then(im=>renderScreenTo(canvas,curScreen(),im));toast('图片已载入');};
+function downloadCanvas(c,name){c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);});}
+$('#btnExportOne').onclick=()=>{const sc=curScreen();if(!sc.img){toast('请先上传这张屏的视觉图');return;}
+  loadImg(sc.img).then(im=>{const c=document.createElement('canvas');renderScreenTo(c,sc,im);downloadCanvas(c,'screen_'+String(sc.id).padStart(2,'0')+'.png');});};
+$('#btnExportAll').onclick=async()=>{let n=0;for(const sc of SCREENS){if(!sc.img)continue;const im=await loadImg(sc.img);
+  const c=document.createElement('canvas');renderScreenTo(c,sc,im);c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='screen_'+String(sc.id).padStart(2,'0')+'.png';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);});n++;await new Promise(r=>setTimeout(r,300));}
+  toast(n?('已导出 '+n+' 张'):'没有可导出的屏（请先上传图片）');};
+/* ============ 图生图：白底产品图 + 提示词 → gpt-image-2（经本地代理） ============ */
+const PROXY_URL = location.origin.startsWith('http') ? '/api/gen' : 'http://localhost:8765/api/gen';
+function dataURLtoBlob(u){const h=u.split(',')[0];const m=h.match(/:(.*?);/)[1];const bin=atob(u.split(',')[1]);const arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return new Blob([arr],{type:m});}
+function setScreenImg(sc,img){sc.img=img;loadImg(img).then(im=>renderScreenTo(canvas,sc,im));}
+function showImageChooser(imgs,sc){
+  const box=$('#genChoices');box.innerHTML='';box.style.display='flex';
+  box.insertAdjacentHTML('beforeend','<div style="font-size:12px;color:var(--muted);width:100%;margin-bottom:6px">生成了 '+imgs.length+' 张，点一张放入本屏：</div>');
+  imgs.forEach((u,i)=>{const b=document.createElement('button');b.className='gc-thumb';b.innerHTML='<img src="'+u+'"><span>'+(i+1)+'</span>';
+    b.onclick=()=>{setScreenImg(sc,u);box.style.display='none';toast('已放入第 '+(i+1)+' 张');};
+    box.appendChild(b);});
+}
+function genOne(){
+  const sc=curScreen();
+  const key=$('#apiKey').value.trim();
+  if(!PRODUCT_IMG){toast('请先在顶部第 0 步上传白底产品图');switchTab('detail');$('#fProduct').scrollIntoView({behavior:'smooth'});return;}
+  if(!key){toast('请先在「API」面板填 redfox Key');switchFunc('api');return;}
+  const prompt=getStyle().prefix+'。'+sc.prompt+'，画面不要出现任何文字';
+  const payload={image_b64:PRODUCT_IMG,prompt,key,fidelity:$('#apiFidelity').value,quality:$('#apiQuality').value,size:sc.size||'1024x1536',n:$('#apiCount').value||'1'};
+  const hint=$('#genHint');hint.style.display='block';hint.textContent='⏳ 正在用白底图生成场景图（约 10–40 秒）…';
+  $('#genChoices').style.display='none';
+  toast('正在生图…');
+  fetch(PROXY_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+    .then(r=>r.json().catch(()=>null))
+    .then(j=>{
+      if(!j||j.error){const msg=(j&&j.error)||'接口无返回';hint.style.display='block';hint.textContent='⚠️ 生图失败：'+msg+'（若本页是公网静态页或直接打开的文件，需电脑双击「启动.command」开启本地代理才能联网生图）';toast('生图失败');console.error(msg);return;}
+      const imgs=j.images||(j.image?[j.image]:[]);
+      if(!imgs.length){hint.style.display='block';hint.textContent='⚠️ 生图成功但未返回图片';return;}
+      hint.style.display='none';
+      if(imgs.length>1){showImageChooser(imgs,sc);toast('生成 '+imgs.length+' 张，请挑选');}
+      else{setScreenImg(sc,imgs[0]);toast('生图成功，已放入本屏');}
+    })
+    .catch(err=>{hint.style.display='block';hint.textContent='⚠️ 生图失败：请确认已双击「启动.command」开启本地代理，或用别的工具生图后上传。'+err;toast('生图失败');console.error(err);});
+}
+$('#btnGenOne').onclick=genOne;
+$('#btnGenContent').onclick=genOne;
+/* API Key 记忆 */
+try{const k=localStorage.getItem('wb_apikey');if(k)$('#apiKey').value=k;}catch(e){}
+$('#apiKey').oninput=e=>{try{localStorage.setItem('wb_apikey',e.target.value.trim());}catch(x){}};
+buildStylePick();buildScreenList();refreshDetail();showProductPreview();
+
+/* ============ 提示词库 ============ */
+const PKEY='wb_prompts_v1';
+function getPrompts(){try{return JSON.parse(localStorage.getItem(PKEY)||'[]');}catch(e){return [];}}
+function setPrompts(a){localStorage.setItem(PKEY,JSON.stringify(a));}
+let editingId=null;
+function esc(s){return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function renderPrompts(){const q=$('#pSearch').value.trim().toLowerCase();
+  const list=getPrompts().filter(p=>!q||(p.title+p.content+(p.category||'')+(p.tags||[]).join(',')).toLowerCase().includes(q));
+  const grid=$('#promptGrid');grid.innerHTML='';
+  if(!list.length){grid.innerHTML='<p class="muted">还没有提示词，先在上面加一条吧。</p>';return;}
+  list.forEach(p=>{const d=document.createElement('div');d.className='pitem';
+    d.innerHTML=`<div class="pt">${esc(p.title)}</div><div class="pc">${esc(p.category||'未分类')}</div>
+      <div class="pcon">${esc(p.content)}</div>${(p.tags||[]).map(t=>`<span class="ptag">${esc(t)}</span>`).join('')}
+      <div style="margin-top:10px;display:flex;gap:8px"><button class="ghost sm" data-edit="${p.id}">编辑</button><button class="danger sm" data-del="${p.id}">删除</button></div>`;
+    grid.appendChild(d);});
+  $$('#promptGrid [data-edit]').forEach(b=>b.onclick=()=>editPrompt(b.dataset.edit));
+  $$('#promptGrid [data-del]').forEach(b=>b.onclick=()=>{setPrompts(getPrompts().filter(x=>x.id!==b.dataset.del));renderPrompts();toast('已删除');});}
+function editPrompt(id){const p=getPrompts().find(x=>x.id===id);if(!p)return;editingId=id;
+  $('#pTitle').value=p.title;$('#pCat').value=p.category||'';$('#pTags').value=(p.tags||[]).join(',');$('#pContent').value=p.content;switchTab('prompts');toast('已载入，改完点保存');}
+$('#btnSavePrompt').onclick=()=>{const title=$('#pTitle').value.trim();if(!title){toast('标题不能为空');return;}
+  const tags=$('#pTags').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const data={title,category:$('#pCat').value.trim(),tags,content:$('#pContent').value};const all=getPrompts();
+  if(editingId){const i=all.findIndex(x=>x.id===editingId);if(i>=0)all[i]={...all[i],...data};editingId=null;}else{data.id='p'+Date.now();all.unshift(data);}
+  setPrompts(all);renderPrompts();$('#pTitle').value='';$('#pCat').value='';$('#pTags').value='';$('#pContent').value='';toast('已保存');};
+$('#btnClearPrompt').onclick=()=>{editingId=null;$('#pTitle').value='';$('#pCat').value='';$('#pTags').value='';$('#pContent').value='';};
+$('#pSearch').oninput=renderPrompts;renderPrompts();
+
+/* ============ 素材库 ============ */
+const DB='wb_gallery';let dbp=null;
+function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open(DB,1);
+  r.onupgradeneeded=()=>{const db=r.result;if(!db.objectStoreNames.contains('imgs'))db.createObjectStore('imgs',{keyPath:'id'});};
+  r.onsuccess=()=>{dbp=r.result;res(dbp);};r.onerror=()=>rej(r.error);});}
+function dbAll(){return new Promise((res,rej)=>{const tx=dbp.transaction('imgs','readonly').objectStore('imgs').getAll();tx.onsuccess=()=>res(tx.result);tx.onerror=()=>rej(tx.error);});}
+function dbPut(o){return new Promise((res,rej)=>{const tx=dbp.transaction('imgs','readwrite').objectStore('imgs').put(o);tx.onsuccess=()=>res();tx.onerror=()=>rej(tx.error);});}
+function dbDel(id){return new Promise((res,rej)=>{const tx=dbp.transaction('imgs','readwrite').objectStore('imgs').delete(id);tx.onsuccess=()=>res();tx.onerror=()=>rej(tx.error);});}
+async function uploadGallery(files){for(const f of files){const u=await new Promise(r=>{const rd=new FileReader();rd.onload=()=>r(rd.result);rd.readAsDataURL(f);});
+  await dbPut({id:'g'+Date.now()+Math.random().toString(36).slice(2,6),name:f.name,data:u,tags:[],note:'',time:Date.now()});}
+  renderGallery();toast('已加入 '+files.length+' 张');}
+async function renderGallery(){if(!dbp)return;let list=await dbAll();
+  const ft=$('#gFilterTag').value.trim().toLowerCase(),fn=$('#gFilterNote').value.trim().toLowerCase();
+  if(ft)list=list.filter(x=>(x.tags||[]).join(',').toLowerCase().includes(ft));
+  if(fn)list=list.filter(x=>(x.note||'').toLowerCase().includes(fn));list.sort((a,b)=>b.time-a.time);
+  const grid=$('#galleryGrid');grid.innerHTML='';
+  if(!list.length){grid.innerHTML='<p class="muted">还没有素材，点上面上传几张吧。</p>';return;}
+  list.forEach(x=>{const d=document.createElement('div');d.className='gitem';
+    d.innerHTML=`<img src="${x.data}"><div class="meta"><div>${esc(x.name)}</div><div class="gtags">${(x.tags||[]).map(t=>'#'+esc(t)).join(' ')}</div>${x.note?('<div>'+esc(x.note)+'</div>'):''}</div>`;
+    d.onclick=()=>openModal(x);grid.appendChild(d);});}
+let curImg=null;
+function openModal(x){curImg=x;$('#modalImg').src=x.data;$('#modalTags').value=(x.tags||[]).join(',');$('#modalNote').value=x.note||'';
+  $('#modalDl').href=x.data;$('#modalDl').download=x.name||'image.png';$('#modal').classList.add('show');}
+$('#modalClose').onclick=()=>$('#modal').classList.remove('show');
+$('#modalSave').onclick=async()=>{if(!curImg)return;curImg.tags=$('#modalTags').value.split(',').map(s=>s.trim()).filter(Boolean);curImg.note=$('#modalNote').value;await dbPut(curImg);renderGallery();toast('已保存');$('#modal').classList.remove('show');};
+$('#modalDel').onclick=async()=>{if(!curImg)return;await dbDel(curImg.id);renderGallery();toast('已删除');$('#modal').classList.remove('show');};
+$('#gUpload').onchange=e=>uploadGallery(e.target.files);
+$('#gFilterTag').oninput=renderGallery;$('#gFilterNote').oninput=renderGallery;
+openDB().then(renderGallery).catch(()=>toast('画廊存储不可用（浏览器限制），可重试'));
+</script>
+</body>
+</html>

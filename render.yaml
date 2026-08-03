@@ -1,0 +1,18 @@
+# 部署到 Render.com 免费版，得到一个「带代理的在线版」公网链接（AI 生图可直接用）
+# 用法：
+#   1. 把 workbench/ 目录推到你的 GitHub 仓库
+#   2. 打开 https://dashboard.render.com → New → Blueprint → 选该仓库 → 部署
+#   3. 部署完会得到一个 https://xxxx.onrender.com 的公网链接，打开即用 AI 生图
+services:
+  - type: web
+    name: dian-shang-ai-image
+    runtime: python
+    plan: free
+    region: oregon
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: python proxy.py
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13"
