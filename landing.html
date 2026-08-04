@@ -260,7 +260,7 @@
       <a class="btn" href="#" id="buy2">购买商用版</a>
     </div>
   </div>
-  <p style="text-align:center;color:var(--muted);font-size:13px;margin-top:22px">点击购买后弹出收款信息，付款时请备注你的微信号 / 邮箱，我们会在 24 小时内发送源码与授权。</p>
+  <p style="text-align:center;color:var(--muted);font-size:13px;margin-top:22px">点击购买后弹出收款信息，付款时请备注你的邮箱，我们会在 24 小时内发送源码与授权。</p>
 </section>
 
 <!-- FAQ -->
@@ -290,7 +290,7 @@
 <footer>
   <div class="wrap">
     <div>© <span id="yr"></span> 电商AI Image · 买断授权产品</div>
-    <div>联系：<a href="#" id="footContact">微信 / 邮箱</a> · <a href="/tool">打开工具</a></div>
+    <div>联系：<a href="#" id="footContact">邮箱</a> · <a href="/tool">打开工具</a></div>
   </div>
 </footer>
 
@@ -308,13 +308,13 @@
     <div id="payQRWrap" style="display:none;text-align:center">
       <img class="qr" id="payQR" alt="收款二维码" src="" style="display:none">
       <div class="note" id="payQRNote" style="text-align:center">微信扫码付款，备注你的联系方式</div>
-      <div class="note" id="payQRFallback" style="display:none;text-align:center;color:#c0392b">该收款码暂未设置，请通过下方微信 / 邮箱联系付款</div>
+      <div class="note" id="payQRFallback" style="display:none;text-align:center;color:#c0392b">该收款码暂未设置，请通过下方邮箱联系付款</div>
     </div>
     <div class="row" id="payEmailRow" style="display:none">
       <span class="k">邮箱</span><span class="v" id="payEmail"></span>
       <button class="copy" data-copy="payEmail">复制</button>
     </div>
-    <div class="note">付款后请通过上方联系方式发送「付款截图 + 你的微信号/邮箱」，我们会在 24 小时内发送源码与授权文件。</div>
+    <div class="note">付款后请通过上方邮箱发送「付款截图 + 你的邮箱」，我们会在 24 小时内发送源码与授权文件。</div>
   </div>
 </div>
 
@@ -332,7 +332,7 @@
     pricePersonal: 99,
     priceCommercial: 299,
     email: "2187435980@qq.com",
-    wechatQr: "/assets/par-qr.png",   // 目前先用现有收款码，建议换成独立的微信收款码 wx-qr.png
+    wechatQr: "/assets/wx-qr.png",   // 微信收款码（独立截图）
     alipayQr: "/assets/ali-qr.png",   // 把你的支付宝收款码截图命名为 ali-qr.png 放入 assets/ 后启用
     qr: "/assets/par-qr.png"          // 兜底收款码（wechatQr/alipayQr 都未设置时使用）
   };
@@ -342,10 +342,10 @@
   if(p1) p1.textContent = CONFIG.pricePersonal;
   if(p2) p2.textContent = CONFIG.priceCommercial;
 
-  // 页脚联系方式
+  // 页脚联系方式（仅保留邮箱）
   const fc = document.getElementById('footContact');
   if(fc){
-    fc.textContent = [CONFIG.wechat!=="你的微信号"?("微信 "+CONFIG.wechat):"", CONFIG.email].filter(Boolean).join(" · ") || "微信 / 邮箱";
+    fc.textContent = CONFIG.email || "邮箱";
   }
 
   // 收款弹窗
@@ -360,13 +360,7 @@
     const defPM = document.querySelector('#payMethods .pm[data-method="wechat"]');
     if(defPM) defPM.classList.add('active');
     showQR('wechat');
-    // 微信
-    const wRow = document.getElementById('payWechatRow');
-    if(CONFIG.wechat && CONFIG.wechat!=="你的微信号"){
-      document.getElementById('payWechat').textContent = CONFIG.wechat;
-      wRow.style.display = 'flex';
-    } else { wRow.style.display = 'none'; }
-    // 邮箱
+    // 邮箱（唯一联系方式）
     const eRow = document.getElementById('payEmailRow');
     if(CONFIG.email && CONFIG.email!=="your@email.com"){
       document.getElementById('payEmail').textContent = CONFIG.email;
