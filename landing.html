@@ -127,6 +127,9 @@
   .modal .note{font-size:12.5px;color:var(--muted);line-height:1.6;margin-top:6px}
   .modal .close{position:absolute;top:14px;right:16px;width:30px;height:30px;border:none;background:var(--panel2);border-radius:50%;font-size:18px;color:var(--muted);cursor:pointer;line-height:1}
   .modal .qr{width:100%;max-width:200px;margin:8px auto 4px;display:block;border-radius:12px}
+  .modal .pay-methods{display:flex;gap:8px;margin:0 0 16px;background:var(--panel2);padding:5px;border-radius:12px}
+  .modal .pay-methods .pm{flex:1;border:none;background:transparent;padding:10px 8px;border-radius:9px;font-size:14px;font-weight:700;color:var(--muted);cursor:pointer;transition:all .2s}
+  .modal .pay-methods .pm.active{background:#fff;color:var(--brand);box-shadow:0 2px 8px rgba(30,80,140,.12)}
   /* 响应式 */
   @media (max-width:900px){
     .hero h2{font-size:32px}
@@ -298,13 +301,14 @@
     <h3 id="payTitle">购买个人版</h3>
     <p class="sub" id="payPlan">个人商用自用授权</p>
     <div class="amt">¥<span id="payAmt">99</span> <span style="font-size:14px;color:var(--muted);font-weight:600">/ 一次性</span></div>
-    <div id="payQRWrap" style="display:none;text-align:center">
-      <img class="qr" id="payQR" alt="收款二维码" src="">
-      <div class="note" style="text-align:center">微信 / 支付宝扫码付款，备注你的联系方式</div>
+    <div class="pay-methods" id="payMethods">
+      <button type="button" class="pm active" data-method="wechat">微信支付</button>
+      <button type="button" class="pm" data-method="alipay">支付宝</button>
     </div>
-    <div class="row" id="payWechatRow" style="display:none">
-      <span class="k">微信号</span><span class="v" id="payWechat"></span>
-      <button class="copy" data-copy="payWechat">复制</button>
+    <div id="payQRWrap" style="display:none;text-align:center">
+      <img class="qr" id="payQR" alt="收款二维码" src="" style="display:none">
+      <div class="note" id="payQRNote" style="text-align:center">微信扫码付款，备注你的联系方式</div>
+      <div class="note" id="payQRFallback" style="display:none;text-align:center;color:#c0392b">该收款码暂未设置，请通过下方微信 / 邮箱联系付款</div>
     </div>
     <div class="row" id="payEmailRow" style="display:none">
       <span class="k">邮箱</span><span class="v" id="payEmail"></span>
@@ -319,16 +323,18 @@
 
   /* ===== 收款与联系方式配置（部署前请改成你的真实信息）=====
      - pricePersonal / priceCommercial：两个套餐价格
-     - wechat：你的微信号（留空则不显示该行）
      - email：你的联系邮箱（留空则不显示该行）
-     - qr：收款二维码图片地址（可放 /assets/ 下的图，如 "/assets/pay-qr.png"；留空则只显示微信号/邮箱）
-     说明：二维码需要你用自己的微信/支付宝收款码截图，放到 assets/ 目录后填路径即可。 */
+     - wechatQr：微信收款码图片地址（放 /assets/ 下，如 "/assets/wx-qr.png"；留空则微信支付页提示未设置）
+     - alipayQr：支付宝收款码图片地址（如 "/assets/ali-qr.png"；留空则支付宝页提示未设置）
+     - qr：旧版兼容字段，仅当上面两者都没设置时作为兜底收款码
+     说明：用你自己的微信 / 支付宝收款码截图，分别命名为 wx-qr.png / ali-qr.png 放进 assets/ 目录，再填对应路径。 */
   const CONFIG = {
     pricePersonal: 99,
     priceCommercial: 299,
-    wechat: "theme_2021",
     email: "2187435980@qq.com",
-    qr: "/assets/par-qr.png"   // 改成你 assets/ 目录下真实的二维码文件名，例如 "/assets/pay-qr.png"
+    wechatQr: "/assets/par-qr.png",   // 目前先用现有收款码，建议换成独立的微信收款码 wx-qr.png
+    alipayQr: "/assets/ali-qr.png",   // 把你的支付宝收款码截图命名为 ali-qr.png 放入 assets/ 后启用
+    qr: "/assets/par-qr.png"          // 兜底收款码（wechatQr/alipayQr 都未设置时使用）
   };
 
   // 价格填充
@@ -349,14 +355,11 @@
     document.getElementById('payTitle').textContent = isCom ? '购买商用授权版' : '购买个人版';
     document.getElementById('payPlan').textContent = isCom ? '商用授权 · 可转售/嵌入客户项目' : '个人商用自用授权';
     document.getElementById('payAmt').textContent = isCom ? CONFIG.priceCommercial : CONFIG.pricePersonal;
-    // 二维码（如果文件不存在/加载失败，自动隐藏二维码区，避免显示破图）
-    const qrWrap = document.getElementById('payQRWrap');
-    const payQR = document.getElementById('payQR');
-    if(CONFIG.qr){
-      payQR.onerror = ()=>{ qrWrap.style.display = 'none'; payQR.onerror=null; };
-      payQR.onload = ()=>{ qrWrap.style.display = 'block'; };
-      payQR.src = CONFIG.qr;
-    } else { qrWrap.style.display = 'none'; }
+    // 重置为微信支付方式
+    document.querySelectorAll('#payMethods .pm').forEach(x=>x.classList.remove('active'));
+    const defPM = document.querySelector('#payMethods .pm[data-method="wechat"]');
+    if(defPM) defPM.classList.add('active');
+    showQR('wechat');
     // 微信
     const wRow = document.getElementById('payWechatRow');
     if(CONFIG.wechat && CONFIG.wechat!=="你的微信号"){
@@ -371,6 +374,36 @@
     } else { eRow.style.display = 'none'; }
     modal.classList.add('show');
   }
+  // 根据支付方式显示对应收款码（未设置则优雅降级提示，不显示破图）
+  function showQR(method){
+    const qrWrap = document.getElementById('payQRWrap');
+    const payQR = document.getElementById('payQR');
+    const note = document.getElementById('payQRNote');
+    const fallback = document.getElementById('payQRFallback');
+    const src = method==='alipay' ? CONFIG.alipayQr : CONFIG.wechatQr;
+    const label = method==='alipay' ? '支付宝扫码付款，备注你的联系方式' : '微信扫码付款，备注你的联系方式';
+    note.textContent = label;
+    payQR.onerror = ()=>{ qrWrap.style.display='block'; payQR.style.display='none'; fallback.style.display='block'; payQR.onerror=null; };
+    payQR.onload = ()=>{ qrWrap.style.display='block'; payQR.style.display='block'; fallback.style.display='none'; };
+    if(src){
+      payQR.style.display='none'; fallback.style.display='none';
+      qrWrap.style.display='block'; payQR.src = src;
+    } else if(CONFIG.qr){
+      payQR.style.display='none'; fallback.style.display='none';
+      qrWrap.style.display='block'; payQR.src = CONFIG.qr;
+    } else {
+      qrWrap.style.display='block'; payQR.style.display='none'; fallback.style.display='block';
+    }
+  }
+  // 支付方式切换
+  document.querySelectorAll('#payMethods .pm').forEach(btn=>{
+    btn.onclick = ()=>{
+      document.querySelectorAll('#payMethods .pm').forEach(x=>x.classList.remove('active'));
+      btn.classList.add('active');
+      showQR(btn.dataset.method);
+    };
+  });
+
   function closePay(){ modal.classList.remove('show'); }
   document.getElementById('payClose').onclick = closePay;
   modal.addEventListener('click', e=>{ if(e.target===modal) closePay(); });
