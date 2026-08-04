@@ -43,23 +43,25 @@
   }
   body.night #skyLayer .cloud{opacity:0;transition:opacity .5s}
   body.night #skyLayer .moon{opacity:1;transform:translateY(0)}
-  /* 顶栏 */
-  header.top{display:flex;align-items:center;gap:14px;padding:16px 24px;background:linear-gradient(120deg,#fff 0%,#fff 60%,#E6F2FC 100%);border-bottom:1px solid var(--line)}
-  header.top .logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--brand),var(--brand2));display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:var(--shadow)}
-  header.top h1{font-size:18px;margin:0;font-weight:800;letter-spacing:.5px}
+  /* 顶栏：与导航合并的 iOS 26 液态玻璃条 */
+  header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;position:relative;z-index:10;background:rgba(255,255,255,.72);backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);border-bottom:1px solid rgba(255,255,255,.55);box-shadow:0 4px 30px rgba(30,80,140,.08)}
+  header.top .brand{display:flex;align-items:center;gap:12px;flex-shrink:0}
+  header.top .logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,var(--brand),var(--brand2));display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:var(--shadow)}
+  header.top h1{font-size:17px;margin:0;font-weight:800;letter-spacing:.5px}
   header.top .sub{color:var(--muted);font-size:12.5px}
-  /* 导航：iOS 风格滑动分段控制器 */
-  nav.tabs{position:relative;display:flex;gap:4px;max-width:760px;margin:18px auto 6px;padding:5px;flex-wrap:nowrap;background:rgba(255,255,255,.70);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.55);border-radius:999px;box-shadow:var(--shadow)}
+  /* 导航：iOS 风格滑动分段控制器，现在嵌在顶栏内 */
+  nav.tabs{position:relative;display:flex;gap:4px;max-width:520px;margin:0;padding:4px;flex:1 1 auto;flex-wrap:nowrap;background:rgba(255,255,255,.62);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.55);border-radius:999px;box-shadow:var(--shadow)}
   nav.tabs .tab-indicator{position:absolute;top:5px;bottom:5px;background:rgba(255,255,255,.40);backdrop-filter:blur(15px) saturate(165%);-webkit-backdrop-filter:blur(15px) saturate(165%);border:1px solid rgba(255,255,255,.72);border-radius:999px;box-shadow:0 2px 14px rgba(30,80,140,.12), inset 0 1px 2px rgba(255,255,255,.6);transition:left .58s cubic-bezier(.16,1,.3,1), width .58s cubic-bezier(.16,1,.3,1), background .32s;z-index:0}
-  nav.tabs button{position:relative;flex:1;min-width:0;background:transparent;border:none;border-radius:999px;padding:10px 12px;cursor:pointer;text-align:center;color:var(--muted);z-index:1;transition:color .42s cubic-bezier(.16,1,.3,1);display:flex;flex-direction:column;align-items:center;gap:2px}
-  nav.tabs button .ic{font-size:20px;line-height:1;filter:grayscale(.35);transition:filter .42s cubic-bezier(.16,1,.3,1), transform .42s cubic-bezier(.16,1,.3,1)}
-  nav.tabs button .t{font-weight:700;color:var(--muted);font-size:13.5px;display:block;white-space:nowrap;transition:color .42s cubic-bezier(.16,1,.3,1), font-weight .42s}
-  nav.tabs button .d{font-size:11px;color:var(--muted);display:block;white-space:nowrap;opacity:.85;transition:color .42s cubic-bezier(.16,1,.3,1), opacity .42s}
+  nav.tabs button{position:relative;flex:1;min-width:0;background:transparent;border:none;border-radius:999px;padding:8px 14px;cursor:pointer;text-align:center;color:var(--muted);z-index:1;transition:color .42s cubic-bezier(.16,1,.3,1);display:flex;flex-direction:column;align-items:center;gap:2px}
+  nav.tabs button .ic{font-size:19px;line-height:1;filter:grayscale(.35);transition:filter .42s cubic-bezier(.16,1,.3,1), transform .42s cubic-bezier(.16,1,.3,1)}
+  nav.tabs button .t{font-weight:700;color:var(--muted);font-size:13px;display:block;white-space:nowrap;transition:color .42s cubic-bezier(.16,1,.3,1), font-weight .42s}
+  nav.tabs button .d{font-size:10.5px;color:var(--muted);display:block;white-space:nowrap;opacity:.85;transition:color .42s cubic-bezier(.16,1,.3,1), opacity .42s}
   nav.tabs button.active{color:var(--brand)}
-  nav.tabs button.active .ic{filter:grayscale(0);transform:translateY(-1px)}
+  nav.tabs button.active .ic{filter:grayscale(0);transform:translateY(-1px) scale(1.08)}
   nav.tabs button.active .t{font-weight:800;color:var(--brand)}
   nav.tabs button.active .d{color:var(--brand);opacity:.9}
-  @media (max-width:560px){ nav.tabs button .d{display:none} nav.tabs button .t{font-size:12.5px} nav.tabs{max-width:calc(100% - 24px)} }
+  @media (max-width:720px){ header.top{padding:10px 12px} header.top .brand{gap:8px} header.top .logo{width:34px;height:34px;font-size:18px} header.top h1{font-size:15px} nav.tabs button{padding:7px 8px;gap:1px} nav.tabs button .ic{font-size:17px} nav.tabs button .t{font-size:11.5px} nav.tabs button .d{display:none} }
+  @media (max-width:480px){ nav.tabs button .t{display:none} nav.tabs button{padding:7px 10px} nav.tabs{max-width:none;gap:6px} header.top .theme-toggle{font-size:12px;padding:6px 10px} }
   /* 视图 */
   .view{display:none;max-width:1080px;margin:0 auto;padding:22px 20px 60px}
   .view.active{display:block}
@@ -145,8 +147,8 @@
   .toast.show{display:block}
   .muted{color:var(--muted);font-size:12.5px}
   /* ============ 日间/夜间切换按钮 ============ */
-  header.top .theme-toggle{margin-left:auto;background:rgba(255,255,255,.75);border:1px solid var(--line);color:var(--ink);border-radius:20px;padding:8px 15px;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap}
-  header.top .theme-toggle:hover{background:#fff}
+  header.top .theme-toggle{background:rgba(255,255,255,.62);border:1px solid rgba(255,255,255,.55);color:var(--ink);border-radius:20px;padding:8px 15px;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap;box-shadow:var(--shadow);transition:background .2s, transform .15s}
+  header.top .theme-toggle:hover{background:rgba(255,255,255,.9);transform:translateY(-1px)}
   /* ============ 深蓝夜间模式 ============ */
   body.night{
     --bg:#0E2440; --panel:#13294A; --panel2:#0F2C52; --line:#2A5689;
@@ -160,10 +162,10 @@
   body.night label{color:#CFE0F4; font-weight:700}
   body.night .card .desc{color:#BFD2EA}
   body.night .muted,body.night nav.tabs button .d,body.night .help .tip{color:#94AFD0}
-  body.night header.top{background:linear-gradient(120deg,#0E2440 0%,#0E2440 60%,#102A4E 100%);border-bottom-color:var(--line)}
-  body.night header.top .theme-toggle{background:rgba(255,255,255,.10);border-color:var(--line);color:var(--ink)}
+  body.night header.top{background:rgba(14,36,64,.78);backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);border-bottom-color:rgba(255,255,255,.10)}
+  body.night header.top .theme-toggle{background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.15);color:var(--ink)}
   body.night header.top .theme-toggle:hover{background:rgba(255,255,255,.18)}
-  body.night nav.tabs{background:rgba(19,41,74,.68);border-color:rgba(255,255,255,.10)}
+  body.night nav.tabs{background:rgba(19,41,74,.60);border-color:rgba(255,255,255,.10)}
   body.night nav.tabs .tab-indicator{background:rgba(125,205,248,.20);border-color:rgba(160,210,250,.40);box-shadow:0 2px 14px rgba(0,0,0,.30), inset 0 1px 2px rgba(255,255,255,.15)}
   body.night nav.tabs button{color:#8DB4DA}
   body.night nav.tabs button.active{color:var(--brand)}
@@ -202,20 +204,19 @@
 <body>
 <div id="skyLayer"></div>
 <header class="top">
-  <div class="logo">🛍️</div>
-  <div>
-    <h1>电商AI Image</h1>
+  <div class="brand">
+    <div class="logo">🛍️</div>
+    <div><h1>电商AI Image</h1></div>
   </div>
+  <nav class="tabs">
+    <div class="tab-indicator" id="tabIndicator"></div>
+    <button data-tab="detail" class="active"><span class="ic">🎨</span><span class="t">做详情页</span><span class="d">传图·填字</span></button>
+    <button data-tab="prompts"><span class="ic">📝</span><span class="t">提示词库</span><span class="d">收藏文案</span></button>
+    <button data-tab="gallery"><span class="ic">🖼️</span><span class="t">素材库</span><span class="d">看图下载</span></button>
+    <button data-tab="help"><span class="ic">❓</span><span class="t">使用说明</span><span class="d">先看这里</span></button>
+  </nav>
   <button class="theme-toggle" id="themeToggle" title="点击循环切换：自动→日间→夜间">🌗 自动</button>
 </header>
-
-<nav class="tabs">
-  <div class="tab-indicator" id="tabIndicator"></div>
-  <button data-tab="detail" class="active"><span class="ic">🎨</span><span class="t">做详情页</span><span class="d">传图·填字</span></button>
-  <button data-tab="prompts"><span class="ic">📝</span><span class="t">提示词库</span><span class="d">收藏文案</span></button>
-  <button data-tab="gallery"><span class="ic">🖼️</span><span class="t">素材库</span><span class="d">看图下载</span></button>
-  <button data-tab="help"><span class="ic">❓</span><span class="t">使用说明</span><span class="d">先看这里</span></button>
-</nav>
 
 <!-- ============ 做详情页 ============ -->
 <section class="view active" id="view-detail">
