@@ -1013,25 +1013,25 @@ openDB().then(()=>{renderGallery();renderRefs();}).catch(()=>toast('画廊存储
       const r=await fetch(baseUrl+'/api/unlock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
       const j=await r.json().catch(()=>null);
       if(j&&j.valid){
-        const exp=j.exp?new Date(j.exp*1000):null;
-        const days=j.remaining_hours!=null?Math.ceil(j.remaining_hours/24):null;
-        let msg='🔓 已解锁，开始使用吧';
-        if(exp){ msg+='（本码可用至 '+exp.toLocaleString('zh-CN')+(days!=null?('，约剩 '+days+' 天'):'')+'）'; }
-        if(j.remaining_hours!=null && j.remaining_hours<24){ msg='⚠️ 访问码即将过期（剩不到 1 天），请及时向发放人续期'; }
-        else if(j.mu!=null && j.mu>1 && j.uses_left!=null){ msg+=' · 还可使用 '+j.uses_left+' 次'; }
-        unlock(code.trim()); toast(msg);
-      } else { showErr((j&&j.error)||'访问码无效'); }
+        if(j.master){
+          unlock(code.trim());
+          toast('🔓 总钥匙已永久解锁，你可无限使用（无需续期）');
+        } else {
+          const exp=j.exp?new Date(j.exp*1000):null;
+          const days=j.remaining_hours!=null?Math.ceil(j.remaining_hours/24):null;
+          let msg='🔓 已解锁，开始使用吧';
+          if(exp){ msg+='（本码可用至 '+exp.toLocaleString('zh-CN')+(days!=null?('，约剩 '+days+' 天'):'')+'）'; }
+          if(j.remaining_hours!=null && j.remaining_hours<24){ msg='⚠️ 访问码即将过期（剩不到 1 天），请及时向发放人续期'; }
+          else if(j.mu!=null && j.mu>1 && j.uses_left!=null){ msg+=' · 还可使用 '+j.uses_left+' 次'; }
+          unlock(code.trim()); toast(msg);
+        }
+      } else { showErr((j&&j.error)||'无效'); }
     }catch(e){ showErr('校验请求失败：'+e); }
     finally{ if(btn){btn.disabled=false;btn.textContent='解锁并使用';} }
   }
   if(btn)btn.onclick=function(){
     const c=(codeEl.value||'').trim();
-    if(!c){showErr('请输入访问码');return;}
-    // 快速预检：访问码（新短码或旧长码）一定带横线
-    if(c.indexOf('-')===-1 || c.length<10){
-      showErr('这不是访问码格式。访问码类似 TJM487-1-DLWNUI2JCFQ76，请打开 gencode.html 生成后填入。');
-      return;
-    }
+    if(!c){showErr('请输入访问码或总钥匙');return;}
     submitUnlock(c);
   };
   if(codeEl)codeEl.addEventListener('keydown',function(e){if(e.key==='Enter'&&btn)btn.click();});
@@ -1052,8 +1052,8 @@ openDB().then(()=>{renderGallery();renderRefs();}).catch(()=>toast('画廊存储
     <div style="font-size:30px;margin-bottom:6px">🔐</div>
     <div style="font-size:19px;font-weight:800;color:#173A5E;margin-bottom:4px">测试版 · 访问码验证</div>
     <div style="font-size:13px;color:#6A86A3;line-height:1.5;margin-bottom:18px">本工具处于测试阶段，仅限受邀用户体验。<br>请输入收到的动态访问码以解锁全部功能。</div>
-    <input id="gateCode" type="text" autocomplete="off" spellcheck="false" placeholder="例如 TJM487-1-DLWNUI2JCFQ76" style="width:100%;box-sizing:border-box;padding:13px 14px;border:1.5px solid #cfe0f0;border-radius:13px;font-size:15px;color:#173A5E;outline:none;letter-spacing:1px;text-align:center">
-    <div style="margin-top:6px;font-size:11px;color:#9fb3c8">这里填的是「访问码」，不是生成器里的「密钥/总钥匙」</div>
+    <input id="gateCode" type="text" autocomplete="off" spellcheck="false" placeholder="访问码（如 TJM487-1-DLWNUI2JCFQ76）或总钥匙" style="width:100%;box-sizing:border-box;padding:13px 14px;border:1.5px solid #cfe0f0;border-radius:13px;font-size:15px;color:#173A5E;outline:none;letter-spacing:1px;text-align:center">
+    <div style="margin-top:6px;font-size:11px;color:#9fb3c8">填「访问码」（发给别人用，有时效）或「总钥匙」（你自己永久使用）</div>
     <button id="gateBtn" style="width:100%;margin-top:12px;padding:13px;border:none;border-radius:13px;background:linear-gradient(135deg,#2E9BE6,#1F7FC4);color:#fff;font-size:15px;font-weight:700;cursor:pointer">解锁并使用</button>
     <div id="gateErr" style="display:none;margin-top:12px;font-size:13px;color:#c0392b;background:#fff0f0;border:1px solid #f5b0b0;border-radius:8px;padding:8px;font-weight:600"></div>
     <div style="margin-top:14px;font-size:11px;color:#9fb3c8">每串码限设定人数使用，过期或次数用尽即失效，请联系发放人续期或换新码</div>

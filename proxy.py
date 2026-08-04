@@ -28,11 +28,14 @@ import requests
 
 # 动态访问码（测试阶段分享保护）：签发/校验逻辑放在 access.py，与 gentoken.py 共用同一密钥。
 try:
-    from access import verify_access_token
+    from access import verify_access_token, resolve_credential
 except Exception:
     # 兜底：即便 access.py 缺失也不让整个代理崩溃，只是所有访问码都会被拒。
     def verify_access_token(code):
         return False, {"error": "access 模块缺失（请联系管理员）"}
+    def resolve_credential(cred):
+        ok, info = verify_access_token(cred)
+        return ok, info, ("code" if ok else None)
 
 PORT = int(os.environ.get("PORT") or os.environ.get("WB_PORT", "8765"))
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -671,7 +674,7 @@ class H(BaseHTTPRequestHandler):
         token = (self.headers.get("Authorization") or "").replace("Bearer ", "", 1).strip()
         if not token:
             token = (self.headers.get("X-Access-Token") or "").strip()
-        ok, info = verify_access_token(token)
+        ok, info, kind = resolve_credential(token)
         if not ok:
             self._send_json(401, {"error": "访问码无效或已过期，请先在页面输入正确的动态访问码。（" + info.get("error", "") + "）"})
             return
@@ -703,8 +706,14 @@ class H(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "请求解析失败"})
             return
         code = (data.get("code") or "").strip()
-        ok, info = verify_access_token(code)
+        ok, info, kind = resolve_credential(code)
         if ok:
+            if kind == "master":
+                # 总钥匙：永久解锁，不消耗次数
+                self._send_json(200, {"valid": True, "master": True, "exp": None,
+                                      "remaining_hours": None, "note": "总钥匙(永久)",
+                                      "mu": None, "uses_left": None})
+                return
             mu = info.get("mu", None)
             left = (mu - _usage.get(_code_key(code), 0)) if mu is not None else None
             self._send_json(200, {"valid": True, "exp": info.get("exp"),
@@ -723,9 +732,15 @@ class H(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "请求解析失败"})
             return
         code = (data.get("code") or "").strip()
-        ok, info = verify_access_token(code)
+        ok, info, kind = resolve_credential(code)
         if not ok:
             self._send_json(200, {"valid": False, "error": info.get("error")})
+            return
+        if kind == "master":
+            # 总钥匙：永久解锁，不消耗次数、不计数
+            self._send_json(200, {"valid": True, "master": True, "exp": None,
+                                  "remaining_hours": None, "note": "总钥匙(永久)",
+                                  "mu": None, "uses_left": None})
             return
         mu = info.get("mu", None)
         if mu is not None:

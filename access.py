@@ -119,3 +119,24 @@ def _build_ok(exp: int, mu, note: str):
         return False, {"error": "访问码已过期", "exp": exp, "remaining_hours": 0}
     return True, {"exp": exp, "remaining_hours": round(remaining / 3600, 1),
                   "note": note, "v": 2 if isinstance(mu, int) else 1, "mu": mu}
+
+
+def resolve_credential(cred):
+    """统一校验入口：接受「访问码」或「总钥匙（=ACCESS_SECRET）」。
+
+    返回 (ok:bool, info:dict, kind:str)。
+    - kind == 'code'   ：普通访问码，有时效/人数限制；
+    - kind == 'master' ：总钥匙，永久解锁、无限制；
+    - kind == None     ：校验失败（info 含 error）。
+
+    优先按访问码校验；若不匹配再判断是否等于总钥匙（恒定时间比较，避免时序侧信道）。
+    """
+    ok, info = verify_access_token(cred)
+    if ok:
+        return True, info, "code"
+    c = (cred or "").strip()
+    if c and hmac.compare_digest(c, ACCESS_SECRET):
+        return True, {"exp": None, "remaining_hours": None,
+                      "note": "总钥匙(永久)", "mu": None, "master": True}, "master"
+    return False, info, None
+
