@@ -43,25 +43,40 @@
   }
   body.night #skyLayer .cloud{opacity:0;transition:opacity .5s}
   body.night #skyLayer .moon{opacity:1;transform:translateY(0)}
-  /* 顶栏：与导航合并的 iOS 26 液态玻璃条 */
-  header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;position:relative;z-index:10;background:rgba(255,255,255,.72);backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);border-bottom:1px solid rgba(255,255,255,.55);box-shadow:0 4px 30px rgba(30,80,140,.08)}
+  /* 顶栏：毛玻璃冠栏（导航独立成行，不再合并） */
+  header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 22px;position:relative;z-index:10;background:rgba(255,255,255,.72);backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);border-bottom:1px solid rgba(255,255,255,.55);box-shadow:0 4px 30px rgba(30,80,140,.08)}
   header.top .brand{display:flex;align-items:center;gap:12px;flex-shrink:0}
-  header.top .logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,var(--brand),var(--brand2));display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:var(--shadow)}
-  header.top h1{font-size:17px;margin:0;font-weight:800;letter-spacing:.5px}
+  header.top .logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--brand),var(--brand2));display:flex;align-items:center;justify-content:center;font-size:23px;box-shadow:var(--shadow)}
+  header.top h1{font-size:18px;margin:0;font-weight:800;letter-spacing:.5px}
+  header.top .brand-txt{display:flex;flex-direction:column;gap:1px}
   header.top .sub{color:var(--muted);font-size:12.5px}
-  /* 导航：iOS 风格滑动分段控制器，现在嵌在顶栏内 */
-  nav.tabs{position:relative;display:flex;gap:4px;max-width:520px;margin:0;padding:4px;flex:1 1 auto;flex-wrap:nowrap;background:rgba(255,255,255,.62);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.55);border-radius:999px;box-shadow:var(--shadow)}
+  header.top .top-actions{display:flex;align-items:center;gap:10px;flex-shrink:0}
+  /* 当前模型状态胶囊 */
+  .model-pill{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.6);color:var(--ink);border-radius:999px;padding:7px 14px;font-size:12.5px;font-weight:700;box-shadow:var(--shadow);white-space:nowrap}
+  .model-pill .dot{width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 0 rgba(34,197,94,.5);animation:pulse 2s infinite;flex-shrink:0}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.45)}70%{box-shadow:0 0 0 7px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+  /* 导航：iOS 风格滑动分段控制器（独立浮岛，保留液态玻璃动画） */
+  nav.tabs{position:relative;display:flex;gap:4px;max-width:760px;margin:18px auto 4px;padding:5px;flex-wrap:nowrap;background:rgba(255,255,255,.70);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.55);border-radius:999px;box-shadow:var(--shadow)}
   nav.tabs .tab-indicator{position:absolute;top:5px;bottom:5px;background:rgba(255,255,255,.40);backdrop-filter:blur(15px) saturate(165%);-webkit-backdrop-filter:blur(15px) saturate(165%);border:1px solid rgba(255,255,255,.72);border-radius:999px;box-shadow:0 2px 14px rgba(30,80,140,.12), inset 0 1px 2px rgba(255,255,255,.6);transition:left .58s cubic-bezier(.16,1,.3,1), width .58s cubic-bezier(.16,1,.3,1), background .32s;z-index:0}
-  nav.tabs button{position:relative;flex:1;min-width:0;background:transparent;border:none;border-radius:999px;padding:8px 14px;cursor:pointer;text-align:center;color:var(--muted);z-index:1;transition:color .42s cubic-bezier(.16,1,.3,1);display:flex;flex-direction:column;align-items:center;gap:2px}
-  nav.tabs button .ic{font-size:19px;line-height:1;filter:grayscale(.35);transition:filter .42s cubic-bezier(.16,1,.3,1), transform .42s cubic-bezier(.16,1,.3,1)}
-  nav.tabs button .t{font-weight:700;color:var(--muted);font-size:13px;display:block;white-space:nowrap;transition:color .42s cubic-bezier(.16,1,.3,1), font-weight .42s}
-  nav.tabs button .d{font-size:10.5px;color:var(--muted);display:block;white-space:nowrap;opacity:.85;transition:color .42s cubic-bezier(.16,1,.3,1), opacity .42s}
+  nav.tabs button{position:relative;flex:1;min-width:0;background:transparent;border:none;border-radius:999px;padding:10px 12px;cursor:pointer;text-align:center;color:var(--muted);z-index:1;transition:color .42s cubic-bezier(.16,1,.3,1);display:flex;flex-direction:column;align-items:center;gap:2px}
+  nav.tabs button .ic{font-size:20px;line-height:1;filter:grayscale(.35);transition:filter .42s cubic-bezier(.16,1,.3,1), transform .42s cubic-bezier(.16,1,.3,1)}
+  nav.tabs button .t{font-weight:700;color:var(--muted);font-size:13.5px;display:block;white-space:nowrap;transition:color .42s cubic-bezier(.16,1,.3,1), font-weight .42s}
+  nav.tabs button .d{font-size:11px;color:var(--muted);display:block;white-space:nowrap;opacity:.85;transition:color .42s cubic-bezier(.16,1,.3,1), opacity .42s}
   nav.tabs button.active{color:var(--brand)}
   nav.tabs button.active .ic{filter:grayscale(0);transform:translateY(-1px) scale(1.08)}
   nav.tabs button.active .t{font-weight:800;color:var(--brand)}
   nav.tabs button.active .d{color:var(--brand);opacity:.9}
-  @media (max-width:720px){ header.top{padding:10px 12px} header.top .brand{gap:8px} header.top .logo{width:34px;height:34px;font-size:18px} header.top h1{font-size:15px} nav.tabs button{padding:7px 8px;gap:1px} nav.tabs button .ic{font-size:17px} nav.tabs button .t{font-size:11.5px} nav.tabs button .d{display:none} }
-  @media (max-width:480px){ nav.tabs button .t{display:none} nav.tabs button{padding:7px 10px} nav.tabs{max-width:none;gap:6px} header.top .theme-toggle{font-size:12px;padding:6px 10px} }
+  /* Hero 横幅：填补顶部空白、展示产品价值 */
+  .hero{display:flex;align-items:center;justify-content:space-between;gap:18px;max-width:1080px;margin:6px auto 0;padding:20px 26px;background:linear-gradient(120deg,rgba(255,255,255,.86),rgba(234,244,254,.9));border:1px solid rgba(255,255,255,.6);border-radius:18px;box-shadow:0 10px 30px rgba(30,80,140,.10);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+  .hero-left{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .hero-title{font-size:22px;font-weight:800;color:var(--ink);line-height:1.3;letter-spacing:.3px}
+  .hero-sub{font-size:13.5px;color:var(--muted);font-weight:600}
+  .hero-btn{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;border:none;padding:13px 26px;border-radius:13px;cursor:pointer;font-size:15px;font-weight:800;box-shadow:var(--shadow);white-space:nowrap;transition:transform .15s, box-shadow .2s}
+  .hero-btn:hover{transform:translateY(-2px);box-shadow:0 12px 26px rgba(46,155,230,.35)}
+  /* 响应式：手机适配 */
+  @media (max-width:760px){ .hero{flex-direction:column;align-items:stretch;text-align:left;padding:16px 18px;gap:12px} .hero-title{font-size:19px} .hero-btn{width:100%} }
+  @media (max-width:720px){ header.top{padding:11px 14px;gap:8px} header.top .logo{width:36px;height:36px;font-size:19px} header.top h1{font-size:16px} header.top .sub{display:none} nav.tabs{max-width:calc(100% - 24px);margin:14px auto 4px} nav.tabs button .d{display:none} nav.tabs button{padding:9px 8px;gap:1px} nav.tabs button .ic{font-size:18px} nav.tabs button .t{font-size:12px} .model-pill{padding:7px 11px;font-size:11.5px} .model-pill .dot{width:7px;height:7px} }
+  @media (max-width:480px){ nav.tabs{overflow-x:auto;scrollbar-width:none} nav.tabs::-webkit-scrollbar{display:none} nav.tabs button .t{display:none} nav.tabs button{padding:9px 14px;flex:0 0 auto} nav.tabs button .ic{font-size:20px} header.top .theme-toggle{font-size:12px;padding:6px 10px} }
   /* 视图 */
   .view{display:none;max-width:1080px;margin:0 auto;padding:22px 20px 60px}
   .view.active{display:block}
@@ -169,6 +184,11 @@
   body.night nav.tabs .tab-indicator{background:rgba(125,205,248,.20);border-color:rgba(160,210,250,.40);box-shadow:0 2px 14px rgba(0,0,0,.30), inset 0 1px 2px rgba(255,255,255,.15)}
   body.night nav.tabs button{color:#8DB4DA}
   body.night nav.tabs button.active{color:var(--brand)}
+  body.night header.top{background:rgba(14,36,64,.78);backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);border-bottom-color:rgba(255,255,255,.10)}
+  body.night header.top .theme-toggle{background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.15);color:var(--ink)}
+  body.night header.top .theme-toggle:hover{background:rgba(255,255,255,.18)}
+  body.night .model-pill{background:rgba(19,41,74,.6);border-color:rgba(255,255,255,.12);color:var(--ink)}
+  body.night .hero{background:linear-gradient(120deg,rgba(19,41,74,.8),rgba(15,44,82,.88));border-color:rgba(255,255,255,.10)}
   body.night .guide{background:linear-gradient(120deg,#13294A,#0F2C52);border-color:var(--line)}
   body.night .step{background:var(--panel);border-color:var(--line)}
   body.night .tag-chip{border-color:var(--line)}
@@ -206,17 +226,32 @@
 <header class="top">
   <div class="brand">
     <div class="logo">🛍️</div>
-    <div><h1>电商AI Image</h1></div>
+    <div class="brand-txt">
+      <h1>电商AI Image</h1>
+      <span class="sub">上传即出 · 文生图 / 图生图 · 一键导出</span>
+    </div>
   </div>
-  <nav class="tabs">
-    <div class="tab-indicator" id="tabIndicator"></div>
-    <button data-tab="detail" class="active"><span class="ic">🎨</span><span class="t">做详情页</span><span class="d">传图·填字</span></button>
-    <button data-tab="prompts"><span class="ic">📝</span><span class="t">提示词库</span><span class="d">收藏文案</span></button>
-    <button data-tab="gallery"><span class="ic">🖼️</span><span class="t">素材库</span><span class="d">看图下载</span></button>
-    <button data-tab="help"><span class="ic">❓</span><span class="t">使用说明</span><span class="d">先看这里</span></button>
-  </nav>
-  <button class="theme-toggle" id="themeToggle" title="点击循环切换：自动→日间→夜间">🌗 自动</button>
+  <div class="top-actions">
+    <div class="model-pill" id="modelPill" title="当前所选生图服务商"><span class="dot"></span><span id="modelPillTxt">未选服务商</span></div>
+    <button class="theme-toggle" id="themeToggle" title="点击循环切换：自动→日间→夜间">🌗 自动</button>
+  </div>
 </header>
+
+<nav class="tabs">
+  <div class="tab-indicator" id="tabIndicator"></div>
+  <button data-tab="detail" class="active"><span class="ic">🎨</span><span class="t">做详情页</span><span class="d">传图·填字</span></button>
+  <button data-tab="prompts"><span class="ic">📝</span><span class="t">提示词库</span><span class="d">收藏文案</span></button>
+  <button data-tab="gallery"><span class="ic">🖼️</span><span class="t">素材库</span><span class="d">看图下载</span></button>
+  <button data-tab="help"><span class="ic">❓</span><span class="t">使用说明</span><span class="d">先看这里</span></button>
+</nav>
+
+<div class="hero">
+  <div class="hero-left">
+    <div class="hero-title">🛍️ 一张白底图，10 屏电商详情页</div>
+    <div class="hero-sub">选风格 → 上传产品图 → 写提示词 → AI 生成场景图，叠标题/正文/标签，整页导出 PNG。</div>
+  </div>
+  <button class="hero-btn" id="heroStart">🚀 开始制作</button>
+</div>
 
 <!-- ============ 做详情页 ============ -->
 <section class="view active" id="view-detail">
@@ -830,6 +865,11 @@ function applyProviderUI(p){
   }else{
     modelWrap.style.display='none';
   }
+  // 顶栏模型状态胶囊
+  try{
+    const txt=$('#modelPillTxt');
+    if(txt) txt.textContent = p.id==='seedream' ? ('Seedream · '+(modelSel.value||'Lite')) : p.name.replace(/（.*?）/g,'').replace(/（.*?\)/g,'').replace(/\(.*?\)/g,'').trim();
+  }catch(e){}
 }
 function saveModel(){try{localStorage.setItem('wb_seedream_model',$('#apiModel').value);}catch(e){}}
 function loadProviders(){
@@ -869,6 +909,10 @@ $('#apiKey').oninput=e=>{try{localStorage.setItem('wb_apikey',e.target.value.tri
 try{const ep=localStorage.getItem(ENDPOINT_KEY);if(ep)$('#apiEndpoint').value=ep;}catch(e){}
 loadProviders();
 buildStylePick();buildScreenList();refreshDetail();showProductPreview();
+/* Hero 开始按钮：跳到「做详情页」并滚动到第一步 */
+try{
+  $('#heroStart').onclick=()=>{ switchTab('detail'); const g=document.querySelector('#view-detail .guide'); if(g) g.scrollIntoView({behavior:'smooth',block:'start'}); };
+}catch(e){}
 
 /* ============ 提示词库 ============ */
 const PKEY='wb_prompts_v1';
