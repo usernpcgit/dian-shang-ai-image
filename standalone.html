@@ -995,24 +995,46 @@ openDB().then(()=>{renderGallery();renderRefs();}).catch(()=>toast('画廊存储
   // 暴露给 genOne：生图返回 401 时重新弹出门禁
   window.__showGate=function(msg){if(gate)gate.style.display='flex';if(errEl){errEl.textContent=msg||'请先在上方输入动态访问码';errEl.style.display='block';}};
   function closeGate(){if(gate)gate.style.display='none';}
-  function unlock(t){try{localStorage.setItem(TOKEN_KEY,t);}catch(e){}closeGate();toast('🔓 已解锁，开始使用吧');}
+  function unlock(t){try{localStorage.setItem(TOKEN_KEY,t);}catch(e){}closeGate();}
   function showErr(m){if(errEl){errEl.textContent=m;errEl.style.display='block';}}
-  async function verifyAndUnlock(code){
+  const baseUrl=location.origin.startsWith('http')?'':'http://localhost:8765';
+  // 静默校验（不消耗次数）：用于已有码的页面重载，仅确认是否过期
+  async function verifyOnly(code){
+    try{
+      const r=await fetch(baseUrl+'/api/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
+      const j=await r.json().catch(()=>null);
+      return !!(j&&j.valid);
+    }catch(e){ return false; }
+  }
+  // 正式解锁（消耗一次使用名额）：仅「解锁」按钮点击时调用
+  async function submitUnlock(code){
     if(!btn)return;btn.disabled=true;btn.textContent='校验中…';showErr('');
     try{
-      const url=location.origin.startsWith('http')?'/api/verify':'http://localhost:8765/api/verify';
-      const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
+      const r=await fetch(baseUrl+'/api/unlock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
       const j=await r.json().catch(()=>null);
-      if(j&&j.valid){unlock(code.trim());}
-      else{showErr((j&&j.error)||'访问码无效');}
-    }catch(e){showErr('校验请求失败：'+e);}
-    finally{if(btn){btn.disabled=false;btn.textContent='解锁并使用';}}
+      if(j&&j.valid){
+        const exp=j.exp?new Date(j.exp*1000):null;
+        const days=j.remaining_hours!=null?Math.ceil(j.remaining_hours/24):null;
+        let msg='🔓 已解锁，开始使用吧';
+        if(exp){ msg+='（本码可用至 '+exp.toLocaleString('zh-CN')+(days!=null?('，约剩 '+days+' 天'):'')+'）'; }
+        if(j.remaining_hours!=null && j.remaining_hours<24){ msg='⚠️ 访问码即将过期（剩不到 1 天），请及时向发放人续期'; }
+        else if(j.mu!=null && j.mu>1 && j.uses_left!=null){ msg+=' · 还可使用 '+j.uses_left+' 次'; }
+        unlock(code.trim()); toast(msg);
+      } else { showErr((j&&j.error)||'访问码无效'); }
+    }catch(e){ showErr('校验请求失败：'+e); }
+    finally{ if(btn){btn.disabled=false;btn.textContent='解锁并使用';} }
   }
-  if(btn)btn.onclick=function(){const c=(codeEl.value||'').trim();if(!c){showErr('请输入访问码');return;}verifyAndUnlock(c);};
+  if(btn)btn.onclick=function(){const c=(codeEl.value||'').trim();if(!c){showErr('请输入访问码');return;}submitUnlock(c);};
   if(codeEl)codeEl.addEventListener('keydown',function(e){if(e.key==='Enter'&&btn)btn.click();});
   if(!ACCESS_ON){closeGate();return;} // 本地打开不强制
   const t=window.__accessToken();
-  if(t){verifyAndUnlock(t).catch(function(){});} // 已有码静默校验，过期则自动弹回门禁
+  if(t){
+    verifyOnly(t).then(function(ok){
+      if(ok){ closeGate(); }
+      else { window.__showGate('访问码已失效或过期，请重新输入，或联系发放人获取新码'); }
+    });
+  }
+  // 无 token 时门禁默认显示，等待用户输入
 })();
 </script>
 <!-- ===== 动态访问码门禁（测试阶段分享保护） ===== -->
@@ -1024,7 +1046,7 @@ openDB().then(()=>{renderGallery();renderRefs();}).catch(()=>toast('画廊存储
     <input id="gateCode" type="text" autocomplete="off" spellcheck="false" placeholder="例如 XXXX-XXXX-XXXX-XXXX" style="width:100%;box-sizing:border-box;padding:13px 14px;border:1.5px solid #cfe0f0;border-radius:13px;font-size:15px;color:#173A5E;outline:none;letter-spacing:1px;text-align:center">
     <button id="gateBtn" style="width:100%;margin-top:14px;padding:13px;border:none;border-radius:13px;background:linear-gradient(135deg,#2E9BE6,#1F7FC4);color:#fff;font-size:15px;font-weight:700;cursor:pointer">解锁并使用</button>
     <div id="gateErr" style="display:none;margin-top:12px;font-size:13px;color:#c0392b"></div>
-    <div style="margin-top:14px;font-size:11px;color:#9fb3c8">访问码有时效，过期或失效请联系发放人重新获取</div>
+    <div style="margin-top:14px;font-size:11px;color:#9fb3c8">每串码限设定人数使用，过期或次数用尽即失效，请联系发放人续期或换新码</div>
   </div>
 </div>
 </body>

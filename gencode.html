@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>访问码生成器</title>
+<style>
+  :root{ --blue:#2E9BE6; --navy:#173A5E; --muted:#6A86A3; --bg1:#eaf4ff; --bg2:#d6ebff; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+        color:var(--navy); background:linear-gradient(160deg,var(--bg1),var(--bg2));
+        min-height:100vh; display:flex; justify-content:center; padding:24px; }
+  .card{ width:100%; max-width:460px; background:#fff; border-radius:20px; padding:24px;
+         box-shadow:0 12px 40px rgba(46,155,230,.18); margin-top:16px; }
+  h1{ font-size:20px; margin:0 0 4px; }
+  .sub{ color:var(--muted); font-size:13px; margin-bottom:18px; }
+  label{ display:block; font-size:13px; font-weight:600; margin:14px 0 6px; }
+  input{ width:100%; padding:11px 12px; border:1px solid #cfe3f7; border-radius:12px;
+         font-size:14px; color:var(--navy); outline:none; }
+  input:focus{ border-color:var(--blue); box-shadow:0 0 0 3px rgba(46,155,230,.15); }
+  .row{ display:flex; gap:10px; }
+  .row > *{ flex:1; }
+  button{ cursor:pointer; border:none; border-radius:12px; font-size:14px; font-weight:600;
+          padding:11px 14px; transition:.15s; }
+  .btn-primary{ background:var(--blue); color:#fff; width:100%; margin-top:18px; font-size:15px; padding:13px; }
+  .btn-primary:hover{ filter:brightness(1.05); }
+  .btn-ghost{ background:#eef6ff; color:var(--blue); }
+  .btn-ghost:hover{ background:#e0efff; }
+  .tip{ background:#fff7e6; border:1px solid #ffe1a8; color:#8a5a00; font-size:12.5px;
+        border-radius:12px; padding:10px 12px; margin-top:14px; line-height:1.5; }
+  .result{ margin-top:18px; padding:16px; border-radius:14px; background:#f3f9ff; border:1px dashed #b9d9f7; display:none; }
+  .result.show{ display:block; }
+  .code{ font-size:18px; font-weight:700; letter-spacing:1px; color:var(--blue);
+          word-break:break-all; background:#fff; padding:12px; border-radius:10px; text-align:center; }
+  .meta{ font-size:12.5px; color:var(--muted); margin-top:8px; text-align:center; }
+  .copied{ color:#1aa463; font-size:12px; margin-left:6px; }
+  .sendbox{ margin-top:12px; background:#fff; border-radius:10px; padding:10px; font-size:12.5px; color:var(--navy); line-height:1.5; }
+  textarea{ width:100%; border:1px solid #cfe3f7; border-radius:10px; padding:8px; font-size:12.5px; resize:none; color:var(--navy); }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🔑 访问码生成器</h1>
+  <div class="sub">给测试用户发码用 · 双击本文件即可使用</div>
+
+  <label>① 密钥（和线上的保持一致，可自己编一个好记的）</label>
+  <div class="row">
+    <input id="secret" type="text" placeholder="可自己编好记的串，或点右边随机生成" autocomplete="off">
+    <button class="btn-ghost" id="randBtn" type="button">随机生成</button>
+  </div>
+  <div style="font-size:12px;color:var(--muted);margin-top:6px">想好记就自己输入一段字符串（建议 12 位以上、字母数字混合），只要和 Render 里 ACCESS_SECRET 填的完全一致即可。</div>
+  <div class="row" style="margin-top:8px;">
+    <button class="btn-ghost" id="copySecret" type="button">复制密钥</button>
+  </div>
+
+  <label>② 有效期（天）</label>
+  <input id="days" type="number" value="7" min="1" max="365">
+
+  <label>③ 备注（发给谁，随便写，可选）</label>
+  <input id="note" type="text" placeholder="如：测试用户A / 小红" autocomplete="off">
+
+  <label>④ 最多可使用人数（默认 1 = 只能一个人用）</label>
+  <input id="mu" type="number" value="1" min="1" max="50">
+
+  <button class="btn-primary" id="genBtn" type="button">生成访问码</button>
+
+  <div class="result" id="result">
+    <div class="code" id="codeText">—</div>
+    <div class="meta" id="metaText"></div>
+    <button class="btn-ghost" id="copyCode" type="button" style="margin-top:10px;width:100%">复制访问码</button>
+    <div class="sendbox">
+      <div style="font-weight:600;margin-bottom:4px">可直接发给对方的文案：</div>
+      <textarea id="sendText" rows="3"></textarea>
+      <button class="btn-ghost" id="copySend" type="button" style="margin-top:6px;width:100%">复制整段文案</button>
+    </div>
+  </div>
+
+  <div class="tip">
+    ⚠️ <b>第一次用必须做一件事</b>：把上面「密钥」填到 Render 后台你的服务 → Environment →
+    新增 <b>ACCESS_SECRET</b>，值就是这串密钥，保存。两边一样，生成的码线上才认。
+    密钥只设这一次，之后发码只点「生成访问码」就行。
+  </div>
+</div>
+
+<script>
+/* ===== 下面是和线上 access.py 一模一样的算法（纯 JS 实现，离线可用） ===== */
+function utf8(s){ return new TextEncoder().encode(s); }
+function ror(x,n){ return ((x>>>n)|(x<<(32-n)))&0xffffffff; }
+function sha256(msg){
+  const K=new Uint32Array([0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2]);
+  let h0=0x6a09e667,h1=0xbb67ae85,h2=0x3c6ef372,h3=0xa54ff53a,h4=0x510e527f,h5=0x9b05688c,h6=0x1f83d9ab,h7=0x5be0cd19;
+  const l=msg.length, bitLen=l*8;
+  const padLen=(56-((l+1)%64)+64)%64;
+  const arr=new Uint8Array(l+1+padLen+8);
+  arr.set(msg); arr[l]=0x80;
+  const dv=new DataView(arr.buffer);
+  dv.setUint32(arr.length-8, Math.floor(bitLen/0x100000000));
+  dv.setUint32(arr.length-4, bitLen>>>0);
+  const w=new Uint32Array(64);
+  for(let off=0; off<arr.length; off+=64){
+    for(let i=0;i<16;i++) w[i]=(arr[off+i*4]<<24)|(arr[off+i*4+1]<<16)|(arr[off+i*4+2]<<8)|arr[off+i*4+3];
+    for(let i=16;i<64;i++){ const s0=ror(w[i-15],7)^ror(w[i-15],18)^(w[i-15]>>>3); const s1=ror(w[i-2],17)^ror(w[i-2],19)^(w[i-2]>>>10); w[i]=(w[i-16]+s0+w[i-7]+s1)|0; }
+    let a=h0,b=h1,c=h2,d=h3,e=h4,f=h5,g=h6,h=h7;
+    for(let i=0;i<64;i++){
+      const S1=ror(e,6)^ror(e,11)^ror(e,25), ch=(e&f)^((~e)&g), t1=(h+S1+ch+K[i]+w[i])|0;
+      const S0=ror(a,2)^ror(a,13)^ror(a,22), maj=(a&b)^(a&c)^(b&c), t2=(S0+maj)|0;
+      h=g; g=f; f=e; e=(d+t1)|0; d=c; c=b; b=a; a=(t1+t2)|0;
+    }
+    h0=(h0+a)|0; h1=(h1+b)|0; h2=(h2+c)|0; h3=(h3+d)|0; h4=(h4+e)|0; h5=(h5+f)|0; h6=(h6+g)|0; h7=(h7+h)|0;
+  }
+  const out=new Uint8Array(32), ov=new DataView(out.buffer);
+  ov.setUint32(0,h0); ov.setUint32(4,h1); ov.setUint32(8,h2); ov.setUint32(12,h3);
+  ov.setUint32(16,h4); ov.setUint32(20,h5); ov.setUint32(24,h6); ov.setUint32(28,h7);
+  return out;
+}
+function concat(a,b){ const c=new Uint8Array(a.length+b.length); c.set(a); c.set(b,a.length); return c; }
+function hmacSha256(key,msg){
+  const B=64; let k=key.length>B?sha256(key):key;
+  const ikey=new Uint8Array(B), okey=new Uint8Array(B);
+  for(let i=0;i<B;i++){ const kb=i<k.length?k[i]:0; ikey[i]=kb^0x36; okey[i]=kb^0x5c; }
+  return sha256(concat(okey, sha256(concat(ikey,msg))));
+}
+function bytesToHex(b){ let s=""; for(const x of b) s+=x.toString(16).padStart(2,"0"); return s; }
+function bytesToB64url(b){
+  let bin=""; for(const x of b) bin+=String.fromCharCode(x);
+  return btoa(bin).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+}
+function bytesToBase32(b){
+  const A="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"; let bits=0,val=0,out="";
+  for(const x of b){ val=(val<<8)|x; bits+=8; while(bits>=5){ out+=A[(val>>>(bits-5))&31]; bits-=5; } }
+  if(bits>0) out+=A[(val<<(5-bits))&31];
+  return out;
+}
+/* 模仿 Python json.dumps 默认格式（含空格）+ ensure_ascii=False 的转义 */
+function pyEscape(s){
+  let o="";
+  for(const ch of s){
+    const c=ch.codePointAt(0);
+    if(ch==='"') o+='\\"';
+    else if(ch==='\\') o+='\\\\';
+    else if(ch==='\b') o+='\\b';
+    else if(ch==='\f') o+='\\f';
+    else if(ch==='\n') o+='\\n';
+    else if(ch==='\r') o+='\\r';
+    else if(ch==='\t') o+='\\t';
+    else if(c<0x20) o+='\\u'+c.toString(16).padStart(4,'0');
+    else o+=ch;
+  }
+  return o;
+}
+function makeCode(secret, days, note, mu){
+  const exp=Math.floor(Date.now()/1000)+days*3600;
+  const noteT=(note||"").slice(0,40);
+  const muT=Math.max(1, parseInt(mu)||1);
+  const payloadStr='{"v": 1, "exp": '+exp+', "note": "'+pyEscape(noteT)+'", "mu": '+muT+'}';
+  const pB64=bytesToB64url(utf8(payloadStr));
+  const sig=bytesToHex(hmacSha256(utf8(secret), utf8(pB64)));
+  const rawStr=pB64+"."+sig;
+  let b32=bytesToBase32(utf8(rawStr)).replace(/=+$/,"");
+  const grouped=b32.match(/.{1,4}/g).join("-");
+  return { code:grouped, expSec:exp, mu:muT };
+}
+
+/* ===== 界面逻辑 ===== */
+const $ = id=>document.getElementById(id);
+function randSecret(){
+  const ch="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let s=""; for(let i=0;i<32;i++) s+=ch[Math.floor(Math.random()*ch.length)];
+  return s;
+}
+function loadSecret(){ const v=localStorage.getItem("gencode_secret"); if(v) $("secret").value=v; }
+function copy(text, btn){
+  navigator.clipboard?.writeText(text).then(()=>{
+    const old=btn.textContent; btn.textContent="✅ 已复制"; setTimeout(()=>btn.textContent=old,1200);
+  }).catch(()=>{ prompt("复制下面这串：", text); });
+}
+$("randBtn").onclick=()=>{ const s=randSecret(); $("secret").value=s; localStorage.setItem("gencode_secret",s); };
+$("copySecret").onclick=()=>copy($("secret").value, $("copySecret"));
+$("genBtn").onclick=()=>{
+  const secret=$("secret").value.trim();
+  if(!secret){ alert("请先填密钥（或点『随机生成』）"); return; }
+  localStorage.setItem("gencode_secret",secret);
+  const days=parseInt($("days").value)||7;
+  const note=$("note").value.trim();
+  const mu=Math.max(1, parseInt($("mu").value)||1);
+  const {code,expSec,mu:muV}=makeCode(secret,days,note,mu);
+  const expDate=new Date(expSec*1000);
+  $("codeText").textContent=code;
+  $("metaText").textContent="有效期至 "+expDate.toLocaleString("zh-CN")+"（"+days+"天）"+(note?(" · "+note):"")+" · 最多 "+muV+" 人可用";
+  const send=`你的访问码：${code}\n有效期至 ${expDate.toLocaleString("zh-CN")}（${days}天），本码最多可供 ${muV} 人使用。\n打开 https://self-ai-image.onrender.com/tool ，输入访问码即可使用工具。`;
+  $("sendText").value=send;
+  $("result").classList.add("show");
+};
+$("copyCode").onclick=()=>copy($("codeText").textContent, $("copyCode"));
+$("copySend").onclick=()=>copy($("sendText").value, $("copySend"));
+loadSecret();
+</script>
+</body>
+</html>

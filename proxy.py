@@ -15,13 +15,14 @@
   GET  /              -> 返回 standalone.html（营销落地页）
   GET  /health        -> ok
   GET  /api/providers -> 返回可选服务商及配置（前端下拉框用）
-  POST /api/verify    -> 校验动态访问码：{code} -> {valid, exp?, remaining_hours?, note?, error?}
+  POST /api/verify    -> 静默校验动态访问码（不消耗次数）：{code} -> {valid, exp?, remaining_hours?, note?, mu?, uses_left?, error?}
+  POST /api/unlock    -> 正式解锁（消耗一次使用名额）：{code} -> {valid, exp?, remaining_hours?, note?, mu?, uses_left?, error?}
   POST /api/gen       -> 生图（【需持有效动态访问码】）：{provider, key, image_b64, prompt, size, quality, n, fidelity, endpoint?}
                          请求头需带 Authorization: Bearer <码> 或 X-Access-Token: <码>
                          无码/无效/过期 -> 401 {"error":"访问码无效或已过期..."}
                          成功 -> {"images":["data:image/png;base64,..."]} 或 {"error":"原因"}
 """
-import os, json, base64, time, io
+import os, json, base64, time, io, hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import requests
 
@@ -36,6 +37,26 @@ except Exception:
 PORT = int(os.environ.get("PORT") or os.environ.get("WB_PORT", "8765"))
 HERE = os.path.dirname(os.path.abspath(__file__))
 ASSETS_DIR = os.path.join(HERE, "assets")
+
+# 访问码使用次数记录（实现「每串码限定使用人数」）。文件落盘 + 进程内缓存。
+# 【已知限制】Render 的磁盘是临时性的，服务重新部署会清空计数；要彻底吊销全部码，改 ACCESS_SECRET 即可一键作废。
+USAGE_FILE = os.path.join(HERE, "used_codes.json")
+_usage = {}
+def _code_key(code):
+    return hashlib.sha256(code.strip().upper().encode("utf-8")).hexdigest()
+def _load_usage():
+    global _usage
+    try:
+        if os.path.exists(USAGE_FILE):
+            _usage = json.load(open(USAGE_FILE, encoding="utf-8"))
+    except Exception:
+        _usage = {}
+def _save_usage():
+    try:
+        json.dump(_usage, open(USAGE_FILE, "w", encoding="utf-8"))
+    except Exception:
+        pass
+_load_usage()
 
 def _resolve(name):
     for _p in [os.path.join(HERE, name), os.path.join(os.getcwd(), name), os.path.join("/opt/render/project/src", name)]:
@@ -631,6 +652,9 @@ class H(BaseHTTPRequestHandler):
         if self.path == "/api/verify":
             self._handle_verify()
             return
+        if self.path == "/api/unlock":
+            self._handle_unlock()
+            return
         if self.path != "/api/gen":
             self.send_response(404)
             self._cors()
@@ -681,11 +705,42 @@ class H(BaseHTTPRequestHandler):
         code = (data.get("code") or "").strip()
         ok, info = verify_access_token(code)
         if ok:
+            mu = info.get("mu", None)
+            left = (mu - _usage.get(_code_key(code), 0)) if mu is not None else None
             self._send_json(200, {"valid": True, "exp": info.get("exp"),
                                   "remaining_hours": info.get("remaining_hours"),
-                                  "note": info.get("note")})
+                                  "note": info.get("note"), "mu": mu, "uses_left": left})
         else:
             self._send_json(200, {"valid": False, "error": info.get("error")})
+
+    def _handle_unlock(self):
+        # 正式解锁：校验通过且未超使用上限时，消耗一次名额（落盘持久化）。
+        try:
+            ln = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(ln)
+            data = json.loads(body or b"{}")
+        except Exception:
+            self._send_json(400, {"error": "请求解析失败"})
+            return
+        code = (data.get("code") or "").strip()
+        ok, info = verify_access_token(code)
+        if not ok:
+            self._send_json(200, {"valid": False, "error": info.get("error")})
+            return
+        mu = info.get("mu", None)
+        if mu is not None:
+            key = _code_key(code)
+            used = _usage.get(key, 0)
+            if used >= mu:
+                self._send_json(200, {"valid": False,
+                                      "error": "该访问码已达使用上限（%d 人/次），如需更多请向发放人申请新码" % mu})
+                return
+            _usage[key] = used + 1
+            _save_usage()
+        left = (mu - _usage.get(_code_key(code), 0)) if mu is not None else None
+        self._send_json(200, {"valid": True, "exp": info.get("exp"),
+                              "remaining_hours": info.get("remaining_hours"),
+                              "note": info.get("note"), "mu": mu, "uses_left": left})
 
     def log_message(self, *a):
         pass

@@ -31,9 +31,10 @@ def _b32_decode(code: str) -> bytes:
     return base64.b32decode(s + "=" * pad)
 
 
-def make_access_token(exp_hours: int = 168, note: str = "") -> str:
-    """生成一个有时效的动态访问码。默认 168 小时 = 7 天。note 为备注（如发放对象/渠道）。"""
-    payload = {"v": 1, "exp": int(time.time() + exp_hours * 3600), "note": note[:40]}
+def make_access_token(exp_hours: int = 168, note: str = "", max_uses: int = 1) -> str:
+    """生成一个有时效的动态访问码。默认 168 小时 = 7 天。note 为备注（如发放对象/渠道）；
+    max_uses 为该码最多可被解锁的人数/设备数（默认 1 = 只能一个人用；旧码无此字段则视为不限）。"""
+    payload = {"v": 1, "exp": int(time.time() + exp_hours * 3600), "note": note[:40], "mu": int(max_uses)}
     p_b64 = base64.urlsafe_b64encode(
         json.dumps(payload, ensure_ascii=False).encode("utf-8")
     ).decode("ascii").rstrip("=")
@@ -66,7 +67,8 @@ def verify_access_token(code: str):
         remaining = exp - now
         if remaining <= 0:
             return False, {"error": "访问码已过期", "exp": exp, "remaining_hours": 0}
+        mu = payload.get("mu", None)  # 旧码无 mu 字段 -> None 表示不限次数
         return True, {"exp": exp, "remaining_hours": round(remaining / 3600, 1),
-                      "note": payload.get("note", ""), "v": payload.get("v", 1)}
+                      "note": payload.get("note", ""), "v": payload.get("v", 1), "mu": mu}
     except Exception as e:
         return False, {"error": "校验失败：" + str(e)}
