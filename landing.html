@@ -328,7 +328,7 @@
     priceCommercial: 299,
     wechat: "theme_2021",
     email: "2187435980@qq.com",
-    qr: "/assets/pay-qr.png"   // 例如 "/assets/pay-qr.png"
+    qr: "/assets/par-qr.png"   // 改成你 assets/ 目录下真实的二维码文件名，例如 "/assets/pay-qr.png"
   };
 
   // 价格填充
@@ -349,11 +349,13 @@
     document.getElementById('payTitle').textContent = isCom ? '购买商用授权版' : '购买个人版';
     document.getElementById('payPlan').textContent = isCom ? '商用授权 · 可转售/嵌入客户项目' : '个人商用自用授权';
     document.getElementById('payAmt').textContent = isCom ? CONFIG.priceCommercial : CONFIG.pricePersonal;
-    // 二维码
+    // 二维码（如果文件不存在/加载失败，自动隐藏二维码区，避免显示破图）
     const qrWrap = document.getElementById('payQRWrap');
+    const payQR = document.getElementById('payQR');
     if(CONFIG.qr){
-      document.getElementById('payQR').src = CONFIG.qr;
-      qrWrap.style.display = 'block';
+      payQR.onerror = ()=>{ qrWrap.style.display = 'none'; payQR.onerror=null; };
+      payQR.onload = ()=>{ qrWrap.style.display = 'block'; };
+      payQR.src = CONFIG.qr;
     } else { qrWrap.style.display = 'none'; }
     // 微信
     const wRow = document.getElementById('payWechatRow');
