@@ -1024,7 +1024,16 @@ openDB().then(()=>{renderGallery();renderRefs();}).catch(()=>toast('画廊存储
     }catch(e){ showErr('校验请求失败：'+e); }
     finally{ if(btn){btn.disabled=false;btn.textContent='解锁并使用';} }
   }
-  if(btn)btn.onclick=function(){const c=(codeEl.value||'').trim();if(!c){showErr('请输入访问码');return;}submitUnlock(c);};
+  if(btn)btn.onclick=function(){
+    const c=(codeEl.value||'').trim();
+    if(!c){showErr('请输入访问码');return;}
+    // 快速预检：访问码（新短码或旧长码）一定带横线
+    if(c.indexOf('-')===-1 || c.length<10){
+      showErr('这不是访问码格式。访问码类似 TJM487-1-DLWNUI2JCFQ76，请打开 gencode.html 生成后填入。');
+      return;
+    }
+    submitUnlock(c);
+  };
   if(codeEl)codeEl.addEventListener('keydown',function(e){if(e.key==='Enter'&&btn)btn.click();});
   if(!ACCESS_ON){closeGate();return;} // 本地打开不强制
   const t=window.__accessToken();
@@ -1043,9 +1052,10 @@ openDB().then(()=>{renderGallery();renderRefs();}).catch(()=>toast('画廊存储
     <div style="font-size:30px;margin-bottom:6px">🔐</div>
     <div style="font-size:19px;font-weight:800;color:#173A5E;margin-bottom:4px">测试版 · 访问码验证</div>
     <div style="font-size:13px;color:#6A86A3;line-height:1.5;margin-bottom:18px">本工具处于测试阶段，仅限受邀用户体验。<br>请输入收到的动态访问码以解锁全部功能。</div>
-    <input id="gateCode" type="text" autocomplete="off" spellcheck="false" placeholder="例如 XXXX-XXXX-XXXX-XXXX" style="width:100%;box-sizing:border-box;padding:13px 14px;border:1.5px solid #cfe0f0;border-radius:13px;font-size:15px;color:#173A5E;outline:none;letter-spacing:1px;text-align:center">
-    <button id="gateBtn" style="width:100%;margin-top:14px;padding:13px;border:none;border-radius:13px;background:linear-gradient(135deg,#2E9BE6,#1F7FC4);color:#fff;font-size:15px;font-weight:700;cursor:pointer">解锁并使用</button>
-    <div id="gateErr" style="display:none;margin-top:12px;font-size:13px;color:#c0392b"></div>
+    <input id="gateCode" type="text" autocomplete="off" spellcheck="false" placeholder="例如 TJM487-1-DLWNUI2JCFQ76" style="width:100%;box-sizing:border-box;padding:13px 14px;border:1.5px solid #cfe0f0;border-radius:13px;font-size:15px;color:#173A5E;outline:none;letter-spacing:1px;text-align:center">
+    <div style="margin-top:6px;font-size:11px;color:#9fb3c8">这里填的是「访问码」，不是生成器里的「密钥/总钥匙」</div>
+    <button id="gateBtn" style="width:100%;margin-top:12px;padding:13px;border:none;border-radius:13px;background:linear-gradient(135deg,#2E9BE6,#1F7FC4);color:#fff;font-size:15px;font-weight:700;cursor:pointer">解锁并使用</button>
+    <div id="gateErr" style="display:none;margin-top:12px;font-size:13px;color:#c0392b;background:#fff0f0;border:1px solid #f5b0b0;border-radius:8px;padding:8px;font-weight:600"></div>
     <div style="margin-top:14px;font-size:11px;color:#9fb3c8">每串码限设定人数使用，过期或次数用尽即失效，请联系发放人续期或换新码</div>
   </div>
 </div>
