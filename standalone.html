@@ -838,10 +838,9 @@ const PROVIDERS_LOCAL=[
   {id:'gemini',name:'Gemini（Google 免费层）',needsKey:true,desc:'Google AI Studio 免费层（Nano Banana），每日约 500 张，支持图生图。需去 aistudio.google.com 拿 Key。免费层带隐形水印、商业用途受限。',getKey:'https://aistudio.google.com/apikey'},
   {id:'openai',name:'OpenAI（gpt-image-2）',needsKey:true,desc:'OpenAI 官方 gpt-image-2，新号有约 $5 试用金，支持图生图/文生图。需能访问 api.openai.com。',getKey:'https://platform.openai.com/api-keys'},
   {id:'redfox',name:'redfox.hk（gpt-image-2 转发）',needsKey:true,desc:'redfox.hk 转发 gpt-image-2，国内访问友好，需注册 Key（现多为付费）。',getKey:'https://redfox.hk/settings/api-keys?source=skillhub'},
-  {id:'seedream',name:'Seedream 5.0（字节火山）',needsKey:true,desc:'字节 Seedream 5.0（火山方舟），国内直连、图生图保真好，适合电商产品图换背景/换装。需去火山方舟开通并拿 ARK API Key；如 Pro 额度用完可切标准版/Lite版。',getKey:'https://console.volcengine.com/ark/region:cn-beijing/apikey',models:[
-    {id:'doubao-seedream-5-0-260128',name:'标准版（推荐，额度更宽松）'},
-    {id:'doubao-seedream-5-0-lite-260128',name:'Lite版（额度最宽松）'},
-    {id:'doubao-seedream-5-0-pro-260628',name:'Pro版（质量最高，但额度紧）'}
+  {id:'seedream',name:'Seedream 5.0（字节火山）',needsKey:true,desc:'字节 Seedream 5.0（火山方舟），官网只有 Pro 和 Lite 两种。Pro 质量高但额度紧；Lite 额度宽松，但要求图片总像素不低于 3686400（约 2048×2048）。',getKey:'https://console.volcengine.com/ark/region:cn-beijing/apikey',models:[
+    {id:'doubao-seedream-5-0-lite-260128',name:'Lite版（额度宽松，默认）'},
+    {id:'doubao-seedream-5-0-pro-260628',name:'Pro版（质量更高，额度紧）'}
   ]},
   {id:'custom',name:'自部署 / 自定义端点',needsKey:true,desc:'对接你自己部署的模型（如本地 ComfyUI、自建 OpenAI 兼容服务、或任意充值付费的兼容端点）。需填 Base URL。',getKey:''}
 ];

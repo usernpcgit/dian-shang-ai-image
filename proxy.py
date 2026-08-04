@@ -77,12 +77,11 @@ PROVIDERS = [
         "name": "Seedream 5.0（字节火山）",
         "needsKey": True,
         "imageEdit": True,
-        "desc": "字节 Seedream 5.0（火山方舟），国内直连、图生图保真好，适合电商产品图换背景/换装。需去火山方舟开通并拿 ARK API Key；如 Pro 额度用完可切标准版/Lite版。",
+        "desc": "字节 Seedream 5.0（火山方舟），官网只有 Pro 和 Lite 两种。Pro 质量高但额度紧；Lite 额度宽松，但要求图片总像素不低于 3686400（约 2048×2048）。",
         "getKey": "https://console.volcengine.com/ark/region:cn-beijing/apikey",
         "models": [
-            {"id": "doubao-seedream-5-0-260128", "name": "标准版（推荐，额度更宽松）"},
-            {"id": "doubao-seedream-5-0-lite-260128", "name": "Lite版（额度最宽松）"},
-            {"id": "doubao-seedream-5-0-pro-260628", "name": "Pro版（质量最高，但额度紧）"},
+            {"id": "doubao-seedream-5-0-lite-260128", "name": "Lite版（额度宽松，默认）"},
+            {"id": "doubao-seedream-5-0-pro-260628", "name": "Pro版（质量更高，额度紧）"},
         ],
     },
     {
@@ -112,6 +111,37 @@ def b64_to_bytes(image_b64):
     if "," in image_b64:
         image_b64 = image_b64.split(",", 1)[1]
     return base64.b64decode(image_b64)
+
+
+def localize_error(msg):
+    """把常见英文模型报错翻译成中文，避免用户看不懂。"""
+    if not msg:
+        return msg
+    m = str(msg)
+    # Seedream / 火山方舟
+    if "image size must be at least 3686400 pixels" in m:
+        return "你选的尺寸太小：Seedream Lite 要求图片总像素不低于 3686400（例如 2048×2048、1664×2496），请在内容面板选更大画幅。"
+    if "The parameter `size` specified in the request is not valid" in m:
+        return "图片尺寸参数不符合模型要求，请换更大的画幅（如 2048×2048 或 1664×2496）。"
+    if "inference limit" in m and "Safe Experience Mode" in m:
+        return "该模型当前额度已用完或被「安全体验模式」暂停。请切换 Pro/Lite 版本，或去火山方舟控制台关闭安全体验模式/开通付费额度。"
+    if "inference limit" in m:
+        return "该模型当前额度已用完，请切换其他模型版本或去控制台开通更多额度。"
+    if "Model Activation" in m or "Safe Experience Mode" in m:
+        return "模型未激活或被安全体验模式限制，请去火山方舟控制台激活模型或关闭安全体验模式。"
+    # OpenAI
+    if "Billing hard limit has been reached" in m or "exceeded your current quota" in m or "insufficient_quota" in m:
+        return "你的 OpenAI 账号余额不足或免费额度已用完，请充值或换其他服务商。"
+    if "Invalid API Key" in m or "Incorrect API key" in m:
+        return "API Key 无效，请检查是否复制正确。"
+    if "content_policy_violation" in m or "safety system" in m:
+        return "提示词触发了内容安全过滤，请修改提示词后重试。"
+    # Gemini
+    if "API key not valid" in m:
+        return "Gemini API Key 无效，请检查是否复制正确。"
+    if "permission" in m and "Gemini" in m:
+        return "Gemini Key 没有调用该模型的权限，请确认已开启 Gemini API 权限。"
+    return msg
 
 
 # ─────────── 各服务商实现 ───────────
@@ -384,14 +414,44 @@ def gen_custom(key, images, prompt, size, n, endpoint):
     return out, None
 
 
+def seedream_valid_size(size, model):
+    """根据 Pro/Lite 的像素范围，把用户选的尺寸自动缩放到合法范围。"""
+    # Pro: [921600, 4624220]；Lite: [3686400, 16777216]
+    if model == "doubao-seedream-5-0-pro-260628":
+        min_area, max_area = 921600, 4624220
+    else:
+        min_area, max_area = 3686400, 16777216
+    try:
+        w, h = (size or "1024x1536").split("x")
+        w, h = int(w), int(h)
+    except Exception:
+        w, h = 1024, 1536
+    if w <= 0 or h <= 0:
+        w, h = 1024, 1536
+    area = w * h
+    if area < min_area:
+        scale = (min_area / area) ** 0.5
+    elif area > max_area:
+        scale = (max_area / area) ** 0.5
+    else:
+        return "%dx%d" % (w, h)
+    nw, nh = int(round(w * scale)), int(round(h * scale))
+    # 保证缩放后因取整仍满足范围
+    if nw * nh < min_area:
+        nw, nh = int((min_area * (w / h)) ** 0.5) + 1, int((min_area * (h / w)) ** 0.5) + 1
+    if nw * nh > max_area:
+        nw, nh = int((max_area * (w / h)) ** 0.5), int((max_area * (h / w)) ** 0.5)
+    return "%dx%d" % (max(16, nw), max(16, nh))
+
+
 def gen_seedream(key, images, prompt, size, n, model=None):
     """字节 Seedream 5.0（火山方舟）。OpenAI 兼容格式，支持图生图 + 多图参考（image 传数组）。"""
     if not key:
-        return None, "缺少火山方舟 ARK API Key"
+        return None, localize_error("缺少火山方舟 ARK API Key")
     if not prompt:
-        return None, "缺少提示词"
-    # 默认标准版（额度更宽松）；可选 lite/pro。pro 版支持图生图编辑；标准版/lite 均支持图生图。
-    model = model or "doubao-seedream-5-0-260128"
+        return None, localize_error("缺少提示词")
+    # 火山官网只有 Pro 和 Lite；默认 Lite（额度宽松），可选 Pro（质量更高）。
+    model = model or "doubao-seedream-5-0-lite-260128"
     url = "https://ark.cn-beijing.volces.com/api/v3/images/generations"
     try:
         count = max(1, min(4, int(n) if str(n).isdigit() else 1))
@@ -404,7 +464,7 @@ def gen_seedream(key, images, prompt, size, n, model=None):
             payload = {
                 "model": model,
                 "prompt": prompt,
-                "size": size or "1024x1536",
+                "size": seedream_valid_size(size, model),
                 "output_format": "png",
                 "response_format": "b64_json",
                 "watermark": False,
@@ -461,28 +521,32 @@ def gen_image(data):
     endpoint = data.get("endpoint") or ""
     model = data.get("model") or ""
 
-    if provider == "pollinations":
-        if not prompt:
-            return None, "缺少提示词"
-        return gen_pollinations(prompt, size, n)
-    if provider == "gemini":
-        if not prompt:
-            return None, "缺少提示词"
-        return gen_gemini(key, images, prompt, size, n)
-    if provider == "openai":
-        if not prompt:
-            return None, "缺少提示词"
-        return gen_openai(key, images, prompt, size, n)
-    if provider == "seedream":
-        if not prompt:
-            return None, "缺少提示词"
-        return gen_seedream(key, images, prompt, size, n, model)
-    if provider == "custom":
-        if not prompt:
-            return None, "缺少提示词"
-        return gen_custom(key, images, prompt, size, n, endpoint)
-    # 默认 redfox
-    return gen_redfox(key, images, prompt, fidelity, size, quality, n)
+    def run():
+        if provider == "pollinations":
+            if not prompt:
+                return None, "缺少提示词"
+            return gen_pollinations(prompt, size, n)
+        if provider == "gemini":
+            if not prompt:
+                return None, "缺少提示词"
+            return gen_gemini(key, images, prompt, size, n)
+        if provider == "openai":
+            if not prompt:
+                return None, "缺少提示词"
+            return gen_openai(key, images, prompt, size, n)
+        if provider == "seedream":
+            if not prompt:
+                return None, "缺少提示词"
+            return gen_seedream(key, images, prompt, size, n, model)
+        if provider == "custom":
+            if not prompt:
+                return None, "缺少提示词"
+            return gen_custom(key, images, prompt, size, n, endpoint)
+        # 默认 redfox
+        return gen_redfox(key, images, prompt, fidelity, size, quality, n)
+
+    imgs, err = run()
+    return imgs, localize_error(err)
 
 
 class H(BaseHTTPRequestHandler):
