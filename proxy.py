@@ -12,15 +12,26 @@
   custom        —— 自部署模型 / 任意 OpenAI 兼容端点（付费或自建入口）
 
 接口：
-  GET  /              -> 返回 standalone.html
+  GET  /              -> 返回 standalone.html（营销落地页）
   GET  /health        -> ok
   GET  /api/providers -> 返回可选服务商及配置（前端下拉框用）
-  POST /api/gen       -> 生图：{provider, key, image_b64, prompt, size, quality, n, fidelity, endpoint?}
-                         返回 {"images":["data:image/png;base64,..."]} 或 {"error":"原因"}
+  POST /api/verify    -> 校验动态访问码：{code} -> {valid, exp?, remaining_hours?, note?, error?}
+  POST /api/gen       -> 生图（【需持有效动态访问码】）：{provider, key, image_b64, prompt, size, quality, n, fidelity, endpoint?}
+                         请求头需带 Authorization: Bearer <码> 或 X-Access-Token: <码>
+                         无码/无效/过期 -> 401 {"error":"访问码无效或已过期..."}
+                         成功 -> {"images":["data:image/png;base64,..."]} 或 {"error":"原因"}
 """
 import os, json, base64, time, io
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import requests
+
+# 动态访问码（测试阶段分享保护）：签发/校验逻辑放在 access.py，与 gentoken.py 共用同一密钥。
+try:
+    from access import verify_access_token
+except Exception:
+    # 兜底：即便 access.py 缺失也不让整个代理崩溃，只是所有访问码都会被拒。
+    def verify_access_token(code):
+        return False, {"error": "access 模块缺失（请联系管理员）"}
 
 PORT = int(os.environ.get("PORT") or os.environ.get("WB_PORT", "8765"))
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -617,17 +628,28 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
+        if self.path == "/api/verify":
+            self._handle_verify()
+            return
         if self.path != "/api/gen":
             self.send_response(404)
             self._cors()
             self.end_headers()
             return
+        # —— 动态访问码门禁：未持有效码者不得生图（硬拦截，绕过前端门禁也无效）——
         try:
             ln = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(ln)
             data = json.loads(body or b"{}")
         except Exception as e:
             self._send_json(400, {"error": "请求解析失败：" + str(e)})
+            return
+        token = (self.headers.get("Authorization") or "").replace("Bearer ", "", 1).strip()
+        if not token:
+            token = (self.headers.get("X-Access-Token") or "").strip()
+        ok, info = verify_access_token(token)
+        if not ok:
+            self._send_json(401, {"error": "访问码无效或已过期，请先在页面输入正确的动态访问码。（" + info.get("error", "") + "）"})
             return
         try:
             imgs, err = gen_image(data)
@@ -647,6 +669,23 @@ class H(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(b)))
         self.end_headers()
         self.wfile.write(b)
+
+    def _handle_verify(self):
+        try:
+            ln = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(ln)
+            data = json.loads(body or b"{}")
+        except Exception:
+            self._send_json(400, {"error": "请求解析失败"})
+            return
+        code = (data.get("code") or "").strip()
+        ok, info = verify_access_token(code)
+        if ok:
+            self._send_json(200, {"valid": True, "exp": info.get("exp"),
+                                  "remaining_hours": info.get("remaining_hours"),
+                                  "note": info.get("note")})
+        else:
+            self._send_json(200, {"valid": False, "error": info.get("error")})
 
     def log_message(self, *a):
         pass

@@ -827,10 +827,15 @@ function genOne(){
   if(provider==='seedream' && $('#apiModel')){payload.model=$('#apiModel').value;}
   const hint=$('#genHint');hint.style.display='block';hint.textContent='⏳ 正在生成（约 10–60 秒，请耐心等待）…';
   $('#genChoices').style.display='none';toast('正在生图…');
-  fetch(PROXY_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+  // 携带动态访问码（测试阶段门禁）：无码时后端会直接 401 拒绝
+  const tk=(window.__accessToken&&window.__accessToken())||'';
+  const gh={'Content-Type':'application/json'};
+  if(tk){gh['Authorization']='Bearer '+tk;gh['X-Access-Token']=tk;}
+  fetch(PROXY_URL,{method:'POST',headers:gh,body:JSON.stringify(payload)})
     .then(r=>r.json().catch(()=>null))
     .then(j=>{
       if(!j||j.error){const msg=(j&&j.error)||'接口无返回';hint.style.display='block';
+        if(/访问码|未授权|401/i.test(msg)){hint.style.display='none';if(window.__showGate)window.__showGate('访问码已失效或无效，请重新输入');return;}
         if(/未激活|has not activated|not activated/i.test(msg))hint.textContent='⚠️ 该模型未在你账号开通：'+msg+'（去对应控制台开通后重试）';
         else if(/inference limit|Safe Experience Mode|set inference limit|model service has been paused/i.test(msg)){
           hint.innerHTML='⚠️ 你火山账号当前模型（'+(provider==='seedream'&&$('#apiModel')?$('#apiModel').selectedOptions[0].textContent:'该模型')+'）的额度已用完或被「安全体验模式」暂停。<br>① 换个模型版本：API 面板 → Seedream 改成「标准版」或「Lite版」再试；<br>② 或去 <a href="https://console.volcengine.com/ark/region:cn-beijing/modelActivation" target="_blank" rel="noopener">火山方舟模型激活页</a> 关闭 Safe Experience Mode / 开通付费额度。';
@@ -973,6 +978,54 @@ $('#modalDel').onclick=async()=>{if(!curImg)return;await dbDel(curImg.id);render
 $('#gUpload').onchange=e=>uploadGallery(e.target.files);
 $('#gFilterTag').oninput=renderGallery;$('#gFilterNote').oninput=renderGallery;
 openDB().then(()=>{renderGallery();renderRefs();}).catch(()=>toast('画廊存储不可用（浏览器限制），可重试'));
+
+/* ===== 动态访问码门禁（测试阶段分享保护） =====
+   双保险：前端全屏遮罩拦截交互 + 后端 /api/gen 硬性校验访问码。
+   仅当经由代理(http)访问时才启用；本地 file:// 直接打开不强制（那时本就无代理可签发）。
+   即便有人用开发者工具移除遮罩，没有有效访问码也无法调用 /api/gen 真正生图。 */
+(function(){
+  const ACCESS_ON = location.protocol.startsWith('http');
+  const TOKEN_KEY='wb_access_token';
+  const gate=document.getElementById('gate');
+  const codeEl=document.getElementById('gateCode');
+  const btn=document.getElementById('gateBtn');
+  const errEl=document.getElementById('gateErr');
+  // 暴露给 genOne：取当前访问码
+  window.__accessToken=function(){try{return localStorage.getItem(TOKEN_KEY)||'';}catch(e){return '';}};
+  // 暴露给 genOne：生图返回 401 时重新弹出门禁
+  window.__showGate=function(msg){if(gate)gate.style.display='flex';if(errEl){errEl.textContent=msg||'请先在上方输入动态访问码';errEl.style.display='block';}};
+  function closeGate(){if(gate)gate.style.display='none';}
+  function unlock(t){try{localStorage.setItem(TOKEN_KEY,t);}catch(e){}closeGate();toast('🔓 已解锁，开始使用吧');}
+  function showErr(m){if(errEl){errEl.textContent=m;errEl.style.display='block';}}
+  async function verifyAndUnlock(code){
+    if(!btn)return;btn.disabled=true;btn.textContent='校验中…';showErr('');
+    try{
+      const url=location.origin.startsWith('http')?'/api/verify':'http://localhost:8765/api/verify';
+      const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
+      const j=await r.json().catch(()=>null);
+      if(j&&j.valid){unlock(code.trim());}
+      else{showErr((j&&j.error)||'访问码无效');}
+    }catch(e){showErr('校验请求失败：'+e);}
+    finally{if(btn){btn.disabled=false;btn.textContent='解锁并使用';}}
+  }
+  if(btn)btn.onclick=function(){const c=(codeEl.value||'').trim();if(!c){showErr('请输入访问码');return;}verifyAndUnlock(c);};
+  if(codeEl)codeEl.addEventListener('keydown',function(e){if(e.key==='Enter'&&btn)btn.click();});
+  if(!ACCESS_ON){closeGate();return;} // 本地打开不强制
+  const t=window.__accessToken();
+  if(t){verifyAndUnlock(t).catch(function(){});} // 已有码静默校验，过期则自动弹回门禁
+})();
 </script>
+<!-- ===== 动态访问码门禁（测试阶段分享保护） ===== -->
+<div id="gate" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(13,27,42,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);padding:20px">
+  <div style="width:100%;max-width:380px;background:rgba(255,255,255,.94);border-radius:22px;padding:28px 24px;box-shadow:0 20px 60px rgba(0,0,0,.35);text-align:center;font-family:inherit">
+    <div style="font-size:30px;margin-bottom:6px">🔐</div>
+    <div style="font-size:19px;font-weight:800;color:#173A5E;margin-bottom:4px">测试版 · 访问码验证</div>
+    <div style="font-size:13px;color:#6A86A3;line-height:1.5;margin-bottom:18px">本工具处于测试阶段，仅限受邀用户体验。<br>请输入收到的动态访问码以解锁全部功能。</div>
+    <input id="gateCode" type="text" autocomplete="off" spellcheck="false" placeholder="例如 XXXX-XXXX-XXXX-XXXX" style="width:100%;box-sizing:border-box;padding:13px 14px;border:1.5px solid #cfe0f0;border-radius:13px;font-size:15px;color:#173A5E;outline:none;letter-spacing:1px;text-align:center">
+    <button id="gateBtn" style="width:100%;margin-top:14px;padding:13px;border:none;border-radius:13px;background:linear-gradient(135deg,#2E9BE6,#1F7FC4);color:#fff;font-size:15px;font-weight:700;cursor:pointer">解锁并使用</button>
+    <div id="gateErr" style="display:none;margin-top:12px;font-size:13px;color:#c0392b"></div>
+    <div style="margin-top:14px;font-size:11px;color:#9fb3c8">访问码有时效，过期或失效请联系发放人重新获取</div>
+  </div>
+</div>
 </body>
 </html>
