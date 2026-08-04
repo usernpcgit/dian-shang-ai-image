@@ -4,23 +4,29 @@
 动态访问码（测试阶段分享保护）
 
 设计要点：
-- 基于时间的一次性不可伪造访问码：payload(含过期时间戳) + HMAC-SHA256 签名，再 base32 编码成易读码。
+- 基于时间的不可伪造访问码：到期时间戳 + 最多人数 + HMAC-SHA256 签名（取前 8 字节）。
 - 离线即可校验（无数据库、无状态），天然支持多实例/重启。
-- 生成：gentoken.py（卖家/管理员用）；校验：proxy.py 的 /api/verify 与 /api/gen 门禁共用本模块。
+- 访问码格式很短、全大写+数字、分三段，方便人工抄写：
+      PART1-PART2-PART3
+      PART1 = 到期时间戳的 base36（大写）
+      PART2 = 最多可用人数（十进制）
+      PART3 = HMAC-SHA256(secret, "PART1.PART2") 前 8 字节的 base32（13 字符，防伪造）
+  例：K3F9ZQ2-1-XQ7KMP9BCD
 - 修改 ACCESS_SECRET 会让所有已发访问码立即失效 —— 这本身就是一键吊销开关。
-
-说明：本实现采用「基于时间」的时效性（用户需求里的其中一种）。若以后需要「单次有效」，
-可在此基础上追加一个服务端已用码集合（文件/Redis）做一次性消费，但会引入状态，测试阶段暂不需要。
+- 兼容旧版长码（base32 包裹的 JSON 格式），已发出的旧码在过期前依然可用。
 """
-import os, time, json, base64, hmac, hashlib
+import os, time, json, base64, hmac, hashlib, re
 
 # 单一真相源：proxy.py 与 gentoken.py 必须共用同一个密钥。
 # 部署前请改成你自己的随机长字符串；生产环境推荐用环境变量 ACCESS_SECRET 注入（避免写进代码库）。
 ACCESS_SECRET = os.environ.get("ACCESS_SECRET", "test-access-secret-change-me-2026")
 
+_B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+_B36 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
 
 def _b32_encode(raw: bytes) -> str:
-    """base32 编码并按 4 位分组加横线，方便人工抄写/口述。"""
+    """base32 编码并按 4 位分组加横线（旧码 fallback 用）。"""
     s = base64.b32encode(raw).decode("ascii").rstrip("=")
     return "-".join(s[i:i + 4] for i in range(0, len(s), 4))
 
@@ -31,26 +37,63 @@ def _b32_decode(code: str) -> bytes:
     return base64.b32decode(s + "=" * pad)
 
 
+def _b36_encode(n: int) -> str:
+    if n <= 0:
+        return "0"
+    s = ""
+    while n > 0:
+        s = _B36[n % 36] + s
+        n //= 36
+    return s
+
+
+def _b36_decode(s: str) -> int:
+    return int(s, 36)
+
+
+def _sig8(secret: str, msg: str) -> str:
+    """HMAC-SHA256 取前 8 字节 → base32 大写无填充（13 字符）。"""
+    dig = hmac.new(secret.encode("utf-8"), msg.encode("utf-8"), hashlib.sha256).digest()[:8]
+    return base64.b32encode(dig).decode("ascii").rstrip("=")
+
+
+# 新短码正则：PART1(base36)-PART2(数字)-PART3(base32 13位)
+_NEW_RE = re.compile(r"^([0-9A-Z]{4,10})-([0-9]{1,3})-([A-Z2-7]{13})$")
+
+
 def make_access_token(exp_hours: int = 168, note: str = "", max_uses: int = 1) -> str:
-    """生成一个有时效的动态访问码。默认 168 小时 = 7 天。note 为备注（如发放对象/渠道）；
-    max_uses 为该码最多可被解锁的人数/设备数（默认 1 = 只能一个人用；旧码无此字段则视为不限）。"""
-    payload = {"v": 1, "exp": int(time.time() + exp_hours * 3600), "note": note[:40], "mu": int(max_uses)}
-    p_b64 = base64.urlsafe_b64encode(
-        json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    ).decode("ascii").rstrip("=")
-    sig = hmac.new(ACCESS_SECRET.encode("utf-8"), p_b64.encode("utf-8"), hashlib.sha256).hexdigest()
-    return _b32_encode((p_b64 + "." + sig).encode("utf-8"))
+    """生成一个有时效的动态访问码。默认 168 小时 = 7 天。
+    note 仅为发放记录，不再写进码里（缩短长度）；max_uses 为该码最多可被解锁的人数（默认 1）。"""
+    exp = int(time.time() + exp_hours * 3600)
+    mu = int(max_uses)
+    p1 = _b36_encode(exp)
+    p2 = str(mu)
+    p3 = _sig8(ACCESS_SECRET, p1 + "." + p2)
+    return f"{p1}-{p2}-{p3}"
 
 
 def verify_access_token(code: str):
     """校验访问码。返回 (ok:bool, info:dict)。
 
-    ok=True 时 info 含 exp / remaining_hours / note；
+    ok=True 时 info 含 exp / remaining_hours / note / v / mu；
     ok=False 时 info 含 error（格式错误 / 签名无效 / 已过期 / 校验失败）。
+    同时兼容新短码与旧版长码。
     """
     try:
+        c = code.strip().replace(" ", "")
+        # —— 新短码 ——
+        m = _NEW_RE.match(c)
+        if m:
+            p1, p2, p3 = m.group(1), m.group(2), m.group(3)
+            exp = _b36_decode(p1)
+            mu = int(p2)
+            expect = _sig8(ACCESS_SECRET, p1 + "." + p2)
+            if not hmac.compare_digest(expect, p3):
+                return False, {"error": "签名无效（密钥不符或码被篡改）"}
+            return _build_ok(exp, mu, "")
+        # —— 旧长码 fallback ——
         try:
-            raw = _b32_decode(code)
+            raw = _b32_decode(c)
             txt = raw.decode("ascii")
         except Exception:
             return False, {"error": "格式错误"}
@@ -63,12 +106,16 @@ def verify_access_token(code: str):
         pad = (-len(p_b64)) % 4
         payload = json.loads(base64.urlsafe_b64decode(p_b64 + "=" * pad).decode("utf-8"))
         exp = int(payload.get("exp", 0))
-        now = int(time.time())
-        remaining = exp - now
-        if remaining <= 0:
-            return False, {"error": "访问码已过期", "exp": exp, "remaining_hours": 0}
         mu = payload.get("mu", None)  # 旧码无 mu 字段 -> None 表示不限次数
-        return True, {"exp": exp, "remaining_hours": round(remaining / 3600, 1),
-                      "note": payload.get("note", ""), "v": payload.get("v", 1), "mu": mu}
+        return _build_ok(exp, mu, payload.get("note", ""))
     except Exception as e:
         return False, {"error": "校验失败：" + str(e)}
+
+
+def _build_ok(exp: int, mu, note: str):
+    now = int(time.time())
+    remaining = exp - now
+    if remaining <= 0:
+        return False, {"error": "访问码已过期", "exp": exp, "remaining_hours": 0}
+    return True, {"exp": exp, "remaining_hours": round(remaining / 3600, 1),
+                  "note": note, "v": 2 if isinstance(mu, int) else 1, "mu": mu}

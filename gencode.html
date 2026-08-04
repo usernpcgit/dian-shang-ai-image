@@ -56,7 +56,7 @@
   <label>② 有效期（天）</label>
   <input id="days" type="number" value="7" min="1" max="365">
 
-  <label>③ 备注（发给谁，随便写，可选）</label>
+  <label>③ 备注（仅作记录，不写进访问码，可选）</label>
   <input id="note" type="text" placeholder="如：测试用户A / 小红" autocomplete="off">
 
   <label>④ 最多可使用人数（默认 1 = 只能一个人用）</label>
@@ -155,17 +155,18 @@ function pyEscape(s){
   }
   return o;
 }
+/* 新短码：PART1(base36到期时间戳)-PART2(人数)-PART3(签名前8字节base32)
+   例：K3F9ZQ2-1-XQ7KMP9BCD —— 全大写+数字、分三段，方便抄写/口述。
+   与线上 access.py 算法完全一致；note 仅作发放记录，不写进码里。 */
 function makeCode(secret, days, note, mu){
   const exp=Math.floor(Date.now()/1000)+days*3600;
-  const noteT=(note||"").slice(0,40);
   const muT=Math.max(1, parseInt(mu)||1);
-  const payloadStr='{"v": 1, "exp": '+exp+', "note": "'+pyEscape(noteT)+'", "mu": '+muT+'}';
-  const pB64=bytesToB64url(utf8(payloadStr));
-  const sig=bytesToHex(hmacSha256(utf8(secret), utf8(pB64)));
-  const rawStr=pB64+"."+sig;
-  let b32=bytesToBase32(utf8(rawStr)).replace(/=+$/,"");
-  const grouped=b32.match(/.{1,4}/g).join("-");
-  return { code:grouped, expSec:exp, mu:muT };
+  const p1=exp.toString(36).toUpperCase();
+  const p2=String(muT);
+  const msg=p1+"."+p2;
+  const sigBytes=hmacSha256(utf8(secret), utf8(msg)).slice(0,8);
+  const p3=bytesToBase32(sigBytes);
+  return { code:p1+"-"+p2+"-"+p3, expSec:exp, mu:muT };
 }
 
 /* ===== 界面逻辑 ===== */
