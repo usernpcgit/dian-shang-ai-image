@@ -982,8 +982,10 @@ openDB().then(()=>{renderGallery();renderRefs();}).catch(()=>toast('画廊存储
 /* ===== 动态访问码门禁（测试阶段分享保护） =====
    双保险：前端全屏遮罩拦截交互 + 后端 /api/gen 硬性校验访问码。
    仅当经由代理(http)访问时才启用；本地 file:// 直接打开不强制（那时本就无代理可签发）。
-   即便有人用开发者工具移除遮罩，没有有效访问码也无法调用 /api/gen 真正生图。 */
-(function(){
+   即便有人用开发者工具移除遮罩，没有有效访问码也无法调用 /api/gen 真正生图。
+   注意：下方 #gate 区块在 <script> 之后，故整段初始化必须等 DOMContentLoaded，
+   否则运行到此处时 #gateBtn 等元素尚未解析，getElementById 返回 null 会让门禁完全失效。 */
+document.addEventListener('DOMContentLoaded', function(){
   const ACCESS_ON = location.protocol.startsWith('http');
   const TOKEN_KEY='wb_access_token';
   const gate=document.getElementById('gate');
@@ -996,7 +998,7 @@ openDB().then(()=>{renderGallery();renderRefs();}).catch(()=>toast('画廊存储
   window.__showGate=function(msg){if(gate)gate.style.display='flex';if(errEl){errEl.textContent=msg||'请先在上方输入动态访问码';errEl.style.display='block';}};
   function closeGate(){if(gate)gate.style.display='none';}
   function unlock(t){try{localStorage.setItem(TOKEN_KEY,t);}catch(e){}closeGate();}
-  function showErr(m){if(errEl){errEl.textContent=m;errEl.style.display='block';}}
+  function showErr(m){if(errEl){ if(!m){errEl.style.display='none';errEl.textContent='';return;} errEl.textContent=m;errEl.style.display='block';}}
   const baseUrl=location.origin.startsWith('http')?'':'http://localhost:8765';
   // 静默校验（不消耗次数）：用于已有码的页面重载，仅确认是否过期
   async function verifyOnly(code){
@@ -1044,7 +1046,7 @@ openDB().then(()=>{renderGallery();renderRefs();}).catch(()=>toast('画廊存储
     });
   }
   // 无 token 时门禁默认显示，等待用户输入
-})();
+});
 </script>
 <!-- ===== 动态访问码门禁（测试阶段分享保护） ===== -->
 <div id="gate" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(13,27,42,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);padding:20px">
