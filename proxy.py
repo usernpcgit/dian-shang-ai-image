@@ -24,11 +24,15 @@ import requests
 
 PORT = int(os.environ.get("PORT") or os.environ.get("WB_PORT", "8765"))
 HERE = os.path.dirname(os.path.abspath(__file__))
-HTML = os.path.join(HERE, "standalone.html")
-for _p in [HTML, os.path.join(os.getcwd(), "standalone.html"), "/opt/render/project/src/standalone.html"]:
-    if os.path.exists(_p):
-        HTML = _p
-        break
+
+def _resolve(name):
+    for _p in [os.path.join(HERE, name), os.path.join(os.getcwd(), name), os.path.join("/opt/render/project/src", name)]:
+        if os.path.exists(_p):
+            return _p
+    return os.path.join(HERE, name)
+
+LANDING = _resolve("landing.html")   # 根路径：营销落地页
+HTML = _resolve("standalone.html")   # /tool：工具页
 
 POLL = 3
 MAX_TRY = 80
@@ -560,20 +564,26 @@ class H(BaseHTTPRequestHandler):
         self._cors()
         self.end_headers()
 
+    def _serve_file(self, path):
+        try:
+            with open(path, "rb") as f:
+                body = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self._cors()
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except Exception:
+            self.send_response(404)
+            self.end_headers()
+
     def do_GET(self):
         if self.path in ("/", "/index.html"):
-            try:
-                with open(HTML, "rb") as f:
-                    body = f.read()
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self._cors()
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-            except Exception:
-                self.send_response(404)
-                self.end_headers()
+            self._serve_file(LANDING)
+            return
+        if self.path == "/tool":
+            self._serve_file(HTML)
             return
         if self.path == "/health":
             self.send_response(200)
