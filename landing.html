@@ -77,7 +77,7 @@
   /* 示例 */
   .ex-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
   .ex{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:var(--shadow)}
-  .ex .img{aspect-ratio:3/4;background:linear-gradient(160deg,#eaf3fe,#d3e9fd);display:flex;align-items:center;justify-content:center;color:var(--brand);font-size:13px;font-weight:700}
+  .ex .img{display:block;width:100%;aspect-ratio:3/4;object-fit:cover;background:linear-gradient(160deg,#eaf3fe,#d3e9fd)}
   .ex .cap{padding:13px 15px;font-size:13.5px;color:var(--ink);font-weight:700}
   .ex .cap span{display:block;color:var(--muted);font-weight:500;font-size:12.5px;margin-top:3px}
   /* 价格 */
@@ -111,6 +111,28 @@
   footer{background:var(--panel);border-top:1px solid var(--line);padding:34px 0;color:var(--muted);font-size:13px}
   footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
   footer a{color:var(--brand);font-weight:600}
+  /* 收款弹窗 */
+  .modal{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;padding:20px;
+    background:rgba(23,58,94,.45);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  .modal.show{display:flex}
+  .modal .card{background:var(--panel);border-radius:20px;max-width:420px;width:100%;padding:28px;box-shadow:0 20px 60px rgba(20,50,90,.30);position:relative}
+  .modal .card h3{margin:0 0 4px;font-size:20px;font-weight:800}
+  .modal .card .sub{color:var(--muted);font-size:13.5px;margin:0 0 18px}
+  .modal .card .amt{font-size:30px;font-weight:800;color:var(--brand);margin:0 0 16px}
+  .modal .row{display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;margin-bottom:11px;background:var(--panel2)}
+  .modal .row .k{flex:0 0 64px;font-weight:700;font-size:13px;color:var(--ink)}
+  .modal .row .v{flex:1;font-size:14px;color:var(--ink);word-break:break-all}
+  .modal .row .copy{flex:0 0 auto;background:var(--brand);color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer}
+  .modal .row .copy:active{transform:scale(.96)}
+  .modal .note{font-size:12.5px;color:var(--muted);line-height:1.6;margin-top:6px}
+  .modal .close{position:absolute;top:14px;right:16px;width:30px;height:30px;border:none;background:var(--panel2);border-radius:50%;font-size:18px;color:var(--muted);cursor:pointer;line-height:1}
+  .modal .qr{width:100%;max-width:200px;margin:8px auto 4px;display:block;border-radius:12px}
+  /* 响应式 */
+  @media (max-width:900px){
+    .hero h2{font-size:32px}
+    .feat-grid,.ex-grid{grid-template-columns:repeat(2,1fr)}
+    header.nav .links{display:none}
+  }
   /* 响应式 */
   @media (max-width:900px){
     .hero h2{font-size:32px}
@@ -192,12 +214,12 @@
   <div class="sec-head">
     <div class="ey">EXAMPLES</div>
     <h3>真实生成效果</h3>
-    <p>以下为工具导出的详情页示例（占位，部署前替换为真实截图）。</p>
+    <p>以下为工具生成的电商详情页场景图（AI 生图后叠字导出）。</p>
   </div>
   <div class="ex-grid">
-    <div class="ex"><div class="img">示例详情页 1</div><div class="cap">美妆个护<span>白底瓶身上身 · 柔光场景</span></div></div>
-    <div class="ex"><div class="img">示例详情页 2</div><div class="cap">食品饮料<span>食材氛围图 · 暖调特写</span></div></div>
-    <div class="ex"><div class="img">示例详情页 3</div><div class="cap">数码 3C<span>产品悬浮 · 科技蓝背景</span></div></div>
+    <div class="ex"><img class="img" src="/assets/ex-beauty.png" alt="美妆个护示例" loading="lazy"><div class="cap">美妆个护<span>白底瓶身上身 · 柔光场景</span></div></div>
+    <div class="ex"><img class="img" src="/assets/ex-food.png" alt="食品饮料示例" loading="lazy"><div class="cap">食品饮料<span>食材氛围图 · 暖调特写</span></div></div>
+    <div class="ex"><img class="img" src="/assets/ex-digital.png" alt="数码3C示例" loading="lazy"><div class="cap">数码 3C<span>产品悬浮 · 科技蓝背景</span></div></div>
   </div>
 </section>
 
@@ -235,7 +257,7 @@
       <a class="btn" href="#" id="buy2">购买商用版</a>
     </div>
   </div>
-  <p style="text-align:center;color:var(--muted);font-size:13px;margin-top:22px">实际价格与收款方式以购买页为准（此处为占位，部署前替换）。</p>
+  <p style="text-align:center;color:var(--muted);font-size:13px;margin-top:22px">点击购买后弹出收款信息，付款时请备注你的微信号 / 邮箱，我们会在 24 小时内发送源码与授权。</p>
 </section>
 
 <!-- FAQ -->
@@ -265,25 +287,103 @@
 <footer>
   <div class="wrap">
     <div>© <span id="yr"></span> 电商AI Image · 买断授权产品</div>
-    <div>联系：<a href="#">微信 / 邮箱</a> · <a href="/tool">打开工具</a></div>
+    <div>联系：<a href="#" id="footContact">微信 / 邮箱</a> · <a href="/tool">打开工具</a></div>
   </div>
 </footer>
 
+<!-- 收款弹窗 -->
+<div class="modal" id="payModal">
+  <div class="card">
+    <button class="close" id="payClose" aria-label="关闭">×</button>
+    <h3 id="payTitle">购买个人版</h3>
+    <p class="sub" id="payPlan">个人商用自用授权</p>
+    <div class="amt">¥<span id="payAmt">99</span> <span style="font-size:14px;color:var(--muted);font-weight:600">/ 一次性</span></div>
+    <div id="payQRWrap" style="display:none;text-align:center">
+      <img class="qr" id="payQR" alt="收款二维码" src="">
+      <div class="note" style="text-align:center">微信 / 支付宝扫码付款，备注你的联系方式</div>
+    </div>
+    <div class="row" id="payWechatRow" style="display:none">
+      <span class="k">微信号</span><span class="v" id="payWechat"></span>
+      <button class="copy" data-copy="payWechat">复制</button>
+    </div>
+    <div class="row" id="payEmailRow" style="display:none">
+      <span class="k">邮箱</span><span class="v" id="payEmail"></span>
+      <button class="copy" data-copy="payEmail">复制</button>
+    </div>
+    <div class="note">付款后请通过上方联系方式发送「付款截图 + 你的微信号/邮箱」，我们会在 24 小时内发送源码与授权文件。</div>
+  </div>
+</div>
+
 <script>
   document.getElementById('yr').textContent = new Date().getFullYear();
-  // 价格占位：部署前可在此改成真实定价，或读取 ?p1=&p2= 参数
-  try{
-    const q=new URLSearchParams(location.search);
-    if(q.get('p1')) document.getElementById('p1').textContent=q.get('p1');
-    if(q.get('p2')) document.getElementById('p2').textContent=q.get('p2');
-  }catch(e){}
-  // 购买按钮：占位，部署前替换为真实收款链接或留资表单
-  ['buy1','buy2'].forEach(id=>{
-    document.getElementById(id).addEventListener('click',e=>{
-      e.preventDefault();
-      alert('购买入口为占位演示。部署前请替换为你的收款链接（微信/支付宝）或留资表单。');
-    });
+
+  /* ===== 收款与联系方式配置（部署前请改成你的真实信息）=====
+     - pricePersonal / priceCommercial：两个套餐价格
+     - wechat：你的微信号（留空则不显示该行）
+     - email：你的联系邮箱（留空则不显示该行）
+     - qr：收款二维码图片地址（可放 /assets/ 下的图，如 "/assets/pay-qr.png"；留空则只显示微信号/邮箱）
+     说明：二维码需要你用自己的微信/支付宝收款码截图，放到 assets/ 目录后填路径即可。 */
+  const CONFIG = {
+    pricePersonal: 99,
+    priceCommercial: 299,
+    wechat: "你的微信号",
+    email: "your@email.com",
+    qr: ""   // 例如 "/assets/pay-qr.png"
+  };
+
+  // 价格填充
+  const p1 = document.getElementById('p1'), p2 = document.getElementById('p2');
+  if(p1) p1.textContent = CONFIG.pricePersonal;
+  if(p2) p2.textContent = CONFIG.priceCommercial;
+
+  // 页脚联系方式
+  const fc = document.getElementById('footContact');
+  if(fc){
+    fc.textContent = [CONFIG.wechat!=="你的微信号"?("微信 "+CONFIG.wechat):"", CONFIG.email].filter(Boolean).join(" · ") || "微信 / 邮箱";
+  }
+
+  // 收款弹窗
+  const modal = document.getElementById('payModal');
+  function openPay(plan){
+    const isCom = plan==='commercial';
+    document.getElementById('payTitle').textContent = isCom ? '购买商用授权版' : '购买个人版';
+    document.getElementById('payPlan').textContent = isCom ? '商用授权 · 可转售/嵌入客户项目' : '个人商用自用授权';
+    document.getElementById('payAmt').textContent = isCom ? CONFIG.priceCommercial : CONFIG.pricePersonal;
+    // 二维码
+    const qrWrap = document.getElementById('payQRWrap');
+    if(CONFIG.qr){
+      document.getElementById('payQR').src = CONFIG.qr;
+      qrWrap.style.display = 'block';
+    } else { qrWrap.style.display = 'none'; }
+    // 微信
+    const wRow = document.getElementById('payWechatRow');
+    if(CONFIG.wechat && CONFIG.wechat!=="你的微信号"){
+      document.getElementById('payWechat').textContent = CONFIG.wechat;
+      wRow.style.display = 'flex';
+    } else { wRow.style.display = 'none'; }
+    // 邮箱
+    const eRow = document.getElementById('payEmailRow');
+    if(CONFIG.email && CONFIG.email!=="your@email.com"){
+      document.getElementById('payEmail').textContent = CONFIG.email;
+      eRow.style.display = 'flex';
+    } else { eRow.style.display = 'none'; }
+    modal.classList.add('show');
+  }
+  function closePay(){ modal.classList.remove('show'); }
+  document.getElementById('payClose').onclick = closePay;
+  modal.addEventListener('click', e=>{ if(e.target===modal) closePay(); });
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape') closePay(); });
+  // 复制按钮
+  document.querySelectorAll('.copy').forEach(b=>{
+    b.onclick = ()=>{
+      const txt = document.getElementById(b.dataset.copy).textContent;
+      navigator.clipboard && navigator.clipboard.writeText(txt);
+      b.textContent = '已复制'; setTimeout(()=>b.textContent='复制',1200);
+    };
   });
+  // 购买按钮
+  document.getElementById('buy1').onclick = e=>{ e.preventDefault(); openPay('personal'); };
+  document.getElementById('buy2').onclick = e=>{ e.preventDefault(); openPay('commercial'); };
 </script>
 </body>
 </html>

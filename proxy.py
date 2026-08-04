@@ -24,6 +24,7 @@ import requests
 
 PORT = int(os.environ.get("PORT") or os.environ.get("WB_PORT", "8765"))
 HERE = os.path.dirname(os.path.abspath(__file__))
+ASSETS_DIR = os.path.join(HERE, "assets")
 
 def _resolve(name):
     for _p in [os.path.join(HERE, name), os.path.join(os.getcwd(), name), os.path.join("/opt/render/project/src", name)]:
@@ -564,12 +565,12 @@ class H(BaseHTTPRequestHandler):
         self._cors()
         self.end_headers()
 
-    def _serve_file(self, path):
+    def _serve_file(self, path, ctype="text/html; charset=utf-8"):
         try:
             with open(path, "rb") as f:
                 body = f.read()
             self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Type", ctype)
             self._cors()
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
@@ -577,6 +578,19 @@ class H(BaseHTTPRequestHandler):
         except Exception:
             self.send_response(404)
             self.end_headers()
+
+    def _serve_static(self, rel):
+        # 防目录穿越：只允许 assets/ 下的普通文件名
+        name = os.path.basename(rel)
+        ext = os.path.splitext(name)[1].lower()
+        mime = {
+            ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+            ".webp": "image/webp", ".gif": "image/gif", ".svg": "image/svg+xml",
+            ".ico": "image/x-icon", ".css": "text/css; charset=utf-8",
+            ".js": "application/javascript; charset=utf-8",
+            ".json": "application/json; charset=utf-8",
+        }.get(ext, "application/octet-stream")
+        self._serve_file(os.path.join(ASSETS_DIR, name), mime)
 
     def do_GET(self):
         if self.path in ("/", "/index.html"):
@@ -594,6 +608,9 @@ class H(BaseHTTPRequestHandler):
             return
         if self.path == "/api/providers":
             self._send_json(200, {"providers": PROVIDERS})
+            return
+        if self.path.startswith("/assets/"):
+            self._serve_static(self.path[len("/assets/"):])
             return
         self.send_response(404)
         self._cors()
