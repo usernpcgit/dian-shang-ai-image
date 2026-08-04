@@ -352,6 +352,11 @@
                 <label>自定义端点 Base URL（兼容 OpenAI 的 /images/generations 或 /images/edits）</label>
                 <input type="text" id="apiEndpoint" placeholder="https://your-host/v1/images/generations">
               </div>
+              <div id="modelWrap" style="display:none">
+                <label>模型版本（Seedream 专属）</label>
+                <select id="apiModel"></select>
+                <p class="muted" style="font-size:12px;margin:4px 0 0">Pro 额度紧张时，切「标准版」或「Lite版」通常可继续用。</p>
+              </div>
               <div class="row">
                 <div><label>保真度（图生图）</label><select id="apiFidelity"><option value="high">高保真（保留产品细节）</option><option value="low">低保真（可大幅改场景）</option></select></div>
                 <div><label>画质</label><select id="apiQuality"><option value="high">高</option><option value="medium">中</option><option value="low">低</option></select></div>
@@ -761,6 +766,7 @@ function genOne(){
   else if(!key && provider!=='custom'){toast('请先在「API」面板填对应 Key');switchFunc('api');return;}
   else if(provider==='custom' && !endpoint){toast('自定义端点需填写 Base URL');switchFunc('api');return;}
   const payload={provider,key,endpoint,images_b64:images,prompt,fidelity:$('#apiFidelity').value,quality:$('#apiQuality').value,size:sc.size||'1024x1536',n:$('#apiCount').value||'1'};
+  if(provider==='seedream' && $('#apiModel')){payload.model=$('#apiModel').value;}
   const hint=$('#genHint');hint.style.display='block';hint.textContent='⏳ 正在生成（约 10–60 秒，请耐心等待）…';
   $('#genChoices').style.display='none';toast('正在生图…');
   fetch(PROXY_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
@@ -768,6 +774,9 @@ function genOne(){
     .then(j=>{
       if(!j||j.error){const msg=(j&&j.error)||'接口无返回';hint.style.display='block';
         if(/未激活|has not activated|not activated/i.test(msg))hint.textContent='⚠️ 该模型未在你账号开通：'+msg+'（去对应控制台开通后重试）';
+        else if(/inference limit|Safe Experience Mode|set inference limit|model service has been paused/i.test(msg)){
+          hint.innerHTML='⚠️ 你火山账号当前模型（'+(provider==='seedream'&&$('#apiModel')?$('#apiModel').selectedOptions[0].textContent:'该模型')+'）的额度已用完或被「安全体验模式」暂停。<br>① 换个模型版本：API 面板 → Seedream 改成「标准版」或「Lite版」再试；<br>② 或去 <a href="https://console.volcengine.com/ark/region:cn-beijing/modelActivation" target="_blank" rel="noopener">火山方舟模型激活页</a> 关闭 Safe Experience Mode / 开通付费额度。';
+        }
         else if(/timed out|timeout|超时|Connection aborted|write operation timed out/i.test(msg))hint.textContent='⚠️ 生成超时（公网跨国网络偏慢）：可在电脑双击「启动.command」走本地代理，从国内网络直连更稳；或换小底图重试。';
         else hint.textContent='⚠️ 生图失败：'+msg;
         toast('生图失败');console.error(msg);return;}
@@ -784,7 +793,7 @@ $('#btnGenOne').onclick=genOne;
 const PROVIDER_KEY='wb_provider';
 const ENDPOINT_KEY='wb_endpoint';
 function applyProviderUI(p){
-  const desc=$('#providerDesc'),keyWrap=$('#keyWrap'),endpointWrap=$('#endpointWrap'),keyLabel=$('#keyLabel'),keyLink=$('#keyLink');
+  const desc=$('#providerDesc'),keyWrap=$('#keyWrap'),endpointWrap=$('#endpointWrap'),modelWrap=$('#modelWrap'),keyLabel=$('#keyLabel'),keyLink=$('#keyLink'),modelSel=$('#apiModel');
   desc.textContent=p.desc||'';
   if(p.needsKey){
     keyWrap.style.display='';
@@ -795,7 +804,18 @@ function applyProviderUI(p){
     keyWrap.style.display='none';
   }
   endpointWrap.style.display=p.id==='custom'?'':'none';
+  if(p.id==='seedream' && p.models && p.models.length){
+    modelWrap.style.display='';
+    const saved=(()=>{try{return localStorage.getItem('wb_seedream_model');}catch(e){return null;}})();
+    modelSel.innerHTML='';
+    p.models.forEach(m=>{const o=document.createElement('option');o.value=m.id;o.textContent=m.name;modelSel.appendChild(o);});
+    if(saved && p.models.some(m=>m.id===saved))modelSel.value=saved;
+    else if(!modelSel.value)modelSel.selectedIndex=0;
+  }else{
+    modelWrap.style.display='none';
+  }
 }
+function saveModel(){try{localStorage.setItem('wb_seedream_model',$('#apiModel').value);}catch(e){}}
 function loadProviders(){
   const sel=$('#apiProvider');
   fetch(location.origin.startsWith('http')?'/api/providers':'http://localhost:8765/api/providers')
@@ -818,10 +838,15 @@ const PROVIDERS_LOCAL=[
   {id:'gemini',name:'Gemini（Google 免费层）',needsKey:true,desc:'Google AI Studio 免费层（Nano Banana），每日约 500 张，支持图生图。需去 aistudio.google.com 拿 Key。免费层带隐形水印、商业用途受限。',getKey:'https://aistudio.google.com/apikey'},
   {id:'openai',name:'OpenAI（gpt-image-2）',needsKey:true,desc:'OpenAI 官方 gpt-image-2，新号有约 $5 试用金，支持图生图/文生图。需能访问 api.openai.com。',getKey:'https://platform.openai.com/api-keys'},
   {id:'redfox',name:'redfox.hk（gpt-image-2 转发）',needsKey:true,desc:'redfox.hk 转发 gpt-image-2，国内访问友好，需注册 Key（现多为付费）。',getKey:'https://redfox.hk/settings/api-keys?source=skillhub'},
-  {id:'seedream',name:'Seedream 5.0（字节火山）',needsKey:true,desc:'字节 Seedream 5.0（火山方舟），国内直连、图生图保真好，适合电商产品图换背景/换装。需去火山方舟开通并拿 ARK API Key。',getKey:'https://console.volcengine.com/ark/region:cn-beijing/apikey'},
+  {id:'seedream',name:'Seedream 5.0（字节火山）',needsKey:true,desc:'字节 Seedream 5.0（火山方舟），国内直连、图生图保真好，适合电商产品图换背景/换装。需去火山方舟开通并拿 ARK API Key；如 Pro 额度用完可切标准版/Lite版。',getKey:'https://console.volcengine.com/ark/region:cn-beijing/apikey',models:[
+    {id:'doubao-seedream-5-0-260128',name:'标准版（推荐，额度更宽松）'},
+    {id:'doubao-seedream-5-0-lite-260128',name:'Lite版（额度最宽松）'},
+    {id:'doubao-seedream-5-0-pro-260628',name:'Pro版（质量最高，但额度紧）'}
+  ]},
   {id:'custom',name:'自部署 / 自定义端点',needsKey:true,desc:'对接你自己部署的模型（如本地 ComfyUI、自建 OpenAI 兼容服务、或任意充值付费的兼容端点）。需填 Base URL。',getKey:''}
 ];
-$('#apiProvider').onchange=e=>{const p=PROVIDERS_LOCAL.find(x=>x.id===e.target.value)||PROVIDERS_LOCAL[0];try{localStorage.setItem(PROVIDER_KEY,e.target.value);}catch(x){}applyProviderUI(p);};
+$('#apiProvider').onchange=e=>{const p=PROVIDERS_LOCAL.find(x=>x.id===e.target.value)||PROVIDERS_LOCAL[0];try{localStorage.setItem(PROVIDER_KEY,e.target.value);}catch(x){}applyProviderUI(p);saveModel();};
+try{$('#apiModel').onchange=saveModel;}catch(e){}
 $('#apiEndpoint').oninput=e=>{try{localStorage.setItem(ENDPOINT_KEY,e.target.value.trim());}catch(x){}};
 /* API Key 记忆 */
 try{const k=localStorage.getItem('wb_apikey');if(k)$('#apiKey').value=k;}catch(e){}

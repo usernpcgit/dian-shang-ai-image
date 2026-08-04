@@ -77,8 +77,13 @@ PROVIDERS = [
         "name": "Seedream 5.0（字节火山）",
         "needsKey": True,
         "imageEdit": True,
-        "desc": "字节 Seedream 5.0（火山方舟），国内直连、图生图保真好，适合电商产品图换背景/换装。需去火山方舟开通并拿 ARK API Key。",
+        "desc": "字节 Seedream 5.0（火山方舟），国内直连、图生图保真好，适合电商产品图换背景/换装。需去火山方舟开通并拿 ARK API Key；如 Pro 额度用完可切标准版/Lite版。",
         "getKey": "https://console.volcengine.com/ark/region:cn-beijing/apikey",
+        "models": [
+            {"id": "doubao-seedream-5-0-260128", "name": "标准版（推荐，额度更宽松）"},
+            {"id": "doubao-seedream-5-0-lite-260128", "name": "Lite版（额度最宽松）"},
+            {"id": "doubao-seedream-5-0-pro-260628", "name": "Pro版（质量最高，但额度紧）"},
+        ],
     },
     {
         "id": "custom",
@@ -379,14 +384,14 @@ def gen_custom(key, images, prompt, size, n, endpoint):
     return out, None
 
 
-def gen_seedream(key, images, prompt, size, n):
+def gen_seedream(key, images, prompt, size, n, model=None):
     """字节 Seedream 5.0（火山方舟）。OpenAI 兼容格式，支持图生图 + 多图参考（image 传数组）。"""
     if not key:
         return None, "缺少火山方舟 ARK API Key"
     if not prompt:
         return None, "缺少提示词"
-    # pro 版支持图生图编辑；换 doubao-seedream-5-0-260128 为标准版，lite 用 -lite-260128
-    model = "doubao-seedream-5-0-pro-260628"
+    # 默认标准版（额度更宽松）；可选 lite/pro。pro 版支持图生图编辑；标准版/lite 均支持图生图。
+    model = model or "doubao-seedream-5-0-260128"
     url = "https://ark.cn-beijing.volces.com/api/v3/images/generations"
     try:
         count = max(1, min(4, int(n) if str(n).isdigit() else 1))
@@ -454,6 +459,7 @@ def gen_image(data):
     n = data.get("n") or 1
     fidelity = data.get("fidelity") or ""
     endpoint = data.get("endpoint") or ""
+    model = data.get("model") or ""
 
     if provider == "pollinations":
         if not prompt:
@@ -470,7 +476,7 @@ def gen_image(data):
     if provider == "seedream":
         if not prompt:
             return None, "缺少提示词"
-        return gen_seedream(key, images, prompt, size, n)
+        return gen_seedream(key, images, prompt, size, n, model)
     if provider == "custom":
         if not prompt:
             return None, "缺少提示词"
