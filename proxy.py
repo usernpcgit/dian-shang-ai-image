@@ -73,6 +73,14 @@ PROVIDERS = [
         "getKey": "https://redfox.hk/settings/api-keys?source=skillhub",
     },
     {
+        "id": "seedream",
+        "name": "Seedream 5.0（字节火山）",
+        "needsKey": True,
+        "imageEdit": True,
+        "desc": "字节 Seedream 5.0（火山方舟），国内直连、图生图保真好，适合电商产品图换背景/换装。需去火山方舟开通并拿 ARK API Key。",
+        "getKey": "https://console.volcengine.com/ark/region:cn-beijing/apikey",
+    },
+    {
         "id": "custom",
         "name": "自部署 / 自定义端点",
         "needsKey": True,
@@ -360,6 +368,67 @@ def gen_custom(key, image_b64, prompt, size, n, endpoint):
     return out, None
 
 
+def gen_seedream(key, image_b64, prompt, size, n):
+    """字节 Seedream 5.0（火山方舟）。OpenAI 兼容格式，支持图生图（image 参数传 Base64/URL）。"""
+    if not key:
+        return None, "缺少火山方舟 ARK API Key"
+    if not prompt:
+        return None, "缺少提示词"
+    # pro 版支持图生图编辑；换 doubao-seedream-5-0-260128 为标准版，lite 用 -lite-260128
+    model = "doubao-seedream-5-0-pro-260628"
+    url = "https://ark.cn-beijing.volces.com/api/v3/images/generations"
+    try:
+        count = max(1, min(4, int(n) if str(n).isdigit() else 1))
+    except Exception:
+        count = 1
+    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+    out = []
+    try:
+        for _ in range(count):
+            payload = {
+                "model": model,
+                "prompt": prompt,
+                "size": size or "1024x1536",
+                "output_format": "png",
+                "response_format": "b64_json",
+                "watermark": False,
+            }
+            if image_b64:
+                payload["image"] = image_b64  # 接受 Base64（带 data: 前缀）或 URL
+            r = S.post(url, headers=headers, json=payload, timeout=180)
+            try:
+                j = r.json()
+            except Exception:
+                return None, "Seedream 返回非 JSON（可能鉴权失败或网络不通）：HTTP %d" % r.status_code
+            items = j.get("data") or []
+            if not items:
+                if "error" in j:
+                    err = j["error"]
+                    return None, "Seedream 错误：" + str(err.get("message", err) if isinstance(err, dict) else err)
+                if j.get("message"):
+                    return None, "Seedream 错误(" + str(j.get("code", "")) + ")：" + str(j.get("message"))
+                return None, "Seedream 未返回图片（可能 Key 无效/额度不足/提示词被拒）"
+            got = False
+            for it in items:
+                if it.get("b64_json"):
+                    out.append("data:image/png;base64," + it["b64_json"])
+                    got = True
+                elif it.get("url"):
+                    try:
+                        d = S.get(it["url"], timeout=120)
+                        out.append("data:image/png;base64," + base64.b64encode(d.content).decode())
+                        got = True
+                    except Exception:
+                        pass
+            if not got:
+                return None, "Seedream 未返回图片数据"
+    except Exception as e:
+        return None, "Seedream 请求失败：" + str(e)
+    if not out:
+        return None, "Seedream 未返回图片"
+    return out, None
+
+
 def gen_image(data):
     provider = (data.get("provider") or "redfox").lower()
     key = data.get("key", "")
@@ -383,6 +452,10 @@ def gen_image(data):
         if not prompt:
             return None, "缺少提示词"
         return gen_openai(key, image_b64, prompt, size, n)
+    if provider == "seedream":
+        if not prompt:
+            return None, "缺少提示词"
+        return gen_seedream(key, image_b64, prompt, size, n)
     if provider == "custom":
         if not prompt:
             return None, "缺少提示词"
