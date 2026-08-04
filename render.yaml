@@ -5,7 +5,7 @@
 #   3. 部署完会得到一个 https://xxxx.onrender.com 的公网链接，打开即用 AI 生图
 services:
   - type: web
-    name: dian-shang-ai-image
+    name: self-ai-image
     runtime: python
     plan: free
     region: oregon
