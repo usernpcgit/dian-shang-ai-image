@@ -132,8 +132,8 @@ def gen_pollinations(prompt, size, n):
         return None, "Pollinations 生图失败：" + str(e)
 
 
-def gen_gemini(key, image_b64, prompt, size, n):
-    """Google Gemini（Nano Banana）。支持图生图（传 image_b64）与文生图。"""
+def gen_gemini(key, images, prompt, size, n):
+    """Google Gemini（Nano Banana）。支持图生图（传 images 列表）与文生图。images[0] 为主图，其余为参考图。"""
     if not key:
         return None, "缺少 Gemini API Key"
     model = "gemini-2.5-flash-image"
@@ -142,23 +142,23 @@ def gen_gemini(key, image_b64, prompt, size, n):
         count = max(1, min(4, int(n) if str(n).isdigit() else 1))
     except Exception:
         count = 1
-    contents = {"parts": []}
-    if image_b64:
-        raw = b64_to_bytes(image_b64)
+    parts = []
+    for im in (images or []):
+        raw = b64_to_bytes(im)
         if not raw:
-            return None, "白底产品图解码失败"
-        fmt, mime = detect_fmt(raw)
-        contents["parts"].append({"inline_data": {"mime_type": mime, "data": base64.b64encode(raw).decode()}})
-    contents["parts"].append({"text": prompt})
+            continue
+        _, mime = detect_fmt(raw)
+        parts.append({"inline_data": {"mime_type": mime, "data": base64.b64encode(raw).decode()}})
+    parts.append({"text": prompt})
     payload = {
-        "contents": [contents],
+        "contents": [{"parts": parts}],
         "generationConfig": {"responseModalities": ["IMAGE"], "imageConfig": {"aspectRatio": "3:4"}},
     }
     try:
-        r = S.post(url, json=payload, timeout=120)
+        r = S.post(url, json=payload, timeout=240)
         j = r.json()
     except Exception as e:
-        return None, "Gemini 请求失败：" + str(e)
+        return None, "Gemini 请求失败（超时/网络）：" + str(e)
     if "error" in j:
         return None, "Gemini 错误：" + str(j["error"].get("message", j["error"]))
     try:
@@ -178,41 +178,46 @@ def gen_gemini(key, image_b64, prompt, size, n):
         return None, "Gemini 结果解析失败：" + str(e)
 
 
-def gen_openai(key, image_b64, prompt, size, n):
-    """OpenAI gpt-image-2。图生图走 /v1/images/edits，文生图走 /v1/images/generations。"""
+def gen_openai(key, images, prompt, size, n):
+    """OpenAI gpt-image-2。图生图走 /v1/images/edits（支持多图），文生图走 /v1/images/generations。"""
     if not key:
         return None, "缺少 OpenAI API Key"
     try:
         count = max(1, min(4, int(n) if str(n).isdigit() else 1))
     except Exception:
         count = 1
-    if image_b64:
-        raw = b64_to_bytes(image_b64)
-        if not raw:
-            return None, "白底产品图解码失败"
-        fmt, mime = detect_fmt(raw)
+    if images:
+        files = []
+        for idx, im in enumerate(images):
+            raw = b64_to_bytes(im)
+            if not raw:
+                continue
+            fmt, mime = detect_fmt(raw)
+            files.append(("image", ("ref%d.%s" % (idx, fmt), raw, mime)))
+        if not files:
+            return None, "白底产品图/参考图解码失败"
         try:
             r = S.post(
                 "https://api.openai.com/v1/images/edits",
                 headers={"Authorization": f"Bearer {key}"},
-                files={"image": ("product." + fmt, raw, mime)},
+                files=files,
                 data={"model": "gpt-image-2", "prompt": prompt, "n": count, "size": size or "1024x1536"},
-                timeout=180,
+                timeout=240,
             )
             j = r.json()
         except Exception as e:
-            return None, "OpenAI 请求失败：" + str(e)
+            return None, "OpenAI 请求失败（超时/网络）：" + str(e)
     else:
         try:
             r = S.post(
                 "https://api.openai.com/v1/images/generations",
                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
                 json={"model": "gpt-image-2", "prompt": prompt, "n": count, "size": size or "1024x1536", "quality": "high"},
-                timeout=180,
+                timeout=240,
             )
             j = r.json()
         except Exception as e:
-            return None, "OpenAI 请求失败：" + str(e)
+            return None, "OpenAI 请求失败（超时/网络）：" + str(e)
     if "error" in j:
         return None, "OpenAI 错误：" + str(j["error"].get("message", j["error"]))
     out = []
@@ -230,12 +235,13 @@ def gen_openai(key, image_b64, prompt, size, n):
     return out, None
 
 
-def gen_redfox(key, image_b64, prompt, fidelity, size, quality, n):
-    """redfox.hk 转发 gpt-image-2（原逻辑）。"""
+def gen_redfox(key, images, prompt, fidelity, size, quality, n):
+    """redfox.hk 转发 gpt-image-2（原逻辑）。仅用主图（images[0]），参考图暂不支持。"""
     if not key:
         return None, "缺少 redfox API Key"
+    image_b64 = (images or [None])[0]
     if not image_b64:
-        return None, "缺少白底产品图"
+        return None, "缺少白底产品图（redfox 为图生图，需上传底图）"
     try:
         raw = b64_to_bytes(image_b64)
     except Exception as e:
@@ -316,7 +322,7 @@ def gen_redfox(key, image_b64, prompt, fidelity, size, quality, n):
     return None, "等待超时（约 %d 秒）" % (POLL * MAX_TRY)
 
 
-def gen_custom(key, image_b64, prompt, size, n, endpoint):
+def gen_custom(key, images, prompt, size, n, endpoint):
     """自部署 / 任意 OpenAI 兼容端点。endpoint 形如 https://your.host/v1/images/generations"""
     if not endpoint:
         return None, "自定义端点需填写 Base URL"
@@ -324,33 +330,38 @@ def gen_custom(key, image_b64, prompt, size, n, endpoint):
         count = max(1, min(4, int(n) if str(n).isdigit() else 1))
     except Exception:
         count = 1
-    if image_b64:
-        raw = b64_to_bytes(image_b64)
-        if not raw:
-            return None, "白底产品图解码失败"
-        fmt, mime = detect_fmt(raw)
+    if images:
+        files = []
+        for idx, im in enumerate(images):
+            raw = b64_to_bytes(im)
+            if not raw:
+                continue
+            fmt, mime = detect_fmt(raw)
+            files.append(("image", ("ref%d.%s" % (idx, fmt), raw, mime)))
+        if not files:
+            return None, "白底产品图/参考图解码失败"
         try:
             r = S.post(
                 endpoint,
                 headers={"Authorization": f"Bearer {key}"} if key else {},
-                files={"image": ("product." + fmt, raw, mime)},
+                files=files,
                 data={"prompt": prompt, "n": count, "size": size or "1024x1536"},
-                timeout=180,
+                timeout=240,
             )
             j = r.json()
         except Exception as e:
-            return None, "自定义端点请求失败：" + str(e)
+            return None, "自定义端点请求失败（超时/网络）：" + str(e)
     else:
         try:
             r = S.post(
                 endpoint,
                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"} if key else {"Content-Type": "application/json"},
                 json={"prompt": prompt, "n": count, "size": size or "1024x1536"},
-                timeout=180,
+                timeout=240,
             )
             j = r.json()
         except Exception as e:
-            return None, "自定义端点请求失败：" + str(e)
+            return None, "自定义端点请求失败（超时/网络）：" + str(e)
     if "error" in j:
         return None, "自定义端点错误：" + str(j["error"].get("message", j["error"]))
     out = []
@@ -368,8 +379,8 @@ def gen_custom(key, image_b64, prompt, size, n, endpoint):
     return out, None
 
 
-def gen_seedream(key, image_b64, prompt, size, n):
-    """字节 Seedream 5.0（火山方舟）。OpenAI 兼容格式，支持图生图（image 参数传 Base64/URL）。"""
+def gen_seedream(key, images, prompt, size, n):
+    """字节 Seedream 5.0（火山方舟）。OpenAI 兼容格式，支持图生图 + 多图参考（image 传数组）。"""
     if not key:
         return None, "缺少火山方舟 ARK API Key"
     if not prompt:
@@ -393,9 +404,10 @@ def gen_seedream(key, image_b64, prompt, size, n):
                 "response_format": "b64_json",
                 "watermark": False,
             }
-            if image_b64:
-                payload["image"] = image_b64  # 接受 Base64（带 data: 前缀）或 URL
-            r = S.post(url, headers=headers, json=payload, timeout=180)
+            if images:
+                # images[0] 为主图（白底/产品图），其余为参考图（风格/版式参考）
+                payload["image"] = images if len(images) > 1 else images[0]
+            r = S.post(url, headers=headers, json=payload, timeout=240)
             try:
                 j = r.json()
             except Exception:
@@ -432,7 +444,10 @@ def gen_seedream(key, image_b64, prompt, size, n):
 def gen_image(data):
     provider = (data.get("provider") or "redfox").lower()
     key = data.get("key", "")
-    image_b64 = data.get("image_b64", "")
+    # 支持数组 images_b64（含主图+参考图）；兼容旧单字段 image_b64
+    images = data.get("images_b64") or []
+    if not images and data.get("image_b64"):
+        images = [data["image_b64"]]
     prompt = data.get("prompt", "")
     size = data.get("size") or "1024x1536"
     quality = data.get("quality") or "high"
@@ -447,21 +462,21 @@ def gen_image(data):
     if provider == "gemini":
         if not prompt:
             return None, "缺少提示词"
-        return gen_gemini(key, image_b64, prompt, size, n)
+        return gen_gemini(key, images, prompt, size, n)
     if provider == "openai":
         if not prompt:
             return None, "缺少提示词"
-        return gen_openai(key, image_b64, prompt, size, n)
+        return gen_openai(key, images, prompt, size, n)
     if provider == "seedream":
         if not prompt:
             return None, "缺少提示词"
-        return gen_seedream(key, image_b64, prompt, size, n)
+        return gen_seedream(key, images, prompt, size, n)
     if provider == "custom":
         if not prompt:
             return None, "缺少提示词"
-        return gen_custom(key, image_b64, prompt, size, n, endpoint)
+        return gen_custom(key, images, prompt, size, n, endpoint)
     # 默认 redfox
-    return gen_redfox(key, image_b64, prompt, fidelity, size, quality, n)
+    return gen_redfox(key, images, prompt, fidelity, size, quality, n)
 
 
 class H(BaseHTTPRequestHandler):

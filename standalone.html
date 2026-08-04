@@ -184,6 +184,19 @@
   body.night .modal .box{background:var(--panel)}
   body.night .help p,body.night .help li{color:#CBD9EA}
   body.night .help .warn{background:#3a2e10;border-color:#6b531f;color:#f0c674}
+  /* 生成模式分段 + 参考图库 */
+  .seg{display:flex;gap:6px;background:#EAF4FD;border-radius:12px;padding:4px}
+  .seg button{flex:1;border:none;background:transparent;border-radius:9px;padding:8px 6px;font-size:13px;color:var(--ink);cursor:pointer;font-weight:600}
+  .seg button.active{background:#fff;color:var(--brand);box-shadow:0 1px 4px rgba(46,155,230,.18)}
+  body.night .seg{background:#0F2C52}
+  body.night .seg button.active{background:#133A5E}
+  .ref-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+  .ref-grid .ritem{position:relative;border:2px solid var(--line);border-radius:10px;overflow:hidden;aspect-ratio:1;cursor:pointer;background:#fff}
+  .ref-grid .ritem img{width:100%;height:100%;object-fit:cover;display:block}
+  .ref-grid .ritem.sel{border-color:var(--brand);box-shadow:0 0 0 3px rgba(46,155,230,.25)}
+  .ref-grid .ritem .del{position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;border:none;font-size:11px;line-height:18px;cursor:pointer}
+  .ref-grid .ritem .tick{position:absolute;left:3px;bottom:3px;background:var(--brand);color:#fff;border-radius:50%;width:16px;height:16px;font-size:10px;line-height:16px;text-align:center;display:none}
+  .ref-grid .ritem.sel .tick{display:block}
 </style>
 </head>
 <body>
@@ -225,8 +238,8 @@
   </div>
 
   <div class="card">
-    <h3>第 0 步：上传白底产品图（AI 生图底图）</h3>
-    <p class="desc">上传一张<b>产品白底图</b>（图上只有产品、背景纯白/透明最好）。AI 会基于它在每一屏生成不同场景图——只需传一次，10 屏共用。想让电脑自动生图，这张必须有。</p>
+    <h3>底图（图生图可选）</h3>
+    <p class="desc">只做<strong>图生图</strong>时需要：上传一张产品白底图（图上只有产品、背景纯白/透明最好），AI 会把这张图放进你写的场景里。做<strong>文生图</strong>则不用传，直接在右侧写提示词即可。多屏可共用，也可在参考图库里加风格参考。</p>
     <input type="file" id="fProduct" accept="image/*">
     <div id="productPrev" style="margin-top:10px;display:none;align-items:center;gap:12px">
       <img id="productThumb" src="" alt="产品图" style="width:90px;height:90px;object-fit:cover;border-radius:10px;border:1px solid var(--line)">
@@ -256,35 +269,54 @@
         </div>
         <div class="func-panels">
           <div class="func-panel active" data-func="content">
-            <label>文字放上面还是下面</label>
-            <select id="fLayout">
-              <option value="top">文字在上方</option>
-              <option value="bottom">文字在下方</option>
-            </select>
-            <label>画幅（输出尺寸）</label>
-            <select id="fSize">
-              <option value="1024x1536">详情页竖版 1024×1536</option>
-              <option value="1024x1024">主图 1:1 1024×1024</option>
-              <option value="1536x1024">横版 3:2 1536×1024</option>
-            </select>
-            <label>标题</label>
-            <input type="text" id="fTitle" placeholder="例如：仙气独角兽，为你而来">
-            <label>副标题（文字在上方时才用）</label>
-            <input type="text" id="fSubtitle" placeholder="例如：仿水晶猫眼石手串 / 满钻吊坠">
-            <label>正文（文字在下方时才用，支持换行）</label>
-            <textarea id="fBody" placeholder="每行一段，可写 1. 2. 3. 列点"></textarea>
-            <label>标签（输入后回车添加）</label>
-            <div class="tag-input" id="tagInput">
-              <input type="text" id="fTag" placeholder="输入标签后回车" style="flex:1;min-width:150px">
+            <div class="sg">
+              <div style="font-weight:800;color:var(--brand);font-size:13px;margin-bottom:8px">🤖 AI 生成电商图</div>
+              <label>生成模式</label>
+              <div class="seg" id="genMode">
+                <button type="button" data-mode="t2i" class="active">文生图</button>
+                <button type="button" data-mode="i2i">图生图（用底图）</button>
+              </div>
+              <p class="muted" id="modeHint" style="font-size:12px;margin:6px 0 0">文生图：只填下面提示词，AI 直接出图（Pollinations/Seedream 等免底图）。图生图：会用顶部「第 0 步」上传的底图 + 提示词改写场景。</p>
+              <label style="margin-top:10px">提示词（AI 据此生成，自由写、越具体越好）</label>
+              <textarea id="fPrompt" rows="3" placeholder="例如：把产品放进清晨咖啡馆场景，柔和自然光，高级电商风，日系极简，画面留白多、干净"></textarea>
+              <label style="margin-top:10px">参考图库（可选 · 作为风格 / 版式参考，多选）</label>
+              <div style="display:flex;gap:8px;align-items:center">
+                <button class="ghost sm" id="btnAddRef" type="button">＋ 添加参考图</button>
+                <span class="muted" id="refCount" style="font-size:12px">0 张已选</span>
+              </div>
+              <input type="file" id="fRef" accept="image/*" multiple style="display:none">
+              <div class="ref-grid" id="refGrid"></div>
+              <label style="margin-top:10px">画幅</label>
+              <select id="fSize">
+                <option value="1024x1536">详情页竖版 1024×1536</option>
+                <option value="1024x1024">主图 1:1 1024×1024</option>
+                <option value="1536x1024">横版 3:2 1536×1024</option>
+              </select>
+              <label style="margin-top:8px">一次生成几张（出多张挑一张）</label>
+              <select id="apiCount">
+                <option value="1">1 张</option><option value="2">2 张</option><option value="3">3 张</option><option value="4">4 张</option>
+              </select>
+              <button class="btn" id="btnGenOne" style="width:100%;margin-top:12px">🤖 生成电商图</button>
+              <div class="gen-choices" id="genChoices" style="display:none"></div>
+              <p class="warn" id="genHint" style="margin:8px 0 0;display:none"></p>
             </div>
-            <button class="btn" id="btnGenContent" style="width:100%">🤖 AI 生成这张屏（白底图 + 提示词）</button>
-            <div class="gen-choices" id="genChoices" style="display:none"></div>
-            <p class="warn" id="genHint" style="margin:8px 0 0;display:none"></p>
-            <label style="margin-top:14px">手动替换这张屏的底图（可选，不传就用 AI 生成的图）</label>
-            <input type="file" id="fImg" accept="image/*">
-            <div class="row" style="margin-top:16px">
-              <button class="btn" id="btnExportOne">导出这张 PNG</button>
-              <button class="ghost" id="btnExportAll">导出全部 10 张</button>
+            <hr style="border:none;border-top:1px dashed var(--line);margin:16px 0">
+            <div class="sg">
+              <div style="font-weight:800;color:var(--brand);font-size:13px;margin-bottom:8px">📝 叠字内容（可选）</div>
+              <p class="muted" style="font-size:12px;margin:0 0 8px">生成完图片后，可在这里叠加标题 / 正文文字再导出。</p>
+              <label>文字放上面还是下面</label>
+              <select id="fLayout"><option value="top">文字在上方</option><option value="bottom">文字在下方</option></select>
+              <label>标题</label><input type="text" id="fTitle" placeholder="例如：仙气独角兽，为你而来">
+              <label>副标题（文字在上方时才用）</label><input type="text" id="fSubtitle" placeholder="例如：仿水晶猫眼石手串">
+              <label>正文（文字在下方时才用，支持换行）</label><textarea id="fBody" placeholder="每行一段"></textarea>
+              <label>标签（输入后回车添加）</label>
+              <div class="tag-input" id="tagInput"><input type="text" id="fTag" placeholder="输入标签后回车" style="flex:1;min-width:150px"></div>
+              <label style="margin-top:14px">手动替换这张屏的底图（可选，不传就用 AI 生成的图）</label>
+              <input type="file" id="fImg" accept="image/*">
+              <div class="row" style="margin-top:16px">
+                <button class="btn" id="btnExportOne">导出这张 PNG</button>
+                <button class="ghost" id="btnExportAll">导出全部 10 张</button>
+              </div>
             </div>
           </div>
           <div class="func-panel" data-func="font">
@@ -307,7 +339,7 @@
           </div>
           <div class="func-panel" data-func="api">
             <div class="api-panel">
-              <p class="muted" style="margin-top:0"><b>图生图流程</b>：顶部「白底产品图」＋ 这屏提示词 → 选服务商生图 → 生成场景图 → 自动叠字导出。</p>
+              <p class="muted" style="margin-top:0"><b>选服务商 + 填 Key</b>：去「内容」面板写提示词（文生图）或上传底图＋提示词（图生图），再回这里选服务商、填 Key（付费 / 自部署入口选「自部署 / 自定义端点」），然后去「内容」点「🤖 生成电商图」。</p>
               <label>生图服务商</label>
               <select id="apiProvider"></select>
               <div id="providerDesc" class="muted" style="font-size:12px;margin:6px 0"></div>
@@ -324,15 +356,7 @@
                 <div><label>保真度（图生图）</label><select id="apiFidelity"><option value="high">高保真（保留产品细节）</option><option value="low">低保真（可大幅改场景）</option></select></div>
                 <div><label>画质</label><select id="apiQuality"><option value="high">高</option><option value="medium">中</option><option value="low">低</option></select></div>
               </div>
-              <label style="margin-top:10px">一次生成几张（出多张挑一张）</label>
-              <select id="apiCount">
-                <option value="1">1 张</option>
-                <option value="2">2 张</option>
-                <option value="3">3 张</option>
-                <option value="4">4 张</option>
-              </select>
-              <p class="warn" style="margin-top:10px">⚠️ 必须先双击「启动.command」开启本地代理（公网版已自带代理则不用）。代理只转发请求，不存你的图和数据。Pollinations 免 Key 可直接试，其余需填对应 Key；付费/自部署入口在服务商下拉里选「自部署 / 自定义端点」。</p>
-              <button class="btn sm" id="btnGenOne" style="margin-top:6px">用白底图生成这张屏</button>
+              <p class="warn" style="margin-top:10px">⚠️ 公网版已自带代理，不用双击「启动.command」；本地双击打开才需要。Pollinations 免 Key 可直接试，其余需填对应 Key；付费 / 自部署入口在服务商下拉里选「自部署 / 自定义端点」。</p>
             </div>
           </div>
         </div>
@@ -401,7 +425,7 @@
       <li>最上方「<b>第 0 步</b>」上传一张<b>产品白底图</b>（图上只有产品、背景纯白/透明最好）。它是 AI 生图的底图，10 屏共用，只需传一次。</li>
       <li>点「<b>先挑一个风格</b>」选一套配色（默认是<b>天空蓝</b>，还有甜粉梦幻 / 高级黑金 / 清新森系 / 国潮 / 简约白）。</li>
       <li>上方点 <b>第几屏</b>，填标题/文案，右边<strong>实时预览</strong>效果。</li>
-      <li>点内容面板的「🤖 <b>AI 生成这张屏</b>」（或去「API」面板填好 redfox Key 后点生成）：工具把白底图 + 这屏提示词发给 gpt-image-2，<strong>生成场景图并自动叠字</strong>。</li>
+      <li>切到「<b>内容</b>」面板，写一句<strong>提示词</strong>（想让 AI 生成什么样的电商图，越具体越好），可选上传底图 / 参考图，点「🤖 <b>生成电商图</b>」，AI 直接出图放入本屏。也可在下方「叠字内容」填标题文案叠加导出。</li>
       <li>满意了点「<b>导出这张 PNG</b>」，或「<b>导出全部 10 张</b>」一次性出片。</li>
     </ol>
 
@@ -416,23 +440,23 @@
       <li>用法：把这库的提示词复制到任意 AI 生图工具（比如对话里让我生图、或你自己的生图平台）去生成图片，再把图回到「做详情页」上传叠字。</li>
     </ol>
 
-    <h2>五、怎么让工具自己调图生图（图生图）</h2>
-    <p>本工具用 <strong>图生图</strong>：把你上传的<b>白底产品图</b>当作底图，加上每屏的提示词，调用生图接口生成电商场景图，再自动叠字。在「做详情页」的「API」面板里：</p>
-    <ol>
-      <li>先选<strong>生图服务商</strong>下拉框：
-        <ul>
-          <li><b>Pollinations（免 Key）</b>：完全免费、不用注册，直接试文生图（图生图能力弱）。</li>
-          <li><b>Gemini（Google 免费层）</b>：去 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com</a> 拿 Key，每日约 500 张，支持图生图。</li>
-          <li><b>OpenAI（gpt-image-2）</b>：去 <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com</a> 拿 Key，新号有试用金，支持图生图。</li>
-          <li><b>redfox.hk</b>：去 <a href="https://redfox.hk/settings/api-keys?source=skillhub" target="_blank" rel="noopener">redfox.hk</a> 拿 Key（现多为付费）。</li>
-          <li><b>自部署 / 自定义端点</b>：对接你自己的模型（本地 ComfyUI、自建 OpenAI 兼容服务，或任意充值付费的兼容端点），填 Base URL 即可。</li>
-        </ul>
-      </li>
-      <li>按所选服务商填 Key（Pollinations 不用填；自定义端点填 Base URL）。Key 会自动记住。</li>
-      <li>第一次用本地版，<b>双击本目录里的「启动.command」</b> —— 它会开一个本地小代理并自动打开工具（纯前端直连各家接口会被跨域拦截，必须经过这个代理；代理只转发请求，不存你的图）。公网版已经自带代理，不用这一步。</li>
-      <li>回到内容面板点「🤖 AI 生成这张屏」，工具自动完成：上传白底图 → 调所选接口 → 生成场景图 → 叠字预览。</li>
-    </ol>
-    <div class="warn">⚠️ 说明：白底产品图是<strong>必填</strong>的（图生图必须有底图；Pollinations 仅文生图可免图）。如果暂时不想接 API，也可以手动在每屏「上传这张屏的底图」放一张现成图，照样能叠字导出。代理关掉后，纯前端模式只能做"手动传图 + 叠字"，不能联网生图。</div>
+    <h2>五、怎么用 AI 生图（文生图 / 图生图）</h2>
+    <p>在「做详情页」→「内容」面板就能直接生图，支持两种模式：</p>
+    <ul>
+      <li><b>文生图</b>：只写提示词，AI 直接生成电商图（Pollinations 免 Key 可立刻试；Seedream / Gemini / OpenAI 需填对应 Key）。</li>
+      <li><b>图生图</b>：上传底图（顶部「底图」，白底产品图最佳）+ 提示词，让 AI 把产品放进你写的场景里。redfox 只支持图生图，必须此模式。</li>
+    </ul>
+    <p>还能在「内容」面板的<b>参考图库</b>上传若干参考图（风格 / 版式），生成时多选几张，AI 会参考它们，让出品更统一。</p>
+    <p>先选<strong>生图服务商</strong>（在「API」面板）：</p>
+    <ul>
+      <li><b>Pollinations（免 Key）</b>：完全免费、不用注册，直接试文生图（仅文生图）。</li>
+      <li><b>Gemini（Google 免费层）</b>：去 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com</a> 拿 Key，每日约 500 张，支持图生图。</li>
+      <li><b>OpenAI（gpt-image-2）</b>：去 <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com</a> 拿 Key，新号试用金，支持文 / 图生图。</li>
+      <li><b>Seedream 5.0（字节火山）</b>：去 <a href="https://console.volcengine.com/ark/region:cn-beijing/apikey" target="_blank" rel="noopener">火山方舟</a> 开通并拿 ARK API Key，国内直连、图生图保真好。</li>
+      <li><b>redfox.hk</b>：去 <a href="https://redfox.hk/settings/api-keys?source=skillhub" target="_blank" rel="noopener">redfox.hk</a> 拿 Key（现多为付费）。</li>
+      <li><b>自部署 / 自定义端点</b>：对接你自己的模型（本地 ComfyUI、自建 OpenAI 兼容服务，或任意充值付费的兼容端点），填 Base URL。</li>
+    </ul>
+    <div class="warn">⚠️ 说明：底图<strong>不是必填</strong>——做文生图只写提示词即可；做图生图才需要底图。公网版已自带代理，不用双击「启动.command」；若公网生图频繁超时，可在电脑双击「启动.command」走本地代理（国内网络更稳）。代理只转发请求，不存你的图。</div>
 
     <h2>六、常见问题</h2>
     <ul>
@@ -592,10 +616,10 @@ let cur=0; const curScreen=()=>SCREENS[cur];
 /* 白底产品图（项目级，AI 生图底图） */
 let PRODUCT_IMG=null;
 try{const p=localStorage.getItem('wb_product');if(p)PRODUCT_IMG=p;}catch(e){}
-function showProductPreview(){const box=$('#productPrev');if(PRODUCT_IMG){box.style.display='flex';$('#productThumb').src=PRODUCT_IMG;$('#productName').textContent='白底产品图已载入（10 屏共用）';}else{box.style.display='none';}}
+function showProductPreview(){const box=$('#productPrev');if(PRODUCT_IMG){box.style.display='flex';$('#productThumb').src=PRODUCT_IMG;$('#productName').textContent='底图已载入（图生图用）';}else{box.style.display='none';}}
 $('#fProduct').onchange=async e=>{const f=e.target.files[0];if(!f)return;
-  const u=await new Promise(r=>{const rd=new FileReader();rd.onload=()=>r(rd.result);rd.readAsDataURL(f);});
-  PRODUCT_IMG=u;try{localStorage.setItem('wb_product',u);}catch(e){}showProductPreview();toast('白底产品图已载入');};
+  const u=await compressImage(f,1024);
+  PRODUCT_IMG=u;try{localStorage.setItem('wb_product',u);}catch(e){}showProductPreview();toast('底图已载入（已压缩，生图更快）');};
 $('#btnProductClear').onclick=()=>{PRODUCT_IMG=null;try{localStorage.removeItem('wb_product');}catch(e){}showProductPreview();$('#fProduct').value='';toast('已移除白底图');};
 function wrapText(ctx,text,maxW,sp){const out=[];const wOf=s=>{let w=0;for(const ch of s)w+=ctx.measureText(ch).width+sp;return Math.max(0,w-sp);};for(const para of text.split('\n')){if(para===''){out.push('');continue;}let line='';for(const ch of para){if(wOf(line+ch)<=maxW)line+=ch;else{out.push(line);line=ch;}}out.push(line);}return out;}
 function drawLine(ctx,s,x,y,sp){let cx=x;for(const ch of s){ctx.fillText(ch,cx,y);cx+=ctx.measureText(ch).width+sp;}}
@@ -690,34 +714,72 @@ function showImageChooser(imgs,sc){
     b.onclick=()=>{setScreenImg(sc,u);box.style.display='none';toast('已放入第 '+(i+1)+' 张');};
     box.appendChild(b);});
 }
+/* ============ 生成模式切换 ============ */
+let GEN_MODE='t2i';
+$('#genMode').addEventListener('click',e=>{const b=e.target.closest('button[data-mode]');if(!b)return;
+  GEN_MODE=b.dataset.mode;const all=$('#genMode').querySelectorAll('button');all.forEach(x=>x.classList.toggle('active',x===b));
+  $('#modeHint').textContent = GEN_MODE==='i2i'
+    ? '图生图：会用顶部上传的底图 + 下面提示词改写场景（redfox 必须此模式）。'
+    : '文生图：只填下面提示词，AI 直接出图（Pollinations / Seedream 等免底图）。';
+});
+
+/* ============ 参考图库（IndexedDB） ============ */
+const REF_STORE='refs';let REF_LIB=[],REF_SEL=new Set();
+function refAll(){return new Promise((res,rej)=>{const tx=dbp.transaction(REF_STORE,'readonly').objectStore(REF_STORE).getAll();tx.onsuccess=()=>res(tx.result);tx.onerror=()=>rej(tx.error);});}
+function refPut(o){return new Promise((res,rej)=>{const tx=dbp.transaction(REF_STORE,'readwrite').objectStore(REF_STORE).put(o);tx.onsuccess=()=>res();tx.onerror=()=>rej(tx.error);});}
+function refDel(id){return new Promise((res,rej)=>{const tx=dbp.transaction(REF_STORE,'readwrite').objectStore(REF_STORE).delete(id);tx.onsuccess=()=>res();tx.onerror=()=>rej(tx.error);});}
+async function renderRefs(){
+  if(!dbp)return;REF_LIB=await refAll().catch(()=>[]);
+  const g=$('#refGrid');g.innerHTML='';
+  REF_LIB.forEach(x=>{const d=document.createElement('div');d.className='ritem'+(REF_SEL.has(x.id)?' sel':'');
+    d.innerHTML='<img src="'+x.data+'"><button class="del" type="button">×</button><span class="tick">✓</span>';
+    d.onclick=e=>{if(e.target.classList.contains('del'))return;if(REF_SEL.has(x.id))REF_SEL.delete(x.id);else REF_SEL.add(x.id);renderRefs();updateRefCount();};
+    d.querySelector('.del').onclick=async e=>{e.stopPropagation();await refDel(x.id);REF_SEL.delete(x.id);renderRefs();updateRefCount();};
+    g.appendChild(d);});
+}
+function updateRefCount(){$('#refCount').textContent=REF_SEL.size+' 张已选';}
+$('#btnAddRef').onclick=()=>$('#fRef').click();
+$('#fRef').onchange=async e=>{for(const f of e.target.files){const u=await compressImage(f,1024);await refPut({id:'r'+Date.now()+Math.random().toString(36).slice(2,5),name:f.name,data:u});}e.target.value='';renderRefs();updateRefCount();toast('参考图已加入图库');};
+function compressImage(file,maxW){return new Promise((res,rej)=>{const rd=new FileReader();rd.onload=()=>{const img=new Image();img.onload=()=>{let w=img.width,h=img.height;const s=Math.min(1,maxW/w);const cw=Math.round(w*s),ch=Math.round(h*s);const cv=document.createElement('canvas');cv.width=cw;cv.height=ch;cv.getContext('2d').drawImage(img,0,0,cw,ch);res(cv.toDataURL('image/jpeg',0.82));};img.onerror=rej;img.src=rd.result;};rd.onerror=rej;rd.readAsDataURL(file);});}
+
+/* ============ 文生图/图生图：自由提示词 → 调大模型 ============ */
 function genOne(){
   const sc=curScreen();
   const provider=$('#apiProvider').value;
   const key=$('#apiKey').value.trim();
   const endpoint=$('#apiEndpoint').value.trim();
-  if(!PRODUCT_IMG && provider!=='pollinations' && provider!=='custom' && provider!=='seedream'){toast('请先在顶部第 0 步上传白底产品图（Seedream 也支持不传图纯文生图）');switchTab('detail');$('#fProduct').scrollIntoView({behavior:'smooth'});return;}
-  if(provider==='pollinations'){/* 免 Key，图生图弱，仅文生图 */}
+  const prompt=($('#fPrompt').value||'').trim();
+  if(!prompt){toast('请先在上面写提示词');switchFunc('content');$('#fPrompt').focus();return;}
+  const refs=REF_LIB.filter(x=>REF_SEL.has(x.id)).map(x=>x.data);
+  let images=[];
+  if(GEN_MODE==='i2i'){
+    if(!PRODUCT_IMG){toast('图生图模式请先在顶部上传底图');switchTab('detail');$('#fProduct').scrollIntoView({behavior:'smooth'});return;}
+    images=[PRODUCT_IMG,...refs];
+  }else{images=[...refs];}
+  if(provider==='redfox' && !images.length){toast('redfox 为图生图，请切到「图生图」模式并上传底图');switchFunc('content');return;}
+  if(provider==='pollinations'){images=[];/* 免 Key 仅文生图 */}
   else if(!key && provider!=='custom'){toast('请先在「API」面板填对应 Key');switchFunc('api');return;}
   else if(provider==='custom' && !endpoint){toast('自定义端点需填写 Base URL');switchFunc('api');return;}
-  const prompt=getStyle().prefix+'。'+sc.prompt+'，画面不要出现任何文字';
-  const payload={provider,key,endpoint,image_b64:PRODUCT_IMG,prompt,fidelity:$('#apiFidelity').value,quality:$('#apiQuality').value,size:sc.size||'1024x1536',n:$('#apiCount').value||'1'};
-  const hint=$('#genHint');hint.style.display='block';hint.textContent='⏳ 正在用白底图生成场景图（约 10–40 秒）…';
-  $('#genChoices').style.display='none';
-  toast('正在生图…');
+  const payload={provider,key,endpoint,images_b64:images,prompt,fidelity:$('#apiFidelity').value,quality:$('#apiQuality').value,size:sc.size||'1024x1536',n:$('#apiCount').value||'1'};
+  const hint=$('#genHint');hint.style.display='block';hint.textContent='⏳ 正在生成（约 10–60 秒，请耐心等待）…';
+  $('#genChoices').style.display='none';toast('正在生图…');
   fetch(PROXY_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
     .then(r=>r.json().catch(()=>null))
     .then(j=>{
-      if(!j||j.error){const msg=(j&&j.error)||'接口无返回';hint.style.display='block';hint.textContent='⚠️ 生图失败：'+msg+'（若本页是公网静态页或直接打开的文件，需电脑双击「启动.command」开启本地代理才能联网生图）';toast('生图失败');console.error(msg);return;}
-      const imgs=j.images||(j.image?[j.image]:[]);
+      if(!j||j.error){const msg=(j&&j.error)||'接口无返回';hint.style.display='block';
+        if(/未激活|has not activated|not activated/i.test(msg))hint.textContent='⚠️ 该模型未在你账号开通：'+msg+'（去对应控制台开通后重试）';
+        else if(/timed out|timeout|超时|Connection aborted|write operation timed out/i.test(msg))hint.textContent='⚠️ 生成超时（公网跨国网络偏慢）：可在电脑双击「启动.command」走本地代理，从国内网络直连更稳；或换小底图重试。';
+        else hint.textContent='⚠️ 生图失败：'+msg;
+        toast('生图失败');console.error(msg);return;}
+      const imgs=j.images||[];
       if(!imgs.length){hint.style.display='block';hint.textContent='⚠️ 生图成功但未返回图片';return;}
       hint.style.display='none';
       if(imgs.length>1){showImageChooser(imgs,sc);toast('生成 '+imgs.length+' 张，请挑选');}
       else{setScreenImg(sc,imgs[0]);toast('生图成功，已放入本屏');}
     })
-    .catch(err=>{hint.style.display='block';hint.textContent='⚠️ 生图失败：请确认已双击「启动.command」开启本地代理，或用别的工具生图后上传。'+err;toast('生图失败');console.error(err);});
+    .catch(err=>{hint.style.display='block';hint.textContent='⚠️ 生图失败：'+err+'（公网版若频繁超时，可双击「启动.command」走本地代理，从国内网络直连更稳）';toast('生图失败');console.error(err);});
 }
 $('#btnGenOne').onclick=genOne;
-$('#btnGenContent').onclick=genOne;
 /* ============ 服务商下拉 + 动态 UI ============ */
 const PROVIDER_KEY='wb_provider';
 const ENDPOINT_KEY='wb_endpoint';
@@ -797,8 +859,8 @@ $('#pSearch').oninput=renderPrompts;renderPrompts();
 
 /* ============ 素材库 ============ */
 const DB='wb_gallery';let dbp=null;
-function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open(DB,1);
-  r.onupgradeneeded=()=>{const db=r.result;if(!db.objectStoreNames.contains('imgs'))db.createObjectStore('imgs',{keyPath:'id'});};
+function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open(DB,2);
+  r.onupgradeneeded=()=>{const db=r.result;if(!db.objectStoreNames.contains('imgs'))db.createObjectStore('imgs',{keyPath:'id'});if(!db.objectStoreNames.contains('refs'))db.createObjectStore('refs',{keyPath:'id'});};
   r.onsuccess=()=>{dbp=r.result;res(dbp);};r.onerror=()=>rej(r.error);});}
 function dbAll(){return new Promise((res,rej)=>{const tx=dbp.transaction('imgs','readonly').objectStore('imgs').getAll();tx.onsuccess=()=>res(tx.result);tx.onerror=()=>rej(tx.error);});}
 function dbPut(o){return new Promise((res,rej)=>{const tx=dbp.transaction('imgs','readwrite').objectStore('imgs').put(o);tx.onsuccess=()=>res();tx.onerror=()=>rej(tx.error);});}
@@ -823,7 +885,7 @@ $('#modalSave').onclick=async()=>{if(!curImg)return;curImg.tags=$('#modalTags').
 $('#modalDel').onclick=async()=>{if(!curImg)return;await dbDel(curImg.id);renderGallery();toast('已删除');$('#modal').classList.remove('show');};
 $('#gUpload').onchange=e=>uploadGallery(e.target.files);
 $('#gFilterTag').oninput=renderGallery;$('#gFilterNote').oninput=renderGallery;
-openDB().then(renderGallery).catch(()=>toast('画廊存储不可用（浏览器限制），可重试'));
+openDB().then(()=>{renderGallery();renderRefs();}).catch(()=>toast('画廊存储不可用（浏览器限制），可重试'));
 </script>
 </body>
 </html>
