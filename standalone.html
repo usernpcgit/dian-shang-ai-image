@@ -7,13 +7,23 @@
 <style>
   :root{
     --bg:#EFF6FD; --panel:#FFFFFF; --panel2:#E6F2FC; --line:#D4E6F6;
-    --ink:#173A5E; --muted:#6A86A3; --brand:#2E9BE6; --brand2:#5BC0F2;
+    --ink:#173A5E; --muted:#4C6E8F; --brand:#2E9BE6; --brand2:#5BC0F2;
     --ok:#23B08A; --danger:#E5484D; --chip:#E4F1FC;
     --shadow:0 8px 24px rgba(30,80,140,.10);
   }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0}
+  /* 键盘焦点指示（iOS 原生同款清晰焦点环） */
+  :focus-visible{outline:2.5px solid var(--brand);outline-offset:2px;border-radius:6px}
   body{color:var(--ink);font-family:"PingFang SC","Heiti SC","Microsoft YaHei",system-ui,sans-serif;font-size:15px;line-height:1.6;padding-top:180px}
+  /* 尊重系统"减弱动态"设置：关掉装饰性动画 */
+  @media (prefers-reduced-motion:reduce){
+    .cloud{animation:none;opacity:.85}
+    body.night #skyLayer .star{animation:none}
+    .model-pill .dot{animation:none}
+    nav.tabs .tab-indicator{transition:none}
+    header.top,nav.tabs,button,.card,.ios-pill,.theme-toggle{transition-duration:.01ms!important}
+  }
   /* 天空渐变底层 */
   body::before{content:"";position:fixed;inset:0;z-index:-2;pointer-events:none;
     background:linear-gradient(180deg, #BFE4FB 0%, #DCEFFB 45%, #EFF6FD 100%);
@@ -45,7 +55,8 @@
   body.night #skyLayer .moon{opacity:1;transform:translateY(0)}
   /* 顶栏：毛玻璃冠栏（导航独立成行，不再合并） */
   /* 顶栏：iOS 26 液态玻璃冠栏（半透明毛玻璃，随页面滚动，非 fixed） */
-  header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 22px;position:fixed;top:0;left:0;right:0;z-index:50;background:transparent;border-bottom:0;box-shadow:none}
+  header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 22px;position:fixed;top:0;left:0;right:0;z-index:50;isolation:isolate;background:linear-gradient(180deg,rgba(255,255,255,.20),rgba(255,255,255,.10));backdrop-filter:blur(18px) saturate(170%);-webkit-backdrop-filter:blur(18px) saturate(170%);border-bottom:1px solid rgba(255,255,255,.18);box-shadow:0 1px 0 rgba(255,255,255,.25) inset}
+  header.top::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(120% 90% at 15% -10%,rgba(255,255,255,.50),rgba(255,255,255,0) 45%)}
   header.top .brand{display:flex;align-items:center;gap:12px;flex-shrink:0}
   header.top .logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--brand),var(--brand2));display:flex;align-items:center;justify-content:center;font-size:23px;box-shadow:var(--shadow)}
   header.top h1{font-size:18px;margin:0;font-weight:800;letter-spacing:.5px;text-shadow:0 1px 2px rgba(255,255,255,.85)}
@@ -59,7 +70,8 @@
   .model-pill .dot{width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 0 rgba(34,197,94,.5);animation:pulse 2s infinite;flex-shrink:0}
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.45)}70%{box-shadow:0 0 0 7px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
   /* 导航：保留液态玻璃滑动浮岛交互（iOS 风格），改为横向图标+文字的导航条（融合千问/小蜘蛛式简洁导航，去掉副标题噪声） */
-  nav.tabs{position:fixed;top:100px;left:50%;transform:translateX(-50%);display:flex;gap:2px;width:calc(100% - 32px);max-width:560px;margin:0;padding:5px;flex-wrap:nowrap;background:rgba(255,255,255,.38);backdrop-filter:blur(28px) saturate(190%);-webkit-backdrop-filter:blur(28px) saturate(190%);border:1px solid rgba(255,255,255,.55);border-radius:999px;box-shadow:0 8px 28px rgba(30,80,140,.10), inset 0 1px 2px rgba(255,255,255,.6);z-index:49}
+  nav.tabs{position:fixed;top:100px;left:50%;transform:translateX(-50%);display:flex;gap:2px;width:calc(100% - 32px);max-width:560px;margin:0;padding:5px;flex-wrap:nowrap;background:linear-gradient(135deg,rgba(255,255,255,.34),rgba(255,255,255,.10));backdrop-filter:blur(28px) saturate(190%);-webkit-backdrop-filter:blur(28px) saturate(190%);border:1px solid rgba(255,255,255,.55);border-radius:999px;box-shadow:0 8px 28px rgba(30,80,140,.10), inset 0 1px 0 rgba(255,255,255,.55), inset 0 -1px 0 rgba(255,255,255,.12);z-index:49}
+  nav.tabs::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:2;background:radial-gradient(140% 100% at 18% -20%,rgba(255,255,255,.42),rgba(255,255,255,0) 48%),linear-gradient(90deg,rgba(255,255,255,.14),rgba(255,255,255,0) 38%,rgba(255,255,255,0) 62%,rgba(255,255,255,.10))}
   nav.tabs .tab-indicator{position:absolute;top:5px;bottom:5px;background:rgba(255,255,255,.65);backdrop-filter:blur(15px) saturate(165%);-webkit-backdrop-filter:blur(15px) saturate(165%);border:1px solid rgba(255,255,255,.75);border-radius:999px;box-shadow:0 2px 14px rgba(30,80,140,.12), inset 0 1px 2px rgba(255,255,255,.6);transition:left .55s cubic-bezier(.16,1,.3,1), width .55s cubic-bezier(.16,1,.3,1), background .32s;z-index:0;pointer-events:none}
   nav.tabs button{position:relative;flex:1;min-width:0;background:transparent;border:none;border-radius:10px;padding:9px 14px;cursor:pointer;text-align:center;color:var(--muted);z-index:1;transition:color .42s cubic-bezier(.16,1,.3,1);display:flex;flex-direction:row;align-items:center;justify-content:center;gap:7px}
   nav.tabs button .ic{font-size:17px;line-height:1;filter:grayscale(.35);transition:filter .42s cubic-bezier(.16,1,.3,1), transform .42s cubic-bezier(.16,1,.3,1)}
@@ -95,9 +107,9 @@
     body{padding-top:202px}
     .left-col{top:196px}
     nav.tabs button .t,nav.tabs button .t::after{display:none}
-    nav.tabs button{padding:10px 0}
+    nav.tabs button{padding:12px 0}
     nav.tabs button .ic{font-size:20px}
-    header.top .theme-toggle{font-size:12px;padding:6px 10px}
+    header.top .theme-toggle{font-size:12px;padding:9px 12px}
   }
   /* 超小屏：标题再缩一点 */
   @media (max-width:360px){ header.top h1{font-size:14px} header.top .logo{width:32px;height:32px;font-size:17px} }
@@ -201,11 +213,13 @@
   body.night label{color:#CFE0F4; font-weight:700}
   body.night .card .desc{color:#BFD2EA}
   body.night .muted,body.night nav.tabs button .d,body.night .help .tip{color:#94AFD0}
-  body.night header.top{background:transparent;border-bottom:0}
+  body.night header.top{background:linear-gradient(180deg,rgba(23,46,82,.42),rgba(23,46,82,.22));border-bottom:1px solid rgba(255,255,255,.10)}
+  body.night header.top::before{background:radial-gradient(120% 90% at 15% -10%,rgba(255,255,255,.22),rgba(255,255,255,0) 45%)}
   body.night header.top .theme-toggle{background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.12);color:var(--ink)}
   body.night header.top .theme-toggle:hover{background:rgba(244,248,254,.12)}
   body.night header.top .brand-tag{box-shadow:0 2px 6px rgba(0,0,0,.3)}
-  body.night nav.tabs{background:rgba(19,41,74,.40);border-color:rgba(255,255,255,.18)}
+  body.night nav.tabs{background:linear-gradient(135deg,rgba(29,56,96,.55),rgba(19,41,74,.28));border-color:rgba(255,255,255,.18);box-shadow:0 8px 28px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.16)}
+  body.night nav.tabs::after{background:radial-gradient(140% 100% at 18% -20%,rgba(255,255,255,.18),rgba(255,255,255,0) 48%)}
   body.night nav.tabs .tab-indicator{background:rgba(125,205,248,.20);border-color:rgba(160,210,250,.40);box-shadow:0 2px 14px rgba(0,0,0,.30), inset 0 1px 2px rgba(255,255,255,.15)}
   body.night nav.tabs button{color:#8DB4DA}
   body.night nav.tabs button.active{color:var(--brand)}
@@ -266,10 +280,10 @@
 
 <nav class="tabs">
   <div class="tab-indicator" id="tabIndicator"></div>
-  <button data-tab="detail" data-short="做图" class="active"><span class="ic">🎨</span><span class="t">做详情页</span></button>
-  <button data-tab="prompts" data-short="词库"><span class="ic">📝</span><span class="t">提示词库</span></button>
-  <button data-tab="gallery" data-short="素材"><span class="ic">🖼️</span><span class="t">素材库</span></button>
-  <button data-tab="help" data-short="帮助"><span class="ic">❓</span><span class="t">使用说明</span></button>
+  <button data-tab="detail" data-short="做图" class="active" aria-label="做详情页"><span class="ic">🎨</span><span class="t">做详情页</span></button>
+  <button data-tab="prompts" data-short="词库" aria-label="提示词库"><span class="ic">📝</span><span class="t">提示词库</span></button>
+  <button data-tab="gallery" data-short="素材" aria-label="素材库"><span class="ic">🖼️</span><span class="t">素材库</span></button>
+  <button data-tab="help" data-short="帮助" aria-label="使用说明"><span class="ic">❓</span><span class="t">使用说明</span></button>
 </nav>
 
 <!-- ============ 做详情页 ============ -->
@@ -295,9 +309,9 @@
   <div class="card">
     <h3>底图（图生图可选）</h3>
     <p class="desc">只做<strong>图生图</strong>时需要：上传一张产品白底图（图上只有产品、背景纯白/透明最好），AI 会把这张图放进你写的场景里。做<strong>文生图</strong>则不用传，直接在右侧写提示词即可。多屏可共用，也可在参考图库里加风格参考。</p>
-    <input type="file" id="fProduct" accept="image/*">
+    <input type="file" id="fProduct" accept="image/*" aria-label="上传产品白底图">
     <div id="productPrev" style="margin-top:10px;display:none;align-items:center;gap:12px">
-      <img id="productThumb" src="" alt="产品图" style="width:90px;height:90px;object-fit:cover;border-radius:10px;border:1px solid var(--line)">
+      <img id="productThumb" alt="产品图" style="width:90px;height:90px;object-fit:cover;border-radius:10px;border:1px solid var(--line)">
       <div>
         <div class="muted" id="productName" style="margin-bottom:6px"></div>
         <button class="ghost sm" id="btnProductClear">移除重传</button>
@@ -338,7 +352,7 @@
                     <button type="button" data-mode="i2i">图生图（用底图）</button>
                   </div>
                   <p class="muted" id="modeHint" style="font-size:12px;margin:6px 0 0">文生图：只填下面提示词，AI 直接出图（Pollinations/Seedream 等免底图）。图生图：会用顶部「第 0 步」上传的底图 + 提示词改写场景。</p>
-                  <label style="margin-top:10px">提示词（AI 据此生成，自由写、越具体越好）</label>
+                  <label style="margin-top:10px" for="fPrompt">提示词（AI 据此生成，自由写、越具体越好）</label>
                   <textarea id="fPrompt" rows="3" placeholder="例如：把产品放进清晨咖啡馆场景，柔和自然光，高级电商风，日系极简，画面留白多、干净"></textarea>
                   <label style="margin-top:10px">参考图库（可选 · 作为风格 / 版式参考，多选）</label>
                   <div style="display:flex;gap:8px;align-items:center">
@@ -347,13 +361,13 @@
                   </div>
                   <input type="file" id="fRef" accept="image/*" multiple style="display:none">
                   <div class="ref-grid" id="refGrid"></div>
-                  <label style="margin-top:10px">画幅</label>
+                  <label style="margin-top:10px" for="fSize">画幅</label>
                   <select id="fSize">
                     <option value="1024x1536">详情页竖版 1024×1536</option>
                     <option value="1024x1024">主图 1:1 1024×1024</option>
                     <option value="1536x1024">横版 3:2 1536×1024</option>
                   </select>
-                  <label style="margin-top:8px">一次生成几张（出多张挑一张）</label>
+                  <label style="margin-top:8px" for="apiCount">一次生成几张（出多张挑一张）</label>
                   <select id="apiCount">
                     <option value="1">1 张</option><option value="2">2 张</option><option value="3">3 张</option><option value="4">4 张</option>
                   </select>
@@ -366,14 +380,14 @@
                 <div class="sg">
                   <div style="font-weight:800;color:var(--brand);font-size:13px;margin-bottom:8px">📝 叠字内容</div>
                   <p class="muted" style="font-size:12px;margin:0 0 8px">切换到「叠字内容」后，左侧预览才会显示文字、标题、标签与风格效果。</p>
-                  <label>文字放上面还是下面</label>
+                  <label for="fLayout">文字放上面还是下面</label>
                   <select id="fLayout"><option value="top">文字在上方</option><option value="bottom">文字在下方</option></select>
-                  <label>标题</label><input type="text" id="fTitle" placeholder="例如：仙气独角兽，为你而来">
-                  <label>副标题（文字在上方时才用）</label><input type="text" id="fSubtitle" placeholder="例如：仿水晶猫眼石手串">
-                  <label>正文（文字在下方时才用，支持换行）</label><textarea id="fBody" placeholder="每行一段"></textarea>
-                  <label>标签（输入后回车添加）</label>
+                  <label for="fTitle">标题</label><input type="text" id="fTitle" placeholder="例如：仙气独角兽，为你而来">
+                  <label for="fSubtitle">副标题（文字在上方时才用）</label><input type="text" id="fSubtitle" placeholder="例如：仿水晶猫眼石手串">
+                  <label for="fBody">正文（文字在下方时才用，支持换行）</label><textarea id="fBody" placeholder="每行一段"></textarea>
+                  <label for="fTag">标签（输入后回车添加）</label>
                   <div class="tag-input" id="tagInput"><input type="text" id="fTag" placeholder="输入标签后回车" style="flex:1;min-width:150px"></div>
-                  <label style="margin-top:14px">手动替换这张屏的底图（可选，不传就用 AI 生成的图）</label>
+                  <label style="margin-top:14px" for="fImg">手动替换这张屏的底图（可选，不传就用 AI 生成的图）</label>
                   <input type="file" id="fImg" accept="image/*">
                   <div class="row" style="margin-top:16px">
                     <button class="btn" id="btnExportOne">导出这张 PNG</button>
@@ -450,7 +464,7 @@
   <div class="card">
     <h3>新增 / 修改一条</h3>
     <div class="row">
-      <div><label>标题</label><input type="text" id="pTitle" placeholder="例如：甜系详情页主图"></div>
+      <div><label for="pTitle">标题</label><input type="text" id="pTitle" placeholder="例如：甜系详情页主图"></div>
       <div><label>分类</label><input type="text" id="pCat" placeholder="详情页 / 海报 / 种草文"></div>
     </div>
     <label>标签（逗号分隔）</label>
@@ -545,7 +559,7 @@
 
 <div class="modal" id="modal">
   <div class="box">
-    <img id="modalImg" src="">
+    <img id="modalImg" alt="素材预览图">
     <label>标签（逗号分隔）</label><input type="text" id="modalTags">
     <label>备注</label><textarea id="modalNote"></textarea>
     <div class="row" style="margin-top:14px">
@@ -570,7 +584,7 @@ function updateTabIndicator(){
   ind.style.width=rect.width+'px';
 }
 function switchTab(n){
-  $$('nav.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===n));
+  $$('nav.tabs button').forEach(b=>{const on=b.dataset.tab===n;b.classList.toggle('active',on);if(on)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
   $$('.view').forEach(v=>v.classList.toggle('active',v.id==='view-'+n));
   requestAnimationFrame(updateTabIndicator);
 }
@@ -1087,11 +1101,11 @@ document.addEventListener('DOMContentLoaded', function(){
     <div style="font-size:30px;margin-bottom:6px">🔐</div>
     <div style="font-size:19px;font-weight:800;color:#173A5E;margin-bottom:4px">测试版 · 访问码验证</div>
     <div style="font-size:13px;color:#6A86A3;line-height:1.5;margin-bottom:18px">本工具处于测试阶段，仅限受邀用户体验。<br>请输入收到的动态访问码以解锁全部功能。</div>
-    <input id="gateCode" type="text" autocomplete="off" spellcheck="false" placeholder="访问码（如 TJM487-1-DLWNUI2JCFQ76）或总钥匙" style="width:100%;box-sizing:border-box;padding:13px 14px;border:1.5px solid #cfe0f0;border-radius:13px;font-size:15px;color:#173A5E;outline:none;letter-spacing:1px;text-align:center">
-    <div style="margin-top:6px;font-size:11px;color:#9fb3c8">填「访问码」（发给别人用，有时效）或「总钥匙」（你自己永久使用）</div>
+    <input id="gateCode" type="text" autocomplete="off" spellcheck="false" aria-label="访问码或总钥匙" placeholder="访问码（如 TJM487-1-DLWNUI2JCFQ76）或总钥匙" style="width:100%;box-sizing:border-box;padding:13px 14px;border:1.5px solid #cfe0f0;border-radius:13px;font-size:15px;color:#173A5E;outline:none;letter-spacing:1px;text-align:center">
+    <div style="margin-top:6px;font-size:11px;color:#55789A">填「访问码」（发给别人用，有时效）或「总钥匙」（你自己永久使用）</div>
     <button id="gateBtn" style="width:100%;margin-top:12px;padding:13px;border:none;border-radius:13px;background:linear-gradient(135deg,#2E9BE6,#1F7FC4);color:#fff;font-size:15px;font-weight:700;cursor:pointer">解锁并使用</button>
     <div id="gateErr" style="display:none;margin-top:12px;font-size:13px;color:#c0392b;background:#fff0f0;border:1px solid #f5b0b0;border-radius:8px;padding:8px;font-weight:600"></div>
-    <div style="margin-top:14px;font-size:11px;color:#9fb3c8">每串码限设定人数使用，过期或次数用尽即失效，请联系发放人续期或换新码</div>
+    <div style="margin-top:14px;font-size:11px;color:#55789A">每串码限设定人数使用，过期或次数用尽即失效，请联系发放人续期或换新码</div>
   </div>
 </div>
 </body>
