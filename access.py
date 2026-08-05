@@ -80,6 +80,8 @@ def verify_access_token(code: str):
     同时兼容新短码与旧版长码。
     """
     try:
+        if not code:
+            return False, {"error": "格式错误（未提供访问码）"}
         c = code.strip().replace(" ", "")
         # —— 新短码 ——
         m = _NEW_RE.match(c)

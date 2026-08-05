@@ -1033,7 +1033,6 @@ openDB().then(()=>{renderGallery();renderRefs();}).catch(()=>toast('画廊存储
    注意：下方 #gate 区块在 <script> 之后，故整段初始化必须等 DOMContentLoaded，
    否则运行到此处时 #gateBtn 等元素尚未解析，getElementById 返回 null 会让门禁完全失效。 */
 document.addEventListener('DOMContentLoaded', function(){
-  const ACCESS_ON = location.protocol.startsWith('http');
   const TOKEN_KEY='wb_access_token';
   const gate=document.getElementById('gate');
   const codeEl=document.getElementById('gateCode');
@@ -1084,7 +1083,8 @@ document.addEventListener('DOMContentLoaded', function(){
     submitUnlock(c);
   };
   if(codeEl)codeEl.addEventListener('keydown',function(e){if(e.key==='Enter'&&btn)btn.click();});
-  if(!ACCESS_ON){closeGate();return;} // 本地打开不强制
+  // 注：无论 http(s) 还是本地 file:// 都显示门禁，让用户能输入访问码/总钥匙解锁；
+  // file:// 下请求默认指向 http://localhost:8765，需本地先起 proxy.py。
   const t=window.__accessToken();
   if(t){
     verifyOnly(t).then(function(ok){

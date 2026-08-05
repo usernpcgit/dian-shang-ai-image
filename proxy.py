@@ -22,7 +22,7 @@
                          无码/无效/过期 -> 401 {"error":"访问码无效或已过期..."}
                          成功 -> {"images":["data:image/png;base64,..."]} 或 {"error":"原因"}
 """
-import os, json, base64, time, io, hashlib
+import os, sys, json, base64, time, io, hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import requests
 
@@ -41,20 +41,31 @@ PORT = int(os.environ.get("PORT") or os.environ.get("WB_PORT", "8765"))
 HERE = os.path.dirname(os.path.abspath(__file__))
 ASSETS_DIR = os.path.join(HERE, "assets")
 
-# 访问码使用次数记录（实现「每串码限定使用人数」）。文件落盘 + 进程内缓存。
-# 【已知限制】Render 的磁盘是临时性的，服务重新部署会清空计数；要彻底吊销全部码，改 ACCESS_SECRET 即可一键作废。
+# 访问码使用次数记录（实现「每串码限定使用人数」）。
+# 【默认不落盘】仅进程内计数，重启即清零——这是专为「本地版解锁问题」修的：
+#   本地磁盘是持久的，以前一串码解锁一次后 used_codes.json 永久记 1，导致本机/换设备再解就被拒；
+#   Render 磁盘本就是临时的，重启会清，所以线上暴露不出，本地一测就中招。
+# 需要跨重启持久计数（如自建持久磁盘部署）时，设 PERSIST_USAGE=1 启用落盘。
+# 要手动清空计数：python proxy.py --reset-usage  （或删 used_codes.json）
+# 彻底吊销全部已发码：改 ACCESS_SECRET 即可一键作废。
 USAGE_FILE = os.path.join(HERE, "used_codes.json")
+PERSIST_USAGE = os.environ.get("PERSIST_USAGE") == "1"
 _usage = {}
 def _code_key(code):
     return hashlib.sha256(code.strip().upper().encode("utf-8")).hexdigest()
 def _load_usage():
     global _usage
+    _usage = {}
+    if not PERSIST_USAGE:
+        return  # 默认不落盘：本地每次启动都是干净计数，避免“解锁一次就永久失效”
     try:
         if os.path.exists(USAGE_FILE):
             _usage = json.load(open(USAGE_FILE, encoding="utf-8"))
     except Exception:
         _usage = {}
 def _save_usage():
+    if not PERSIST_USAGE:
+        return  # 默认不落盘
     try:
         json.dump(_usage, open(USAGE_FILE, "w", encoding="utf-8"))
     except Exception:
@@ -697,6 +708,14 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b)
 
+    def _enrich_err(self, info):
+        """把「签名无效」等笼统错误补上可操作的排查提示（针对密钥不一致场景）。"""
+        err = (info or {}).get("error", "")
+        if "签名无效" in err:
+            err += "（请确认 gentoken.py 与运行 proxy.py 的服务端使用【同一 ACCESS_SECRET】；"
+            err += "本地发码若没设 ACCESS_SECRET，而服务端设了自定义密钥，就会对不上）"
+        return err
+
     def _handle_verify(self):
         try:
             ln = int(self.headers.get("Content-Length", 0))
@@ -720,7 +739,7 @@ class H(BaseHTTPRequestHandler):
                                   "remaining_hours": info.get("remaining_hours"),
                                   "note": info.get("note"), "mu": mu, "uses_left": left})
         else:
-            self._send_json(200, {"valid": False, "error": info.get("error")})
+            self._send_json(200, {"valid": False, "error": self._enrich_err(info)})
 
     def _handle_unlock(self):
         # 正式解锁：校验通过且未超使用上限时，消耗一次名额（落盘持久化）。
@@ -734,7 +753,7 @@ class H(BaseHTTPRequestHandler):
         code = (data.get("code") or "").strip()
         ok, info, kind = resolve_credential(code)
         if not ok:
-            self._send_json(200, {"valid": False, "error": info.get("error")})
+            self._send_json(200, {"valid": False, "error": self._enrich_err(info)})
             return
         if kind == "master":
             # 总钥匙：永久解锁，不消耗次数、不计数
@@ -763,6 +782,17 @@ class H(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     import socket
+    # —— 维护命令：清空访问码使用计数（解决本地“解锁一次就永久失效”）——
+    if "--reset-usage" in sys.argv:
+        try:
+            if os.path.exists(USAGE_FILE):
+                os.remove(USAGE_FILE)
+                print("[reset-usage] 已清空 %s，所有访问码重新可用（限当前落盘计数）" % USAGE_FILE)
+            else:
+                print("[reset-usage] 没有可清空的计数文件（%s 不存在）" % USAGE_FILE)
+        except Exception as e:
+            print("[reset-usage] 清空失败：%s" % e)
+        sys.exit(0)
     print("[启动] PORT=%s, HTML=%s, exists=%s" % (PORT, HTML, os.path.exists(HTML)))
     print("[启动] cwd=%s, files=%s" % (os.getcwd(), os.listdir(os.getcwd())[:10]))
     srv = ThreadingHTTPServer(("0.0.0.0", PORT), H)

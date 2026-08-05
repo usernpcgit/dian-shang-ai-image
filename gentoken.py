@@ -12,7 +12,9 @@
 """
 import argparse
 import time
-from access import make_access_token
+from access import make_access_token, ACCESS_SECRET
+
+_DEFAULT_SECRET = "test-access-secret-change-me-2026"
 
 
 def main():
@@ -21,6 +23,8 @@ def main():
     g.add_argument("--hours", type=int, default=None, help="有效时长（小时）")
     g.add_argument("--days", type=float, default=None, help="有效时长（天）")
     ap.add_argument("--note", default="", help="备注，如 测试用户A / 渠道X / 有效期至X")
+    ap.add_argument("--max-uses", type=int, default=1,
+                    help="该码最多可被解锁的人数（默认 1；本地自测可设大些，如 5）")
     args = ap.parse_args()
 
     if args.days is not None:
@@ -30,11 +34,18 @@ def main():
     else:
         hours = 168  # 默认 7 天
 
-    code = make_access_token(exp_hours=hours, note=args.note)
+    if ACCESS_SECRET == _DEFAULT_SECRET:
+        print("⚠️  警告：当前用的是【默认 ACCESS_SECRET】，服务端若设了自定义密钥，"
+              "发出的码会校验失败（签名无效）。")
+        print("    生产/线上请统一用环境变量：ACCESS_SECRET=你的密钥 python gentoken.py ...")
+        print("")
+
+    code = make_access_token(exp_hours=hours, note=args.note, max_uses=args.max_uses)
     exp_ts = int(time.time()) + hours * 3600
     print("动态访问码：", code)
     print("有效期至：  ", time.ctime(exp_ts))
     print("剩余时长：  %.1f 小时（约 %.1f 天）" % (hours, hours / 24))
+    print("最多解锁：  %d 人/次" % args.max_uses)
     if args.note:
         print("备注：      ", args.note)
     print("（把这段码发给受邀用户，他们在 /tool 页面输入即可解锁；过期联系你重新生成）")
