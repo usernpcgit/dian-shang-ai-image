@@ -44,12 +44,12 @@
   body.night #skyLayer .cloud{opacity:0;transition:opacity .5s}
   body.night #skyLayer .moon{opacity:1;transform:translateY(0)}
   /* 顶栏：毛玻璃冠栏（导航独立成行，不再合并） */
-  header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 22px;position:relative;z-index:10;background:rgba(255,255,255,.72);backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);border-bottom:1px solid rgba(255,255,255,.55);box-shadow:0 4px 30px rgba(30,80,140,.08)}
+  header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:20px 22px 8px;position:relative;z-index:10}
   header.top .brand{display:flex;align-items:center;gap:12px;flex-shrink:0}
   header.top .logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--brand),var(--brand2));display:flex;align-items:center;justify-content:center;font-size:23px;box-shadow:var(--shadow)}
-  header.top h1{font-size:18px;margin:0;font-weight:800;letter-spacing:.5px}
+  header.top h1{font-size:18px;margin:0;font-weight:800;letter-spacing:.5px;text-shadow:0 1px 3px rgba(255,255,255,.6)}
   header.top .brand-txt{display:flex;flex-direction:column;gap:1px}
-  header.top .sub{color:var(--muted);font-size:12.5px}
+  header.top .sub{color:var(--muted);font-size:12.5px;text-shadow:0 1px 2px rgba(255,255,255,.55)}
   header.top .top-actions{display:flex;align-items:center;gap:10px;flex-shrink:0}
   /* 品牌 BETA 标签（融合千问办公的 BETA 标记，强化"产品名+状态"层级） */
   header.top .brand-tag{display:inline-flex;align-items:center;justify-content:center;background:var(--brand);color:#fff;font-size:10px;font-weight:800;line-height:1;padding:3px 7px;border-radius:999px;margin-left:7px;vertical-align:middle;letter-spacing:.4px;box-shadow:0 2px 6px rgba(46,155,230,.35)}
@@ -58,12 +58,12 @@
   header.top .nav-cta:hover{transform:translateY(-1px);background:#0F2C52;box-shadow:0 6px 18px rgba(30,80,140,.22)}
   header.top .nav-cta:active{transform:translateY(0)}
   /* 当前模型状态胶囊 */
-  .model-pill{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.6);color:var(--ink);border-radius:999px;padding:7px 14px;font-size:12.5px;font-weight:700;box-shadow:var(--shadow);white-space:nowrap}
+  .model-pill{display:flex;align-items:center;gap:7px;color:var(--ink);font-size:12.5px;font-weight:700;white-space:nowrap}
   .model-pill .dot{width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 0 rgba(34,197,94,.5);animation:pulse 2s infinite;flex-shrink:0}
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.45)}70%{box-shadow:0 0 0 7px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
   /* 导航：保留液态玻璃滑动浮岛交互（iOS 风格），改为横向图标+文字的导航条（融合千问/小蜘蛛式简洁导航，去掉副标题噪声） */
-  nav.tabs{position:relative;display:flex;gap:2px;max-width:560px;margin:14px auto 4px;padding:4px;flex-wrap:nowrap;background:rgba(255,255,255,.70);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.55);border-radius:14px;box-shadow:var(--shadow)}
-  nav.tabs .tab-indicator{position:absolute;top:4px;bottom:4px;background:rgba(255,255,255,.55);backdrop-filter:blur(15px) saturate(165%);-webkit-backdrop-filter:blur(15px) saturate(165%);border:1px solid rgba(255,255,255,.72);border-radius:10px;box-shadow:0 2px 14px rgba(30,80,140,.12), inset 0 1px 2px rgba(255,255,255,.6);transition:left .58s cubic-bezier(.16,1,.3,1), width .58s cubic-bezier(.16,1,.3,1), background .32s;z-index:0}
+  nav.tabs{position:relative;display:flex;gap:2px;max-width:560px;margin:8px auto 6px;padding:0 4px;flex-wrap:nowrap;border:none}
+  nav.tabs .tab-indicator{position:absolute;bottom:0;height:3px;background:var(--brand);border-radius:3px;box-shadow:0 1px 5px rgba(46,155,230,.45);transition:left .5s cubic-bezier(.16,1,.3,1), width .5s cubic-bezier(.16,1,.3,1);z-index:0;pointer-events:none}
   nav.tabs button{position:relative;flex:1;min-width:0;background:transparent;border:none;border-radius:10px;padding:9px 14px;cursor:pointer;text-align:center;color:var(--muted);z-index:1;transition:color .42s cubic-bezier(.16,1,.3,1);display:flex;flex-direction:row;align-items:center;justify-content:center;gap:7px}
   nav.tabs button .ic{font-size:17px;line-height:1;filter:grayscale(.35);transition:filter .42s cubic-bezier(.16,1,.3,1), transform .42s cubic-bezier(.16,1,.3,1)}
   nav.tabs button .t{font-weight:700;color:var(--muted);font-size:14px;white-space:nowrap;transition:color .42s cubic-bezier(.16,1,.3,1), font-weight .42s}
@@ -186,8 +186,8 @@
   .toast.show{display:block}
   .muted{color:var(--muted);font-size:12.5px}
   /* ============ 日间/夜间切换按钮 ============ */
-  header.top .theme-toggle{background:rgba(255,255,255,.62);border:1px solid rgba(255,255,255,.55);color:var(--ink);border-radius:20px;padding:8px 15px;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap;box-shadow:var(--shadow);transition:background .2s, transform .15s}
-  header.top .theme-toggle:hover{background:rgba(255,255,255,.9);transform:translateY(-1px)}
+  header.top .theme-toggle{background:transparent;border:1px solid rgba(23,58,94,.18);color:var(--ink);border-radius:20px;padding:8px 15px;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap;transition:background .2s, transform .15s}
+  header.top .theme-toggle:hover{background:rgba(23,58,94,.06);transform:translateY(-1px)}
   /* ============ 深蓝夜间模式 ============ */
   body.night{
     --bg:#0E2440; --panel:#13294A; --panel2:#0F2C52; --line:#2A5689;
@@ -201,17 +201,17 @@
   body.night label{color:#CFE0F4; font-weight:700}
   body.night .card .desc{color:#BFD2EA}
   body.night .muted,body.night nav.tabs button .d,body.night .help .tip{color:#94AFD0}
-  body.night header.top{background:rgba(14,36,64,.78);backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);border-bottom-color:rgba(255,255,255,.10)}
-  body.night header.top .theme-toggle{background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.15);color:var(--ink)}
-  body.night header.top .theme-toggle:hover{background:rgba(255,255,255,.18)}
+  body.night header.top{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;border-bottom:none}
+  body.night header.top .theme-toggle{background:transparent;border-color:rgba(244,248,254,.22);color:var(--ink)}
+  body.night header.top .theme-toggle:hover{background:rgba(244,248,254,.12)}
   body.night header.top .nav-cta{background:#fff;color:var(--ink)}
   body.night header.top .nav-cta:hover{background:#e6f2fc}
   body.night header.top .brand-tag{box-shadow:0 2px 6px rgba(0,0,0,.3)}
-  body.night nav.tabs{background:rgba(19,41,74,.60);border-color:rgba(255,255,255,.10)}
-  body.night nav.tabs .tab-indicator{background:rgba(125,205,248,.20);border-color:rgba(160,210,250,.40);box-shadow:0 2px 14px rgba(0,0,0,.30), inset 0 1px 2px rgba(255,255,255,.15)}
+  body.night nav.tabs{background:transparent;border-color:transparent}
+  body.night nav.tabs .tab-indicator{background:var(--brand);box-shadow:0 1px 5px rgba(91,186,244,.5)}
   body.night nav.tabs button{color:#8DB4DA}
   body.night nav.tabs button.active{color:var(--brand)}
-  body.night .model-pill{background:rgba(19,41,74,.6);border-color:rgba(255,255,255,.12);color:var(--ink)}
+  body.night .model-pill{background:transparent;border-color:transparent;color:var(--ink)}
   body.night .guide{background:linear-gradient(120deg,#13294A,#0F2C52);border-color:var(--line)}
   body.night .step{background:var(--panel);border-color:var(--line)}
   body.night .tag-chip{border-color:var(--line)}
