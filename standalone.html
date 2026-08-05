@@ -229,6 +229,12 @@
   .seg button.active{background:#fff;color:var(--brand);box-shadow:0 1px 4px rgba(46,155,230,.18)}
   body.night .seg{background:#0F2C52}
   body.night .seg button.active{background:#133A5E}
+  /* 内嵌小菜单（在「内容」面板里切换「生成模式」/「叠字内容」） */
+  .sub-seg{margin:0 0 12px}
+  .sub-seg button{padding:7px 10px;font-size:12.5px}
+  .sub-panels{position:relative}
+  .sub-panel{display:none}
+  .sub-panel.active{display:block}
   .ref-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
   .ref-grid .ritem{position:relative;border:2px solid var(--line);border-radius:10px;overflow:hidden;aspect-ratio:1;cursor:pointer;background:#fff}
   .ref-grid .ritem img{width:100%;height:100%;object-fit:cover;display:block}
@@ -314,56 +320,65 @@
         </div>
         <div class="func-panels">
           <div class="func-panel active" data-func="content">
-            <div class="sg">
-              <div style="font-weight:800;color:var(--brand);font-size:13px;margin-bottom:8px">🤖 AI 生成电商图</div>
-              <label>生成模式</label>
-              <div class="seg" id="genMode">
-                <button type="button" data-mode="t2i" class="active">文生图</button>
-                <button type="button" data-mode="i2i">图生图（用底图）</button>
-              </div>
-              <p class="muted" id="modeHint" style="font-size:12px;margin:6px 0 0">文生图：只填下面提示词，AI 直接出图（Pollinations/Seedream 等免底图）。图生图：会用顶部「第 0 步」上传的底图 + 提示词改写场景。</p>
-              <label style="margin-top:10px">提示词（AI 据此生成，自由写、越具体越好）</label>
-              <textarea id="fPrompt" rows="3" placeholder="例如：把产品放进清晨咖啡馆场景，柔和自然光，高级电商风，日系极简，画面留白多、干净"></textarea>
-              <label style="margin-top:10px">参考图库（可选 · 作为风格 / 版式参考，多选）</label>
-              <div style="display:flex;gap:8px;align-items:center">
-                <button class="ghost sm" id="btnAddRef" type="button">＋ 添加参考图</button>
-                <span class="muted" id="refCount" style="font-size:12px">0 张已选</span>
-              </div>
-              <input type="file" id="fRef" accept="image/*" multiple style="display:none">
-              <div class="ref-grid" id="refGrid"></div>
-              <label style="margin-top:10px">画幅</label>
-              <select id="fSize">
-                <option value="1024x1536">详情页竖版 1024×1536</option>
-                <option value="1024x1024">主图 1:1 1024×1024</option>
-                <option value="1536x1024">横版 3:2 1536×1024</option>
-              </select>
-              <label style="margin-top:8px">一次生成几张（出多张挑一张）</label>
-              <select id="apiCount">
-                <option value="1">1 张</option><option value="2">2 张</option><option value="3">3 张</option><option value="4">4 张</option>
-              </select>
-              <button class="btn" id="btnGenOne" style="width:100%;margin-top:12px">🤖 生成电商图</button>
-              <div class="gen-choices" id="genChoices" style="display:none"></div>
-              <p class="warn" id="genHint" style="margin:8px 0 0;display:none"></p>
+            <div class="seg sub-seg" id="contentSubMode">
+              <button type="button" data-sub="gen" class="active">生成模式</button>
+              <button type="button" data-sub="overlay">叠字内容</button>
             </div>
-            <hr style="border:none;border-top:1px dashed var(--line);margin:16px 0">
-            <div class="sg">
-              <div style="font-weight:800;color:var(--brand);font-size:13px;margin-bottom:8px">📝 叠字内容（可选）</div>
-              <p class="muted" style="font-size:12px;margin:0 0 8px">生成完图片后，可在这里叠加标题 / 正文文字再导出。</p>
-              <label>文字放上面还是下面</label>
-              <select id="fLayout"><option value="top">文字在上方</option><option value="bottom">文字在下方</option></select>
-              <label>标题</label><input type="text" id="fTitle" placeholder="例如：仙气独角兽，为你而来">
-              <label>副标题（文字在上方时才用）</label><input type="text" id="fSubtitle" placeholder="例如：仿水晶猫眼石手串">
-              <label>正文（文字在下方时才用，支持换行）</label><textarea id="fBody" placeholder="每行一段"></textarea>
-              <label>标签（输入后回车添加）</label>
-              <div class="tag-input" id="tagInput"><input type="text" id="fTag" placeholder="输入标签后回车" style="flex:1;min-width:150px"></div>
-              <label style="margin-top:14px">手动替换这张屏的底图（可选，不传就用 AI 生成的图）</label>
-              <input type="file" id="fImg" accept="image/*">
-              <div class="row" style="margin-top:16px">
-                <button class="btn" id="btnExportOne">导出这张 PNG</button>
-                <button class="ghost" id="btnExportRaw">单独导出原图</button>
+            <div class="sub-panels">
+              <div class="sub-panel active" data-sub="gen">
+                <div class="sg">
+                  <div style="font-weight:800;color:var(--brand);font-size:13px;margin-bottom:8px">🤖 AI 生成电商图</div>
+                  <label>生成模式</label>
+                  <div class="seg" id="genMode">
+                    <button type="button" data-mode="t2i" class="active">文生图</button>
+                    <button type="button" data-mode="i2i">图生图（用底图）</button>
+                  </div>
+                  <p class="muted" id="modeHint" style="font-size:12px;margin:6px 0 0">文生图：只填下面提示词，AI 直接出图（Pollinations/Seedream 等免底图）。图生图：会用顶部「第 0 步」上传的底图 + 提示词改写场景。</p>
+                  <label style="margin-top:10px">提示词（AI 据此生成，自由写、越具体越好）</label>
+                  <textarea id="fPrompt" rows="3" placeholder="例如：把产品放进清晨咖啡馆场景，柔和自然光，高级电商风，日系极简，画面留白多、干净"></textarea>
+                  <label style="margin-top:10px">参考图库（可选 · 作为风格 / 版式参考，多选）</label>
+                  <div style="display:flex;gap:8px;align-items:center">
+                    <button class="ghost sm" id="btnAddRef" type="button">＋ 添加参考图</button>
+                    <span class="muted" id="refCount" style="font-size:12px">0 张已选</span>
+                  </div>
+                  <input type="file" id="fRef" accept="image/*" multiple style="display:none">
+                  <div class="ref-grid" id="refGrid"></div>
+                  <label style="margin-top:10px">画幅</label>
+                  <select id="fSize">
+                    <option value="1024x1536">详情页竖版 1024×1536</option>
+                    <option value="1024x1024">主图 1:1 1024×1024</option>
+                    <option value="1536x1024">横版 3:2 1536×1024</option>
+                  </select>
+                  <label style="margin-top:8px">一次生成几张（出多张挑一张）</label>
+                  <select id="apiCount">
+                    <option value="1">1 张</option><option value="2">2 张</option><option value="3">3 张</option><option value="4">4 张</option>
+                  </select>
+                  <button class="btn" id="btnGenOne" style="width:100%;margin-top:12px">🤖 生成电商图</button>
+                  <div class="gen-choices" id="genChoices" style="display:none"></div>
+                  <p class="warn" id="genHint" style="margin:8px 0 0;display:none"></p>
+                </div>
               </div>
-              <div class="row" style="margin-top:10px">
-                <button class="ghost" id="btnExportAll" style="width:100%">导出全部 10 张</button>
+              <div class="sub-panel" data-sub="overlay">
+                <div class="sg">
+                  <div style="font-weight:800;color:var(--brand);font-size:13px;margin-bottom:8px">📝 叠字内容</div>
+                  <p class="muted" style="font-size:12px;margin:0 0 8px">切换到「叠字内容」后，左侧预览才会显示文字、标题、标签与风格效果。</p>
+                  <label>文字放上面还是下面</label>
+                  <select id="fLayout"><option value="top">文字在上方</option><option value="bottom">文字在下方</option></select>
+                  <label>标题</label><input type="text" id="fTitle" placeholder="例如：仙气独角兽，为你而来">
+                  <label>副标题（文字在上方时才用）</label><input type="text" id="fSubtitle" placeholder="例如：仿水晶猫眼石手串">
+                  <label>正文（文字在下方时才用，支持换行）</label><textarea id="fBody" placeholder="每行一段"></textarea>
+                  <label>标签（输入后回车添加）</label>
+                  <div class="tag-input" id="tagInput"><input type="text" id="fTag" placeholder="输入标签后回车" style="flex:1;min-width:150px"></div>
+                  <label style="margin-top:14px">手动替换这张屏的底图（可选，不传就用 AI 生成的图）</label>
+                  <input type="file" id="fImg" accept="image/*">
+                  <div class="row" style="margin-top:16px">
+                    <button class="btn" id="btnExportOne">导出这张 PNG</button>
+                    <button class="ghost" id="btnExportRaw">单独导出原图</button>
+                  </div>
+                  <div class="row" style="margin-top:10px">
+                    <button class="ghost" id="btnExportAll" style="width:100%">导出全部 10 张</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -682,9 +697,11 @@ $('#btnProductClear').onclick=()=>{PRODUCT_IMG=null;try{localStorage.removeItem(
 function wrapText(ctx,text,maxW,sp){const out=[];const wOf=s=>{let w=0;for(const ch of s)w+=ctx.measureText(ch).width+sp;return Math.max(0,w-sp);};for(const para of text.split('\n')){if(para===''){out.push('');continue;}let line='';for(const ch of para){if(wOf(line+ch)<=maxW)line+=ch;else{out.push(line);line=ch;}}out.push(line);}return out;}
 function drawLine(ctx,s,x,y,sp){let cx=x;for(const ch of s){ctx.fillText(ch,cx,y);cx+=ctx.measureText(ch).width+sp;}}
 function rgb(a,al){return `rgba(${a[0]},${a[1]},${a[2]},${al})`;}
-function renderScreenTo(canvas,sc,img){
+function renderScreenTo(canvas,sc,img,mode){
   const ctx=canvas.getContext('2d');const sz=SIZES[sc.size]||SIZES['1024x1536'];const W=sz.w,H=sz.h;canvas.width=W;canvas.height=H;ctx.clearRect(0,0,W,H);
   if(img)ctx.drawImage(img,0,0,W,H);else{ctx.fillStyle='#eee';ctx.fillRect(0,0,W,H);}
+  const drawOverlay=mode==='overlay';
+  if(!drawOverlay)return;
   ctx.textBaseline='top';const C=getStyle().colors;const grad=C.gradient;
   const LS=(parseFloat(sc.lineSpacing)||1),CS=(parseFloat(sc.charSpacing)||1),BO=Math.min(1,Math.max(0.2,(parseFloat(sc.bgOpacity)||1))),FS=Math.min(1.6,Math.max(0.6,(parseFloat(sc.fontScale)||1)));
   const P_LR=Math.max(0,parseInt(sc.padLR)||64),P_TB=Math.max(0,parseInt(sc.padTB)||50);
@@ -724,6 +741,15 @@ function drawTags(ctx,tags,x,y,C,sp,tagFont){
 }
 const canvas=$('#previewCanvas');
 function loadImg(u){return new Promise(r=>{const im=new Image();im.onload=()=>r(im);im.src=u;});}
+/* 内容面板内嵌小菜单：生成模式 / 叠字内容 */
+let contentSubMode='gen';
+function setContentSubMode(m){
+  contentSubMode=m;
+  $$('#contentSubMode button').forEach(b=>b.classList.toggle('active',b.dataset.sub===m));
+  $$('.sub-panel').forEach(p=>p.classList.toggle('active',p.dataset.sub===m));
+  refreshDetail();
+}
+$$('#contentSubMode button').forEach(b=>b.onclick=()=>setContentSubMode(b.dataset.sub));
 function refreshDetail(){
   const sc=curScreen();$('#fLayout').value=sc.layout;$('#fSize').value=sc.size||'1024x1536';$('#fTitle').value=sc.title||'';
   $('#fSubtitle').value=sc.subtitle||'';$('#fBody').value=sc.body||'';renderTags();
@@ -732,7 +758,7 @@ function refreshDetail(){
   $('#fPadLR').value=sc.padLR||64;$('#fPadTB').value=sc.padTB||50;
   $('#valLine').textContent=(sc.lineSpacing||1).toFixed(1);$('#valBlock').textContent=(sc.charSpacing||1).toFixed(1);$('#valBg').textContent=(sc.bgOpacity||1).toFixed(2);$('#valFont').textContent=(sc.fontScale||1).toFixed(2);
   $('#valPadLR').textContent=sc.padLR||64;$('#valPadTB').textContent=sc.padTB||50;
-  if(sc.img)loadImg(sc.img).then(im=>renderScreenTo(canvas,sc,im));else renderScreenTo(canvas,sc,null);
+  if(sc.img)loadImg(sc.img).then(im=>renderScreenTo(canvas,sc,im,contentSubMode));else renderScreenTo(canvas,sc,null,contentSubMode);
 }
 function renderTags(){const box=$('#tagInput');$$('#tagInput .tag-chip').forEach(e=>e.remove());
   curScreen().tags.forEach((t,i)=>{const c=document.createElement('span');c.className='tag-chip';
@@ -760,19 +786,19 @@ $('#fPadTB').oninput=e=>{curScreen().padTB=parseInt(e.target.value);$('#valPadTB
 $('#fTag').onkeydown=e=>{if(e.key==='Enter'){const v=e.target.value.trim();if(v){curScreen().tags.push(v);e.target.value='';renderTags();refreshDetail();}}};
 $('#fImg').onchange=async e=>{const f=e.target.files[0];if(!f)return;
   const u=await new Promise(r=>{const rd=new FileReader();rd.onload=()=>r(rd.result);rd.readAsDataURL(f);});
-  curScreen().img=u;loadImg(u).then(im=>renderScreenTo(canvas,curScreen(),im));toast('图片已载入');};
+  curScreen().img=u;loadImg(u).then(im=>renderScreenTo(canvas,curScreen(),im,contentSubMode));toast('图片已载入');};
 function downloadCanvas(c,name){c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);});}
 $('#btnExportOne').onclick=()=>{const sc=curScreen();if(!sc.img){toast('请先上传这张屏的视觉图');return;}
-  loadImg(sc.img).then(im=>{const c=document.createElement('canvas');renderScreenTo(c,sc,im);downloadCanvas(c,'screen_'+String(sc.id).padStart(2,'0')+'.png');});};
+  loadImg(sc.img).then(im=>{const c=document.createElement('canvas');renderScreenTo(c,sc,im,contentSubMode);downloadCanvas(c,'screen_'+String(sc.id).padStart(2,'0')+'.png');});};
 $('#btnExportRaw').onclick=()=>{const sc=curScreen();const src=sc.img||PRODUCT_IMG;if(!src){toast('当前没有可导出的原图');return;}
   loadImg(src).then(im=>{const c=document.createElement('canvas');const sz=SIZES[sc.size]||SIZES['1024x1536'];c.width=sz.w;c.height=sz.h;c.getContext('2d').drawImage(im,0,0,sz.w,sz.h);downloadCanvas(c,'raw_'+String(sc.id).padStart(2,'0')+'.png');toast('已单独导出原图');});};
 $('#btnExportAll').onclick=async()=>{let n=0;for(const sc of SCREENS){if(!sc.img)continue;const im=await loadImg(sc.img);
-  const c=document.createElement('canvas');renderScreenTo(c,sc,im);c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='screen_'+String(sc.id).padStart(2,'0')+'.png';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);});n++;await new Promise(r=>setTimeout(r,300));}
+  const c=document.createElement('canvas');renderScreenTo(c,sc,im,contentSubMode);c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='screen_'+String(sc.id).padStart(2,'0')+'.png';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);});n++;await new Promise(r=>setTimeout(r,300));}
   toast(n?('已导出 '+n+' 张'):'没有可导出的屏（请先上传图片）');};
 /* ============ 图生图：白底产品图 + 提示词 → gpt-image-2（经本地代理） ============ */
 const PROXY_URL = location.origin.startsWith('http') ? '/api/gen' : 'http://localhost:8765/api/gen';
 function dataURLtoBlob(u){const h=u.split(',')[0];const m=h.match(/:(.*?);/)[1];const bin=atob(u.split(',')[1]);const arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return new Blob([arr],{type:m});}
-function setScreenImg(sc,img){sc.img=img;loadImg(img).then(im=>renderScreenTo(canvas,sc,im));}
+function setScreenImg(sc,img){sc.img=img;loadImg(img).then(im=>renderScreenTo(canvas,sc,im,contentSubMode));}
 function showImageChooser(imgs,sc){
   const box=$('#genChoices');box.innerHTML='';box.style.display='flex';
   box.insertAdjacentHTML('beforeend','<div style="font-size:12px;color:var(--muted);width:100%;margin-bottom:6px">生成了 '+imgs.length+' 张，点一张放入本屏：</div>');
