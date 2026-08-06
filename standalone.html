@@ -871,7 +871,8 @@ function genOne(){
   else if(!key && provider!=='custom'){toast('请先在「API」面板填对应 Key');switchFunc('api');return;}
   else if(provider==='custom' && !endpoint){toast('自定义端点需填写 Base URL');switchFunc('api');return;}
   const payload={provider,key,endpoint,images_b64:images,prompt,fidelity:$('#apiFidelity').value,quality:$('#apiQuality').value,size:sc.size||'1024x1536',n:$('#apiCount').value||'1'};
-  if(provider==='seedream' && $('#apiModel')){payload.model=$('#apiModel').value;}
+  const pm0=PROVIDERS_LOCAL.find(x=>x.id===provider);
+  if(pm0 && pm0.models && pm0.models.length && $('#apiModel')){payload.model=$('#apiModel').value;}
   const hint=$('#genHint');hint.style.display='block';hint.textContent='⏳ 正在生成（约 10–60 秒，请耐心等待）…';
   $('#genChoices').style.display='none';toast('正在生图…');
   // 携带动态访问码（测试阶段门禁）：无码时后端会直接 401 拒绝
@@ -914,9 +915,9 @@ function applyProviderUI(p){
     keyWrap.style.display='none';
   }
   endpointWrap.style.display=p.id==='custom'?'':'none';
-  if(p.id==='seedream' && p.models && p.models.length){
+  if(p.models && p.models.length){
     modelWrap.style.display='';
-    const saved=(()=>{try{return localStorage.getItem('wb_seedream_model');}catch(e){return null;}})();
+    const saved=(()=>{try{return localStorage.getItem('wb_model_'+p.id);}catch(e){return null;}})();
     modelSel.innerHTML='';
     p.models.forEach(m=>{const o=document.createElement('option');o.value=m.id;o.textContent=m.name;modelSel.appendChild(o);});
     if(saved && p.models.some(m=>m.id===saved))modelSel.value=saved;
@@ -927,10 +928,14 @@ function applyProviderUI(p){
   // 顶栏模型状态胶囊
   try{
     const txt=$('#modelPillTxt');
-    if(txt) txt.textContent = p.id==='seedream' ? ('Seedream · '+(modelSel.value||'Lite')) : p.name.replace(/（.*?）/g,'').replace(/（.*?\)/g,'').replace(/\(.*?\)/g,'').trim();
+    if(txt){
+      const selName=(modelSel.selectedOptions&&modelSel.selectedOptions[0])?modelSel.selectedOptions[0].textContent:'';
+      const base=p.name.replace(/[（(].*?[）)]/g,'').trim();
+      txt.textContent = (p.models&&p.models.length&&selName)?(base+' · '+selName):base;
+    }
   }catch(e){}
 }
-function saveModel(){try{localStorage.setItem('wb_seedream_model',$('#apiModel').value);}catch(e){}}
+function saveModel(){try{localStorage.setItem('wb_model_'+$('#apiProvider').value,$('#apiModel').value);}catch(e){}}
 function loadProviders(){
   const sel=$('#apiProvider');
   fetch(location.origin.startsWith('http')?'/api/providers':'http://localhost:8765/api/providers')
@@ -956,6 +961,17 @@ const PROVIDERS_LOCAL=[
   {id:'seedream',name:'Seedream 5.0（字节火山）',needsKey:true,desc:'字节 Seedream 5.0（火山方舟），官网只有 Pro 和 Lite 两种。Pro 质量高但额度紧；Lite 额度宽松，但要求图片总像素不低于 3686400（约 2048×2048）。',getKey:'https://console.volcengine.com/ark/region:cn-beijing/apikey',models:[
     {id:'doubao-seedream-5-0-lite-260128',name:'Lite版（额度宽松，默认）'},
     {id:'doubao-seedream-5-0-pro-260628',name:'Pro版（质量更高，额度紧）'}
+  ]},
+  {id:'qwen',name:'千问生图（阿里百炼）',needsKey:true,desc:'阿里千问生图（百炼/DashScope）。3.0 系支持文生图+图生图/参考图，付费：标准版 0.18元/张、旗舰 Pro 0.25元/张起；老版 plus/max 便宜、新用户开通百炼有免费额度（如 100 张/90 天，控制台可查）。需阿里云百炼 API Key。',getKey:'https://bailian.console.aliyun.com',models:[
+    {id:'qwen-image-3.0',name:'3.0 标准版（0.18元/张，默认）'},
+    {id:'qwen-image-3.0-pro',name:'3.0 旗舰 Pro（0.25元/张，排版/画质更强）'},
+    {id:'qwen-image-plus',name:'老版 plus（便宜，新用户有免费额度）'},
+    {id:'qwen-image-max',name:'老版 max（画质高，免费额度少）'}
+  ]},
+  {id:'nano',name:'Nano Banana 2（Gemini 3.1 Flash）',needsKey:true,desc:'谷歌 Nano Banana 2（Gemini 3.1 Flash Image）家族：标准约$0.067/张、Lite 极速约$0.034/张、Pro 旗舰约$0.09/张。注意：走 API 是按张付费、无免费额度；免费只在 Gemini 应用 / AI Studio 网页（有每日上限）。需 AI Studio Key。',getKey:'https://aistudio.google.com/apikey',models:[
+    {id:'gemini-3.1-flash-image',name:'Nano Banana 2 标准（约$0.067/张，默认）'},
+    {id:'gemini-3.1-flash-lite-image',name:'Nano Banana 2 Lite（约$0.034/张，极速）'},
+    {id:'gemini-3-pro-image',name:'Nano Banana Pro（约$0.09/张，画质顶配）'}
   ]},
   {id:'custom',name:'自部署 / 自定义端点',needsKey:true,desc:'对接你自己部署的模型（如本地 ComfyUI、自建 OpenAI 兼容服务、或任意充值付费的兼容端点）。需填 Base URL。',getKey:''}
 ];

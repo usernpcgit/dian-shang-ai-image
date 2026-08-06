@@ -7,6 +7,8 @@
 支持的服务商（provider）：
   pollinations  —— 免 Key、免注册，直接出图（仅文生图，图生图能力弱，适合快速试）
   gemini        —— Google Gemini（Nano Banana）免费层，支持图生图/文生图，需 AI Studio Key
+  qwen          —— 阿里千问生图（百炼 DashScope）：3.0 标准/旗舰 Pro + 老版 plus/max，需百炼 API Key
+  nano          —— Google Nano Banana 2（Gemini 3.1 Flash Image）家族：标准/Lite/Pro，需 AI Studio Key
   openai        —— OpenAI gpt-image-2，新号有试用金，支持图生图/文生图
   redfox        —— redfox.hk 转发 gpt-image-2（原默认）
   custom        —— 自部署模型 / 任意 OpenAI 兼容端点（付费或自建入口）
@@ -136,6 +138,33 @@ PROVIDERS = [
         ],
     },
     {
+        "id": "qwen",
+        "name": "千问生图（阿里百炼）",
+        "needsKey": True,
+        "imageEdit": True,
+        "desc": "阿里千问生图（百炼/DashScope）。3.0 系支持文生图+图生图/参考图，付费：标准版 0.18元/张、旗舰 Pro 0.25元/张起；老版 plus/max 便宜、新用户开通百炼有免费额度（如 100 张/90 天，控制台可查）。需阿里云百炼 API Key。",
+        "getKey": "https://bailian.console.aliyun.com",
+        "models": [
+            {"id": "qwen-image-3.0", "name": "3.0 标准版（0.18元/张，默认）"},
+            {"id": "qwen-image-3.0-pro", "name": "3.0 旗舰 Pro（0.25元/张，排版/画质更强）"},
+            {"id": "qwen-image-plus", "name": "老版 plus（便宜，新用户有免费额度）"},
+            {"id": "qwen-image-max", "name": "老版 max（画质高，免费额度少）"},
+        ],
+    },
+    {
+        "id": "nano",
+        "name": "Nano Banana 2（Gemini 3.1 Flash）",
+        "needsKey": True,
+        "imageEdit": True,
+        "desc": "谷歌 Nano Banana 2（Gemini 3.1 Flash Image）家族：标准约$0.067/张、Lite 极速约$0.034/张、Pro 旗舰约$0.09/张。注意：走 API 是按张付费、无免费额度；免费只在 Gemini 应用 / AI Studio 网页（有每日上限）。需 AI Studio Key。",
+        "getKey": "https://aistudio.google.com/apikey",
+        "models": [
+            {"id": "gemini-3.1-flash-image", "name": "Nano Banana 2 标准（约$0.067/张，默认）"},
+            {"id": "gemini-3.1-flash-lite-image", "name": "Nano Banana 2 Lite（约$0.034/张，极速）"},
+            {"id": "gemini-3-pro-image", "name": "Nano Banana Pro（约$0.09/张，画质顶配）"},
+        ],
+    },
+    {
         "id": "custom",
         "name": "自部署 / 自定义端点",
         "needsKey": True,
@@ -192,6 +221,13 @@ def localize_error(msg):
         return "Gemini API Key 无效，请检查是否复制正确。"
     if "permission" in m and "Gemini" in m:
         return "Gemini Key 没有调用该模型的权限，请确认已开启 Gemini API 权限。"
+    # 千问 / 百炼
+    if "InvalidApiKey" in m:
+        return "千问 API Key 无效，请检查是否复制正确（阿里云百炼控制台 → API-KEY）。"
+    if "Throttling" in m or "FlowExceedLimit" in m:
+        return "千问调用被限流或免费额度已用完，请到百炼控制台查看用量或开通付费。"
+    if "Model.AccessDenied" in m or "NotActivated" in m or "未开通" in m:
+        return "该千问模型未在你账号开通，请到百炼控制台开通对应模型服务。"
     return msg
 
 
@@ -218,11 +254,25 @@ def gen_pollinations(prompt, size, n):
         return None, "Pollinations 生图失败：" + str(e)
 
 
-def gen_gemini(key, images, prompt, size, n):
-    """Google Gemini（Nano Banana）。支持图生图（传 images 列表）与文生图。images[0] 为主图，其余为参考图。"""
+def _gemini_ratio(size, default="3:4"):
+    """把工具里的 WxH 尺寸转成 Gemini 的 aspectRatio；转不了就用默认 3:4。"""
+    try:
+        w, h = (size or "1024x1536").split("x")
+        w, h = int(w), int(h)
+        r = w / float(h)
+    except Exception:
+        return default
+    for target, val in [("1:1", 1.0), ("3:4", 0.75), ("4:3", 1.3333), ("2:3", 0.6667), ("3:2", 1.5)]:
+        if abs(r - val) < 0.05:
+            return target
+    return default
+
+
+def gen_gemini(key, images, prompt, size, n, model=None):
+    """Google Gemini（Nano Banana 家族）。支持图生图（传 images 列表）与文生图。images[0] 为主图，其余为参考图。"""
     if not key:
-        return None, "缺少 Gemini API Key"
-    model = "gemini-2.5-flash-image"
+        return None, "缺少 Gemini/Nano Banana API Key"
+    model = model or "gemini-2.5-flash-image"
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
     try:
         count = max(1, min(4, int(n) if str(n).isdigit() else 1))
@@ -238,7 +288,7 @@ def gen_gemini(key, images, prompt, size, n):
     parts.append({"text": prompt})
     payload = {
         "contents": [{"parts": parts}],
-        "generationConfig": {"responseModalities": ["IMAGE"], "imageConfig": {"aspectRatio": "3:4"}},
+        "generationConfig": {"responseModalities": ["IMAGE"], "imageConfig": {"aspectRatio": _gemini_ratio(size)}},
     }
     try:
         r = S.post(url, json=payload, timeout=240)
@@ -557,6 +607,134 @@ def gen_seedream(key, images, prompt, size, n, model=None):
     return out, None
 
 
+def _qwen_err(j, model):
+    """把百炼/DashScope 常见报错翻译成人话。"""
+    code = str(j.get("code") or (j.get("output") or {}).get("code") or "")
+    msg = str(j.get("message") or (j.get("output") or {}).get("message") or "") + " " + str(j.get("error", ""))
+    if "InvalidApiKey" in msg or "InvalidApiKey" in code or "401" in code:
+        return "千问 API Key 无效，请检查是否复制正确（阿里云百炼控制台 → API-KEY）。"
+    if "Throttling" in msg or "FlowExceedLimit" in msg or "限流" in msg or "quota" in msg.lower() or "额度" in msg:
+        return "千问调用被限流或额度不足（免费额度用完或需开通付费），请到百炼控制台查看用量。"
+    if "Model.AccessDenied" in msg or "NotActivated" in msg or "未开通" in msg or "not activated" in msg.lower():
+        return "该千问模型未在你账号开通，请到百炼控制台开通对应模型服务。"
+    if "model does not exist" in msg.lower() or "ModelNotFound" in msg or "not found" in msg.lower():
+        return "该千问模型 ID 不存在或未对你开放（若用 3.0 标准版报错，可换「3.0 旗舰 Pro」版本再试）。"
+    return "千问生图失败(" + code + ")：" + (msg.strip() or "未知错误")
+
+
+def _qwen_extract(j):
+    """从百炼响应里取图片 URL（兼容同步/异步、老版/3.0 两种返回结构），下载成 base64。"""
+    out = j.get("output") or {}
+    if out.get("task_status") == "FAILED":
+        return None, _qwen_err(j, j.get("model", ""))
+    # 顶层直接报错（鉴权/参数/限流等，没有 output）：翻译成人话
+    if not out and (j.get("code") or j.get("message") or j.get("error")):
+        return None, _qwen_err(j, j.get("model", ""))
+    urls = []
+    for it in out.get("results") or []:            # 老版 text2image 异步任务结果
+        if it.get("url"):
+            urls.append(it["url"])
+    for ch in out.get("choices") or []:            # 3.0 多模态对话结果
+        c = (ch.get("message") or {}).get("content") or []
+        for it in c:
+            if isinstance(it, dict) and it.get("image"):
+                urls.append(it["image"])
+    extra = out.get("images") or []                # 兜底字段
+    if isinstance(extra, str):
+        urls.append(extra)
+    else:
+        urls.extend(extra)
+    if not urls:
+        return None, "千问生图未返回图片（可能额度不足/提示词被拒）"
+    imgs = []
+    for u in urls[:4]:
+        try:
+            d = S.get(u, timeout=120)
+            imgs.append("data:image/png;base64," + base64.b64encode(d.content).decode())
+        except Exception:
+            continue
+    if not imgs:
+        return None, "千问生图结果下载失败"
+    return imgs, None
+
+
+def gen_qwen(key, images, prompt, size, n, model=None):
+    """阿里千问生图（百炼 DashScope）。
+    3.0 系走「多模态对话」接口（支持文生图 + 图生图/参考图，images[0] 为主图）；
+    老版 qwen-image-plus/max 走 text2image 异步任务接口（仅文生图）。
+    """
+    if not key:
+        return None, "缺少阿里云百炼 API Key"
+    model = model or "qwen-image-3.0"
+    try:
+        count = max(1, min(4, int(n) if str(n).isdigit() else 1))
+    except Exception:
+        count = 1
+    dsize = (size or "1024x1536").replace("x", "*")
+    headers = {"Authorization": "Bearer " + key, "Content-Type": "application/json"}
+    base = "https://dashscope.aliyuncs.com/api/v1/services/aigc"
+    is_v3 = model.startswith("qwen-image-3.0")
+    raws = [b64_to_bytes(im) for im in (images or [])]
+    try:
+        if is_v3:
+            # 多模态对话接口：content 里可带 image（图生图/参考图）+ text（文生图时只有 text）
+            content = []
+            for raw in raws:
+                if not raw:
+                    continue
+                _, mime = detect_fmt(raw)
+                content.append({"image": "data:%s;base64,%s" % (mime, base64.b64encode(raw).decode())})
+            content.append({"text": prompt})
+            payload = {
+                "model": model,
+                "input": {"messages": [{"role": "user", "content": content}]},
+                "parameters": {"size": dsize, "n": count, "prompt_extend": True},
+            }
+            r = S.post(base + "/multimodal-generation/generation", headers=headers, json=payload, timeout=240)
+            j = r.json()
+            task_id = (j.get("output") or {}).get("task_id")
+            if task_id:  # 异步返回：轮询任务
+                for _ in range(MAX_TRY):
+                    time.sleep(POLL)
+                    try:
+                        rr = S.get("https://dashscope.aliyuncs.com/api/v1/tasks/" + task_id, headers=headers, timeout=15)
+                        j = rr.json()
+                    except Exception:
+                        continue
+                    st = (j.get("output") or {}).get("task_status")
+                    if st in ("SUCCEEDED", "FAILED"):
+                        break
+            return _qwen_extract(j)
+        # 老版：text2image 异步任务接口（仅文生图）
+        if any(raws):
+            return None, "该千问版本仅支持文生图；图生图/参考图请把版本换成「3.0 标准版」或「3.0 旗舰 Pro」。"
+        payload = {
+            "model": model,
+            "input": {"prompt": prompt},
+            "parameters": {"size": dsize, "n": count, "watermark": False},
+        }
+        r = S.post(base + "/text2image/image-synthesis", headers=headers, json=payload, timeout=60)
+        j = r.json()
+        task_id = (j.get("output") or {}).get("task_id")
+        if not task_id:
+            return None, _qwen_err(j, model)
+        for _ in range(MAX_TRY):
+            time.sleep(POLL)
+            try:
+                rr = S.get("https://dashscope.aliyuncs.com/api/v1/tasks/" + task_id, headers=headers, timeout=15)
+                j = rr.json()
+            except Exception:
+                continue
+            st = (j.get("output") or {}).get("task_status")
+            if st == "SUCCEEDED":
+                break
+            if st == "FAILED":
+                return None, _qwen_err(j, model)
+        return _qwen_extract(j)
+    except Exception as e:
+        return None, "千问生图请求失败：" + str(e)
+
+
 def gen_image(data):
     provider = (data.get("provider") or "redfox").lower()
     key = data.get("key", "")
@@ -589,6 +767,14 @@ def gen_image(data):
             if not prompt:
                 return None, "缺少提示词"
             return gen_seedream(key, images, prompt, size, n, model)
+        if provider == "qwen":
+            if not prompt:
+                return None, "缺少提示词"
+            return gen_qwen(key, images, prompt, size, n, model)
+        if provider == "nano":
+            if not prompt:
+                return None, "缺少提示词"
+            return gen_gemini(key, images, prompt, size, n, model or "gemini-3.1-flash-image")
         if provider == "custom":
             if not prompt:
                 return None, "缺少提示词"
