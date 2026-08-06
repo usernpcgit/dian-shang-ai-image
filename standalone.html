@@ -157,10 +157,16 @@
   .work-area{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
   .left-col{flex:0 0 320px;display:flex;flex-direction:column;gap:14px;position:sticky;top:0;align-self:flex-start}
   .right-col{flex:1;min-width:300px}
-  .preview-scroller{width:100%;max-height:calc(100vh - 220px);overflow-y:auto;border-radius:12px;box-shadow:var(--shadow);background:var(--panel);scroll-behavior:smooth}
+  .preview-scroller{width:100%;overflow:hidden;border-radius:12px;box-shadow:var(--shadow);background:var(--panel);scroll-behavior:smooth;position:relative}
+  /* 单张模式：高度只够一张图；批量模式：恢复长图滚动 */
+  .preview-scroller.mode-single{max-height:460px;overflow:hidden}
+  .preview-scroller.mode-batch{max-height:calc(100vh - 220px);overflow-y:auto}
   .preview-stack{display:flex;flex-direction:column;gap:0}
   .preview-stack canvas,.preview-stack img{width:100%;height:auto;display:block;background:#eee}
-  .preview-stack .sc-placeholder{aspect-ratio:2/3;background:linear-gradient(135deg,#1a1a24,#0d0d12);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;padding:20px;text-align:center;box-sizing:border-box}
+  /* 单张模式：只显示当前屏的一项 */
+  .preview-scroller.mode-single .preview-item:not(.current){display:none}
+  .preview-scroller.mode-single .preview-item.current{display:block}
+  .preview-stack .sc-placeholder{aspect-ratio:2/3;background:linear-gradient(135deg,#1a1a24,#0d0d12);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;padding:20px;text-align:center;box-sizing:border-box;font-weight:700;letter-spacing:.5px}
   .ios-pill{position:relative;display:flex;gap:4px;padding:5px;background:rgba(124,58,237,.12);border:1px solid rgba(124,58,237,.30);border-radius:999px;box-shadow:0 4px 16px rgba(0,0,0,.4), inset 0 1px 0 rgba(167,139,250,.12)}
   .screen-tabs{width:100%;justify-content:space-between}
   .screen-tabs button{position:relative;flex:1;min-width:0;background:transparent;border:none;border-radius:999px;padding:9px 4px;cursor:pointer;text-align:center;color:var(--muted);z-index:1;transition:color .42s cubic-bezier(.16,1,.3,1),opacity .3s;font-weight:800;font-size:14px;letter-spacing:.3px}
@@ -176,6 +182,20 @@
   .func-panel{display:none}
   .func-panel.active{display:block}
   .api-panel{margin-top:4px;border:1px dashed var(--brand);border-radius:12px;padding:14px;background:rgba(124,58,237,.08)}
+  /* 滑块：细轨道、小滑块，数值默认隐藏，滑动时才浮出 */
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:14px;background:transparent;cursor:pointer;margin:2px 0}
+  input[type=range]:focus{outline:none}
+  input[type=range]::-webkit-slider-runnable-track{height:4px;background:rgba(124,58,237,.18);border-radius:2px}
+  input[type=range]::-moz-range-track{height:4px;background:rgba(124,58,237,.18);border-radius:2px}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:14px;height:14px;border-radius:50%;background:linear-gradient(135deg,#7C3AED,#A78BFA);border:1.5px solid rgba(255,255,255,.25);box-shadow:0 1px 4px rgba(124,58,237,.5);margin-top:-5px;cursor:grab;transition:transform .15s}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:linear-gradient(135deg,#7C3AED,#A78BFA);border:1.5px solid rgba(255,255,255,.25);box-shadow:0 1px 4px rgba(124,58,237,.5);cursor:grab;transition:transform .15s}
+  input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15);cursor:grabbing}
+  input[type=range]:active::-moz-range-thumb{transform:scale(1.15);cursor:grabbing}
+  .slider-row{display:flex;align-items:center;gap:8px;margin-top:10px}
+  .slider-row label{flex:1;margin:0;font-weight:600;font-size:13px}
+  .slider-row .val{font-size:12px;color:var(--brand);font-weight:800;min-width:36px;text-align:right;opacity:0;transition:opacity .2s;font-variant-numeric:tabular-nums}
+  .slider-row.dragging .val,.slider-row:focus-within .val{opacity:1}
+  .slider-row input[type=range]{flex:0 0 130px;margin:0}
   .tag-input{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
   .tag-chip{background:var(--chip);border:1px solid var(--line);border-radius:16px;padding:5px 11px;font-size:13px;font-weight:500;display:flex;gap:6px;align-items:center}
   .tag-chip b{cursor:pointer;color:var(--danger)}
@@ -402,48 +422,36 @@
           <div class="func-panel" data-func="font">
             <div class="sg">
               <div style="font-weight:800;color:var(--brand);font-size:13px;margin-bottom:8px">字体与排版调节</div>
-              <label style="margin-top:6px">字体大小（标题/副标题/正文/标签） <span class="muted" id="valFont">1.00</span></label>
-              <input type="range" id="fFont" min="0.6" max="1.6" step="0.05" value="1">
-              <label style="margin-top:8px">字体行间距 <span class="muted" id="valLine">1.0</span></label>
-              <input type="range" id="fLine" min="0.6" max="2.0" step="0.1" value="1">
-              <label style="margin-top:8px">字体间距（字左右疏密） <span class="muted" id="valBlock">1.0</span></label>
-              <input type="range" id="fBlock" min="0.6" max="2.0" step="0.1" value="1">
-              <label style="margin-top:8px">左右间距（文字距画面左右边距） <span class="muted" id="valPadLR">64</span></label>
-              <input type="range" id="fPadLR" min="20" max="180" step="4" value="64">
-              <label style="margin-top:8px">上下间距（文字块距顶/底边距） <span class="muted" id="valPadTB">50</span></label>
-              <input type="range" id="fPadTB" min="20" max="200" step="4" value="50">
+              <div class="slider-row"><label>字体大小</label><input type="range" id="fFont" min="0.6" max="1.6" step="0.05" value="1"><span class="val" id="valFont">1.00</span></div>
+              <div class="slider-row"><label>字体行间距</label><input type="range" id="fLine" min="0.6" max="2.0" step="0.1" value="1"><span class="val" id="valLine">1.0</span></div>
+              <div class="slider-row"><label>字体间距</label><input type="range" id="fBlock" min="0.6" max="2.0" step="0.1" value="1"><span class="val" id="valBlock">1.0</span></div>
+              <div class="slider-row"><label>左右间距</label><input type="range" id="fPadLR" min="20" max="180" step="4" value="64"><span class="val" id="valPadLR">64</span></div>
+              <div class="slider-row"><label>上下间距</label><input type="range" id="fPadTB" min="20" max="200" step="4" value="50"><span class="val" id="valPadTB">50</span></div>
             </div>
           </div>
           <div class="func-panel" data-func="bg">
             <div class="sg">
               <div style="font-weight:800;color:var(--brand);font-size:13px;margin-bottom:8px">背景遮罩</div>
-              <label style="margin-top:6px">背景深浅（遮罩浓度） <span class="muted" id="valBg">1.00</span></label>
-              <input type="range" id="fBg" min="0.2" max="1.0" step="0.05" value="1">
+              <div class="slider-row"><label>背景深浅</label><input type="range" id="fBg" min="0.2" max="1.0" step="0.05" value="1"><span class="val" id="valBg">1.00</span></div>
             </div>
           </div>
           <div class="func-panel" data-func="api">
             <div class="api-panel">
-              <p class="muted" style="margin-top:0"><b>选服务商 + 填 Key</b>：去「内容」面板写提示词（文生图）或上传底图＋提示词（图生图），再回这里选服务商、填 Key（付费 / 自部署入口选「自部署 / 自定义端点」），然后去「内容」点「🤖 生成电商图」。</p>
-              <label>生图服务商</label>
               <select id="apiProvider"></select>
               <div id="providerDesc" class="muted" style="font-size:12px;margin:6px 0"></div>
               <div id="keyWrap">
-                <label id="keyLabel">API Key</label>
                 <input type="text" id="apiKey" placeholder="粘贴 API Key">
                 <a id="keyLink" href="#" target="_blank" rel="noopener" style="font-size:12px;display:inline-block;margin-top:4px">去哪拿 Key？</a>
               </div>
               <div id="endpointWrap" style="display:none">
-                <label>自定义端点 Base URL（兼容 OpenAI 的 /images/generations 或 /images/edits）</label>
                 <input type="text" id="apiEndpoint" placeholder="https://your-host/v1/images/generations">
               </div>
               <div id="modelWrap" style="display:none">
-                <label>模型版本（Seedream 专属）</label>
                 <select id="apiModel"></select>
-                <p class="muted" style="font-size:12px;margin:4px 0 0">Pro 额度紧张时，切「标准版」或「Lite版」通常可继续用。</p>
               </div>
               <div class="row">
-                <div><label>保真度（图生图）</label><select id="apiFidelity"><option value="high">高保真（保留产品细节）</option><option value="low">低保真（可大幅改场景）</option></select></div>
-                <div><label>画质</label><select id="apiQuality"><option value="high">高</option><option value="medium">中</option><option value="low">低</option></select></div>
+                <div><select id="apiFidelity"><option value="high">高保真（保留产品细节）</option><option value="low">低保真（可大幅改场景）</option></select></div>
+                <div><select id="apiQuality"><option value="high">高</option><option value="medium">中</option><option value="low">低</option></select></div>
               </div>
               <p class="warn" style="margin-top:10px">⚠️ 公网版已自带代理，不用双击「启动.command」；本地双击打开才需要。Pollinations 免 Key 可直接试，其余需填对应 Key；付费 / 自部署入口在服务商下拉里选「自部署 / 自定义端点」。</p>
             </div>
@@ -835,7 +843,7 @@ function rebuildPreviewStack(){
     }else{
       const ph=document.createElement('div');
       ph.className='sc-placeholder';
-      ph.innerHTML='<div>屏幕 '+(i+1)+'<br><span style="font-size:11px;opacity:.7">'+(sc.title || '待生成')+'</span></div>';
+      ph.innerHTML='<div>屏幕 '+(i+1)+'</div>';
       wrap.appendChild(ph);
     }
     previewStack.appendChild(wrap);
@@ -859,7 +867,7 @@ function updatePreviewItem(idx){
   }else{
     const ph=document.createElement('div');
     ph.className='sc-placeholder';
-    ph.innerHTML='<div>屏幕 '+(idx+1)+'<br><span style="font-size:11px;opacity:.7">'+(sc.title || '待生成')+'</span></div>';
+    ph.innerHTML='<div>屏幕 '+(idx+1)+'</div>';
     wrap.appendChild(ph);
   }
   old.parentNode.replaceChild(wrap,old);
@@ -893,11 +901,20 @@ function buildStylePick(){const box=$('#stylePick');box.innerHTML='';
 $('#stylePrefix').value=getStyle().prefix;
 $('#fSize').onchange=e=>{curScreen().size=e.target.value;refreshDetail();};
 $('#fLine').oninput=e=>{curScreen().lineSpacing=parseFloat(e.target.value);$('#valLine').textContent=curScreen().lineSpacing.toFixed(1);refreshDetail();};
-$('#fBlock').oninput=e=>{curScreen().charSpacing=parseFloat(e.target.value);$('#valBlock').textContent=curScreen().charSpacing.toFixed(1);refreshDetail();};
-$('#fBg').oninput=e=>{curScreen().bgOpacity=parseFloat(e.target.value);$('#valBg').textContent=curScreen().bgOpacity.toFixed(2);refreshDetail();};
-$('#fFont').oninput=e=>{curScreen().fontScale=parseFloat(e.target.value);$('#valFont').textContent=curScreen().fontScale.toFixed(2);refreshDetail();};
-$('#fPadLR').oninput=e=>{curScreen().padLR=parseInt(e.target.value);$('#valPadLR').textContent=curScreen().padLR;refreshDetail();};
-$('#fPadTB').oninput=e=>{curScreen().padTB=parseInt(e.target.value);$('#valPadTB').textContent=curScreen().padTB;refreshDetail();};
+  $('#fBlock').oninput=e=>{curScreen().charSpacing=parseFloat(e.target.value);$('#valBlock').textContent=curScreen().charSpacing.toFixed(1);refreshDetail();};
+  $('#fBg').oninput=e=>{curScreen().bgOpacity=parseFloat(e.target.value);$('#valBg').textContent=curScreen().bgOpacity.toFixed(2);refreshDetail();};
+  $('#fFont').oninput=e=>{curScreen().fontScale=parseFloat(e.target.value);$('#valFont').textContent=curScreen().fontScale.toFixed(2);refreshDetail();};
+  $('#fPadLR').oninput=e=>{curScreen().padLR=parseInt(e.target.value);$('#valPadLR').textContent=curScreen().padLR;refreshDetail();};
+  $('#fPadTB').oninput=e=>{curScreen().padTB=parseInt(e.target.value);$('#valPadTB').textContent=curScreen().padTB;refreshDetail();};
+  // 滑动时才显示数值（mousedown/touchstart 加 dragging，松开移除）
+  ['fFont','fLine','fBlock','fBg','fPadLR','fPadTB'].forEach(id=>{
+    const el=document.getElementById(id);if(!el)return;
+    const row=el.closest('.slider-row');
+    const on=()=>row&&row.classList.add('dragging');
+    const off=()=>row&&row.classList.remove('dragging');
+    el.addEventListener('mousedown',on);el.addEventListener('touchstart',on,{passive:true});
+    el.addEventListener('mouseup',off);el.addEventListener('touchend',off);el.addEventListener('blur',off);
+  });
 function downloadCanvas(c,name){c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);});}
 const btnExportOne=$('#btnExportOne'); if(btnExportOne){ btnExportOne.onclick=()=>{const sc=curScreen();if(!sc.img){toast('请先上传这张屏的视觉图');return;}
   const a=document.createElement('a');a.href=sc.img;a.download='screen_'+String(sc.id).padStart(2,'0')+'.png';a.click();}; }
@@ -919,6 +936,17 @@ function showImageChooser(imgs,sc){
 }
 /* ============ 生成模式切换 ============ */
 let GEN_MODE='t2i';
+function setPreviewMode(mode){
+  const sc=$('#previewScroller');if(!sc)return;
+  sc.classList.toggle('mode-batch',mode==='batch');
+  sc.classList.toggle('mode-single',mode!=='batch');
+  // 单张模式：给当前屏的预览项打 current 标记
+  const curIdx=SCREENS.indexOf(curScreen());
+  $$('.preview-item').forEach(el=>{
+    const i=parseInt(el.dataset.index,10);
+    el.classList.toggle('current',i===curIdx);
+  });
+}
 $('#genMode').addEventListener('click',e=>{const b=e.target.closest('button[data-mode]');if(!b)return;
   GEN_MODE=b.dataset.mode;const all=$('#genMode').querySelectorAll('button');all.forEach(x=>x.classList.toggle('active',x===b));
   const bp=$('#batchPanel'), sp=$('#singleGenPanel');
@@ -929,7 +957,13 @@ $('#genMode').addEventListener('click',e=>{const b=e.target.closest('button[data
       ? '图生图：会用顶部上传的底图 + 下面提示词改写场景（redfox 必须此模式）。'
       : '文生图：只填下面提示词，AI 直接出图（Pollinations / Seedream 等免底图）。';
   }
+  setPreviewMode(GEN_MODE);
 });
+// 切屏幕/切功能时，让预览跟随
+const _origSwitchScreen=switchScreen;
+switchScreen=function(i){_origSwitchScreen(i);setPreviewMode(GEN_MODE);};
+const _origSwitchFunc=switchFunc;
+switchFunc=function(n){_origSwitchFunc(n);setPreviewMode(GEN_MODE);};
 
 /* ============ 批量详情页：提示词模板引擎 ============
 基于电商详情页标准结构（首屏主图→卖点提炼→细节展示→使用场景→参数对比→买家秀/售后），
@@ -1239,7 +1273,7 @@ function applyProviderUI(p){
   desc.textContent=p.desc||'';
   if(p.needsKey){
     keyWrap.style.display='';
-    keyLabel.textContent=p.id==='custom'?'鉴权 Token（可选）':'API Key（'+p.name+'）';
+    if(keyLabel){ keyLabel.textContent=p.id==='custom'?'鉴权 Token（可选）':'API Key（'+p.name+'）'; }
     keyLink.href=p.getKey&&p.getKey.startsWith('http')?p.getKey:'#';
     keyLink.style.display=p.getKey&&p.getKey.startsWith('http')?'inline-block':'none';
   }else{
@@ -1315,6 +1349,7 @@ $('#apiKey').oninput=e=>{try{localStorage.setItem('wb_apikey',e.target.value.tri
 try{const ep=localStorage.getItem(ENDPOINT_KEY);if(ep)$('#apiEndpoint').value=ep;}catch(e){}
 loadProviders();
 buildStylePick();buildScreenList();refreshDetail();showProductPreview();
+setPreviewMode(GEN_MODE);   // 初始化预览模式（默认单张）
 
 /* ============ 提示词库 ============ */
 const PKEY='wb_prompts_v1';
