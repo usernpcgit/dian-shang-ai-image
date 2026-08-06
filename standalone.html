@@ -666,7 +666,7 @@ function initDragTabs(navSel, indSel, onActivate){
       let best=items[0];
       for(const it of items){ if(Math.abs(it.cx-x)<Math.abs(best.cx-x)) best=it; }
       suppressClick=true; setTimeout(()=>{suppressClick=false;},250);   // 吞掉拖动后自动触发的 click
-      onActivate(best.b.dataset.tab);                   // 弹簧吸附 + 切换视图
+      onActivate(best.b);                                // 传按钮元素，由调用方取正确的 dataset 属性（tab/func 等）
     }
   };
   nav.addEventListener('pointerup',endDrag);
@@ -674,9 +674,9 @@ function initDragTabs(navSel, indSel, onActivate){
   nav.addEventListener('contextmenu',e=>e.preventDefault());   // 屏蔽长按右键菜单/系统菜单
   nav.addEventListener('click',e=>{ if(suppressClick){ e.stopPropagation(); e.preventDefault(); suppressClick=false; } },true);
 }
-initDragTabs('nav.tabs','#tabIndicator',tabId=>switchTab(tabId));
-initDragTabs('#funcTabs','#funcIndicator',fn=>switchFunc(fn));
-initDragTabs('#screenList','#screenIndicator',idx=>switchScreen(parseInt(idx,10)));
+initDragTabs('nav.tabs','#tabIndicator',btn=>switchTab(btn.dataset.tab));
+initDragTabs('#funcTabs','#funcIndicator',btn=>switchFunc(btn.dataset.func));
+initDragTabs('#screenList','#screenIndicator',btn=>switchScreen(parseInt(btn.dataset.tab,10)));
 // 通用：indicator 位置更新（left+width，rAF 节流防止掉帧）
 function applyIndTransform(ind, parent, rect){
   const L=rect.left-parent.left, w=rect.width;
