@@ -842,6 +842,7 @@ function rebuildPreviewStack(){
     }
     previewStack.appendChild(wrap);
   });
+  setPreviewMode(GEN_MODE);   // 重建后重新标记当前屏（单张模式靠 .current 决定是否显示）
 }
 
 /** 只更新某一个 screen 对应的预览项 */
@@ -867,6 +868,7 @@ function updatePreviewItem(idx){
     wrap.appendChild(ph);
   }
   old.parentNode.replaceChild(wrap,old);
+  setPreviewMode(GEN_MODE);   // 重建某一项后重新标记当前屏，避免单张模式下当前项被隐藏
 }
 
 function refreshDetail(){
