@@ -660,9 +660,10 @@ function initDragTabs(navSel, indSel, onActivate){
     nav.classList.remove('dragging');
     state=null;
     if(wasDrag){
-      const x=(e.clientX!=null?e.clientX:lastX);
-      // 用最新几何找最近 tab
-      const {items}=geom();
+      const {p,items}=geom();                            // 取最新几何（防止布局变化导致误判）
+      // ★关键修复：x 必须转成 nav-local（减掉 p.left），否则和 it.cx（已减 p.left）坐标系不一致，
+      //   导致「离指针最近的 tab」永远算成最右那个（屏幕标签总跳到10、funcTabs 总跳到 API）
+      const x=(e.clientX!=null?e.clientX:lastX)-p.left;
       let best=items[0];
       for(const it of items){ if(Math.abs(it.cx-x)<Math.abs(best.cx-x)) best=it; }
       suppressClick=true; setTimeout(()=>{suppressClick=false;},250);   // 吞掉拖动后自动触发的 click
