@@ -335,7 +335,50 @@
                   <div class="seg" id="genMode">
                     <button type="button" data-mode="t2i" class="active">文生图</button>
                     <button type="button" data-mode="i2i">图生图（用底图）</button>
+                    <button type="button" data-mode="batch">🚀 批量详情页</button>
                   </div>
+                  <!-- 批量详情页模式的产品信息输入区（默认隐藏，选 batch 模式时显示） -->
+                  <div id="batchPanel" style="display:none;margin-top:14px;padding:14px;border:1.5px solid rgba(124,58,237,.25);border-radius:14px;background:rgba(124,58,237,.04)">
+                    <div style="font-weight:800;color:var(--brand);font-size:13px;margin-bottom:10px">🚀 一键生成整套详情页（10-15张不同场景）</div>
+                    <p class="muted" style="font-size:12px;margin:0 0 10px">填入产品基本信息，AI 会自动为每个详情页模块（首屏主图→卖点→细节→场景→对比→售后等）生成不同的提示词，然后逐张调用生图接口，自动填入屏幕 1-N。</p>
+                    <label style="margin-top:6px">产品名称 <span class="muted" style="font-size:11px">（越具体越好，如「乳白色猫眼仿水晶圆珠手串·满钻独角兽吊坠」）</span></label>
+                    <input type="text" id="bpName" placeholder="你的产品叫什么？" style="width:100%;box-sizing:border-box">
+                    <label style="margin-top:8px">产品类目</label>
+                    <select id="bpCategory" style="width:100%;box-sizing:border-box">
+                      <option value="">— 请选择 —</option>
+                      <option value="jewelry">饰品 / 首饰 / 手链项链</option>
+                      <option value="clothing">服装 / 配饰 / 鞋包</option>
+                      <option value="beauty">美妆 / 护肤 / 个护</option>
+                      <option value="home">家居 / 生活百货</option>
+                      <option value="food">食品 / 零食 / 保健品</option>
+                      <option value="digital">数码 / 3C / 电子</option>
+                      <option value="other">其他</option>
+                    </select>
+                    <label style="margin-top:8px">核心卖点（每行一个，AI 会据此展开不同角度的提示词）</label>
+                    <textarea id="bpSellingPoints" rows="3" placeholder="例如：&#10;猫眼石灵动光晕，光线下流光溢彩&#10;满钻独角兽吊坠，精致梦幻&#10;高弹力绳，不勒手易穿戴&#10;百搭日常/通勤/约会场景"></textarea>
+                    <label style="margin-top:8px">目标人群</label>
+                    <input type="text" id="bpAudience" placeholder="例如：18-28岁年轻女性、学生党、上班族" style="width:100%;box-sizing:border-box">
+                    <label style="margin-top:8px">风格关键词（可选，留空则自动匹配类目风格）</label>
+                    <input type="text" id="bpStyle" placeholder="例如：清新梦幻、仙气高级感、浅粉浅蓝" style="width:100%;box-sizing:border-box">
+                    <label style="margin-top:8px">生成数量</label>
+                    <select id="bpCount" style="width:100%;box-sizing:border-box">
+                      <option value="10">10 张（标准详情页）</option>
+                      <option value="12" selected>12 张（完整详情页，推荐）</option>
+                      <option value="15">15 张（加长版详情页）</option>
+                    </select>
+                    <div style="display:flex;gap:8px;margin-top:12px">
+                      <button class="btn" id="btnBatchGen" style="flex:1">🚀 一键生成整套详情页</button>
+                      <button class="ghost" id="btnBatchCancel" type="button" style="display:none;padding:8px 16px;border-radius:12px">取消</button>
+                    </div>
+                    <!-- 批量进度条 -->
+                    <div id="batchProgress" style="display:none;margin-top:12px">
+                      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px"><span id="batchStatusText">准备中…</span><span id="batchCountText">0/0</span></div>
+                      <div style="height:6px;background:rgba(124,58,237,.12);border-radius:3px;overflow:hidden"><div id="batchProgressBar" style="height:100%;background:var(--brand);border-radius:3px;transition:width .3s;width:0%"></div></div>
+                      <div id="batchLog" style="margin-top:8px;font-size:11px;color:var(--muted);max-height:120px;overflow-y:auto"></div>
+                    </div>
+                  </div>
+                  <!-- 以下原有内容在非 batch 模式时显示 -->
+                  <div id="singleGenPanel">
                   <p class="muted" id="modeHint" style="font-size:12px;margin:6px 0 0">文生图：只填下面提示词，AI 直接出图（Pollinations/Seedream 等免底图）。图生图：会用顶部「第 0 步」上传的底图 + 提示词改写场景。</p>
                   <label style="margin-top:10px" for="fPrompt">提示词（AI 据此生成，自由写、越具体越好）</label>
                   <textarea id="fPrompt" rows="3" placeholder="例如：把产品放进清晨咖啡馆场景，柔和自然光，高级电商风，日系极简，画面留白多、干净"></textarea>
@@ -359,6 +402,7 @@
                   <button class="btn" id="btnGenOne" style="width:100%;margin-top:12px">🤖 生成电商图</button>
                   <div class="gen-choices" id="genChoices" style="display:none"></div>
                   <p class="warn" id="genHint" style="margin:8px 0 0;display:none"></p>
+                  </div><!-- /singleGenPanel -->
                 </div>
               </div>
               <div class="sub-panel" data-sub="overlay">
@@ -917,12 +961,251 @@ function showImageChooser(imgs,sc){
 }
 /* ============ 生成模式切换 ============ */
 let GEN_MODE='t2i';
+const $=s=>document.getElementById(s);
 $('#genMode').addEventListener('click',e=>{const b=e.target.closest('button[data-mode]');if(!b)return;
   GEN_MODE=b.dataset.mode;const all=$('#genMode').querySelectorAll('button');all.forEach(x=>x.classList.toggle('active',x===b));
-  $('#modeHint').textContent = GEN_MODE==='i2i'
-    ? '图生图：会用顶部上传的底图 + 下面提示词改写场景（redfox 必须此模式）。'
-    : '文生图：只填下面提示词，AI 直接出图（Pollinations / Seedream 等免底图）。';
+  const bp=$('#batchPanel'), sp=$('#singleGenPanel');
+  if(GEN_MODE==='batch'){bp.style.display='';sp.style.display='none';
+    $('#modeHint').textContent='批量详情页：填入产品信息，AI 自动生成 10-15 张不同场景的详情页图片，一键填满所有屏幕。';
+  }else{bp.style.display='none';sp.style.display='';
+    $('#modeHint').textContent = GEN_MODE==='i2i'
+      ? '图生图：会用顶部上传的底图 + 下面提示词改写场景（redfox 必须此模式）。'
+      : '文生图：只填下面提示词，AI 直接出图（Pollinations / Seedream 等免底图）。';
+  }
 });
+
+/* ============ 批量详情页：提示词模板引擎 ============
+基于电商详情页标准结构（首屏主图→卖点提炼→细节展示→使用场景→参数对比→买家秀/售后），
+根据用户输入的产品信息，自动为每个模块生成不同的提示词。
+每个模板返回 {title, subtitle, body, tags, prompt}，既用于生图也用于叠字内容。 */
+const DETAIL_PAGE_TEMPLATES = [
+  // 1. 首屏主图 —— 产品核心展示 + 主标题
+  {key:'hero', titleFn: p=>`${p.name}，为你而来`, subtitleFn: p=>p.shortName||p.name, body:'', tagsFn: p=>[], promptFn: (p,s)=>`电商产品首屏主图：${p.name}，高清产品居中展示，${s.style}风格，柔和自然光，高级电商质感，画面留白充足干净，不要出现任何文字`},
+  // 2. 卖点提炼 —— 核心卖点图标化/视觉化
+  {key:'selling', titleFn: p=>`为什么选择${p.shortName||'它'}？`, subtitleFn: p=>'核心亮点一览', bodyFn: p=>(p.points||[]).map((pt,i)=>`${i+1}. ${pt}`).join('\n'), tagsFn: p=>['核心卖点','品质保证'], promptFn: (p,s)=>`电商卖点展示图：将"${p.name}"的${(p.points||[]).slice(0,3).join('、')}等核心卖点用视觉化方式呈现，${s.style}风格，干净留白的高级电商排版，柔和光晕点缀`},
+  // 3. 细节特写 —— 材质/工艺/纹理近拍
+  {key:'detail', titleFn: p=>'凝脂玉润，颗颗精选', subtitleFn: p=>'细节见真章', bodyFn: p=>`高品质材质，圆润细腻。光线下呈现迷人光泽，仿佛凝结于指尖的珍宝，质感十足。`, tagsFn: p=>['细节特写','工艺精湛'], promptFn: (p,s)=>`微距特写产品细节图：${p.name}的材质表面与工艺细节，展现纹理、光泽和做工精度，${s.style}风格，浅色干净背景，大量留白，柔光打亮质感`},
+  // 4. 场景图1 —— 生活日常场景
+  {key:'scene1', titleFn: p=>'甜美日常，治愈出街', subtitleFn: p=>'生活中的美好瞬间', bodyFn: p=>`日常穿搭的完美点缀。让每一次出街都更具仪式感，精致吸睛不撞款。`, tagsFn: p=>['生活场景','日常百搭'], promptFn: (p,s)=>`日常生活场景电商图：${p.name}在${getSceneDesc(p.category,'daily')}中的自然使用状态，${s.targetAudience||'年轻女性'}轻松使用，${s.style}风格，柔和自然光，真实生活感`},
+  // 5. 场景图2 —— 不同角度/环境
+  {key:'scene2', titleFn: p=>'知性通勤，温婉加分', subtitleFn: p=>'职场中的低调优雅', bodyFn: p=>`不需要繁琐搭配，单戴就足够出彩。在职场中展现一份灵气与品味。`, tagsFn: p=>['通勤场景','知性优雅'], promptFn: (p,s)=>`通勤办公场景电商图：${p.name}在${getSceneDesc(p.category,'work')}中的专业搭配效果，${s.style}风格，简约高级感，干净利落的构图`},
+  // 6. 尺寸/对比 —— 与日常物品对比参照
+  {key:'compare', titleFn: p=>'大小刚刚好，佩戴更直观', subtitleFn: p=>'真实尺寸参考', bodyFn: p=>`精心设计的尺寸比例，适合不同需求。一眼看懂实际大小，选购不踩雷。`, tagsFn: p=>['尺寸参考','真实对比'], promptFn: (p,s)=>`产品尺寸对比展示图：${p.name}与常见日常物品并排摆放做大小对比，浅色干净背景，${s.style}风格，俯拍或平视角度，清晰直观`},
+  // 7. 功能演示 —— 动作/效果展示
+  {key:'function', titleFn: p=>'柔韧无束缚，轻松戴取', subtitleFn: p=>'人性化设计', bodyFn: p=>`采用高品质材料，耐用不易变形。适合不同使用习惯，方便穿脱无压力。`, tagsFn: p=>['功能演示','便捷实用'], promptFn: (p,s)=>`产品功能演示图：展示${p.name}的使用方法或功能特点（如穿戴/展开/操作），${s.style}风格，步骤清晰，干净背景`},
+  // 8. 搭配建议 —— 搭配其他商品/穿搭灵感
+  {key:'match', titleFn: p=>'多种搭法，百变造型', subtitleFn: p=>'搭配灵感指南', bodyFn: p=>`一件单品，无限可能。无论什么风格都能完美驾驭，让你的穿搭更有层次感。`, tagsFn: p=>['搭配建议','穿搭灵感'], promptFn: (p,s)=>`产品搭配展示图：${p.name}与其他时尚单品（服装/配饰/包包）的组合搭配效果，${s.style}风格，完整穿搭look，杂志级电商大片感`},
+  // 9. 包装/开箱 —— 开箱体验
+  {key:'unbox', titleFn: p=>'开箱即惊喜', subtitleFn: p=>'精致从第一眼开始', bodyFn: p=>`每一处细节都经过精心设计。从包装到本体，给你完整的开箱仪式感。`, tagsFn: p=>['精致包装','开箱体验'], promptFn: (p,s)=>`产品开箱/包装展示图：${p.name}放置于精美包装盒或礼盒中，旁边有丝绒袋/卡片/干花等道具，${s.style}风格，温馨浪漫氛围，浅色调`},
+  // 10. 品牌故事/调性 —— 品牌氛围
+  {key:'brand', titleFn: p=>'一份好礼，送她一抹星光', subtitleFn: p=>'心意之选', bodyFn: p=>`赠予挚友的见证，送给自己的奖励。把美好戴在身上，让每一天都闪闪发光。`, tagsFn: p=>['品牌故事','心意好礼'], promptFn: (p,s)=>`品牌氛围/礼物场景图：${p.name}作为礼物的呈现方式，精美礼盒+贺卡+温馨布置，${s.style}风格，浪漫温暖氛围`},
+  // 11. 用户评价/信任背书
+  {key:'review', titleFn: p=>'她们都在说…', subtitleFn: p=>'真实好评', bodyFn: p=>`「质量超出预期！」「朋友都问我要链接」「戴出去被夸了好几次」——来自真实用户的反馈。`, tagsFn: p=>['真实评价','口碑推荐'], promptFn: (p,s)=>`用户好评/口碑展示图：${p.name}被手持或佩戴的自然状态，模拟真实用户分享照片的风格，${s.style}风格，亲切真实感`},
+  // 12. 购买引导 / CTA
+  {key:'cta', titleFn: p=>'现在就拥有', subtitleFn: p=>'限时品质之选', bodyFn: p=>`品质生活从这一件开始。点击下方立即购买，开启你的精彩每一天。`, tagsFn: p=>['立即购买','限时优惠'], promptFn: (p,s)=>`电商购买引导CTA图：${p.name}居中展示，周围有促销元素（虚光/光晕/星星点缀），${s.style}风格，高级感+紧迫感的平衡`},
+  // 13-15. 额外场景变体（如果用户选15张）
+  {key:'extra1', titleFn: p=>'户外时光，自由随性', subtitleFn: p=>'周末出逃计划', body:'', tagsFn: p=>['户外场景','休闲时光'], promptFn: (p,s)=>`户外休闲场景电商图：${p.name}在户外环境（公园/咖啡馆/旅行）中的使用场景，${s.style}风格，阳光自然光，惬意氛围`},
+  {key:'extra2', titleFn: p=>'夜晚派对，闪耀全场', subtitleFn: p=>'聚光灯下的焦点', body:'', tagsFn: p=>['派对场合','闪耀夺目'], promptFn: (p,s)=>`晚宴/派对场景电商图：${p.name}在灯光下或正式场合的佩戴效果，${s.style}风格，灯光映衬下的璀璨质感`},
+  {key:'extra3', titleFn: p=>'四季皆宜，经典耐看', subtitleFn: p=>'跨越季节的美', body:'', tagsFn: p=>['四季百搭','经典款式'], promptFn: (p,s)=>`季节变换场景电商图：展示${p.name}在不同季节（春夏秋冬）的搭配可能性，${s.style}风格，多样性的统一调性`},
+];
+
+/** 根据类目获取场景描述 */
+function getSceneDesc(cat, type){
+  const scenes = {
+    jewelry:{ daily:'手腕/颈间自然佩戴', work:'简约职场搭配' },
+    clothing:{ daily:'街头/咖啡馆日常穿搭', work:'办公室商务休闲' },
+    beauty:{ daily:'梳妆台前护肤时刻', work:'通勤快速妆容' },
+    home:{ daily:'居家客厅/卧室环境', work:'书房/办公桌布置' },
+    food:{ daily:'餐桌/野餐场景', work:'办公室茶歇时光' },
+    digital:{ daily:'桌面/随身携带', work:'会议室专业设备' },
+    other:{ daily:'日常生活中使用', work:'工作场景中使用' },
+  };
+  return (scenes[cat]||scenes.other)[type] || '日常使用环境中';
+}
+
+/** 根据类目获取默认风格关键词 */
+function getDefaultStyle(category){
+  const styles = {
+    jewelry:'清新梦幻、仙气高级感、浅粉浅蓝色调',
+    clothing:'时尚简约、都市摩登、干净利落',
+    beauty:'温柔纯净、水光透亮、樱花粉调',
+    home:'日系森系、自然木纹、温暖治愈',
+    food:'食欲诱人、暖黄光线、新鲜饱满',
+    digital:'科技冷感、极简黑白、金属质感',
+    other:'清新通透、高级电商风、干净留白',
+  };
+  return styles[category] || styles.other;
+}
+
+/**
+ * 核心函数：根据用户输入的产品信息，生成 N 条详情页提示词（含标题/副标题/正文/标签）。
+ * 返回 [{screenIndex, title, subtitle, body, tags, prompt}, ...]
+ */
+function generateDetailPagePrompts(productInfo, count){
+  const name = productInfo.name || '这款产品';
+  const shortName = name.length > 12 ? name.slice(0, 12) + '…' : name;
+  const category = productInfo.category || 'other';
+  const points = (productInfo.sellingPoints || '').split('\n').map(s => s.trim()).filter(Boolean);
+  const audience = productInfo.audience || '';
+  const styleInput = productInfo.style || '';
+  const style = styleInput || getDefaultStyle(category);
+
+  const p = {name, shortName, category, points, targetAudience: audience, style};
+  const templates = DETAIL_PAGE_TEMPLATES.slice(0, parseInt(count) || 12);
+
+  return templates.map((t, i) => ({
+    screenIndex: i,
+    title: typeof t.titleFn === 'function' ? t.titleFn(p) : (t.title || ''),
+    subtitle: typeof t.subtitleFn === 'function' ? t.subtitleFn(p) : (t.subtitle || ''),
+    body: typeof t.bodyFn === 'function' ? t.bodyFn(p) : (t.body || ''),
+    tags: typeof t.tagsFn === 'function' ? t.tagsFn(p) : (t.tags || []),
+    prompt: typeof t.promptFn === 'function' ? t.promptFn(p, {style}) : (t.prompt || ''),
+  }));
+}
+
+/* ============ 批量详情页：执行生成 ============ */
+let _batchCancelled = false;
+$('#btnBatchGen').onclick = async function(){
+  // 校验必填
+  const name = ($('#bpName') && $('#bpName').value) || '';
+  if (!name.trim()) { toast('请先填写产品名称'); ($('#bpName')||{}).focus(); return; }
+  const provider = ($('#apiProvider') && $('#apiProvider').value) || '';
+  const key = ($('#apiKey') && $('#apiKey').value.trim()) || '';
+  const endpoint = ($('#apiEndpoint') && $('#apiEndpoint').value.trim()) || '';
+  if (provider !== 'pollinations' && !key && provider !== 'custom') {
+    toast('请先在「API」面板填对应 Key'); switchFunc('api'); return;
+  }
+  if (provider === 'custom' && !endpoint) {
+    toast('自定义端点需填写 Base URL'); switchFunc('api'); return;
+  }
+
+  const count = parseInt(($('#bpCount') && $('#bpCount').value) || '12');
+  const size = ($('#fSize') && $('#fSize').value) || '1024x1536';
+
+  // 收集产品信息
+  const productInfo = {
+    name: name.trim(),
+    category: (($('#bpCategory') && $('#bpCategory').value) || '') || 'other',
+    sellingPoints: (($('#bpSellingPoints') && $('#bpSellingPoints').value) || '').trim(),
+    audience: (($('#bpAudience') && $('#bpAudience').value) || '').trim(),
+    style: (($('#bpStyle') && $('#bpStyle').value) || '').trim(),
+  };
+
+  // 生成提示词列表
+  const prompts = generateDetailPagePrompts(productInfo, count);
+  if (!prompts.length) { toast('提示词生成失败'); return; }
+
+  // 确保 SCREENS 数量足够
+  while (SCREENS.length < prompts.length) {
+    const newId = SCREENS.length + 1;
+    SCREENS.push({id:newId, layout:'bottom', title:'', subtitle:'', body:'', tags:[], img:null, lineSpacing:1, charSpacing:1, fontScale:1, bgOpacity:1, padLR:64, padTB:50, prompt:''});
+  }
+  buildScreenList(); // 刷新屏幕标签
+
+  // 显示进度 UI
+  _batchCancelled = false;
+  const progPanel = $('#batchProgress');
+  const progBar = $('#batchProgressBar');
+  const statusText = $('#batchStatusText');
+  const countText = $('#batchCountText');
+  const logEl = $('#batchLog');
+  const cancelBtn = $('#btnBatchCancel');
+  progPanel.style.display = '';
+  cancelBtn.style.display = '';
+  logEl.innerHTML = '';
+  $('#btnBatchGen').disabled = true;
+
+  const log = (msg) => {
+    const d = document.createElement('div'); d.textContent = msg; d.style.marginBottom = '2px'; logEl.appendChild(d);
+    logEl.scrollTop = logEl.scrollHeight;
+  };
+
+  const tk = (window.__accessToken && window.__accessToken()) || '';
+  const gh = {'Content-Type':'application/json'};
+  if (tk) { gh['Authorization'] = 'Bearer ' + tk; gh['X-Access-Token'] = tk; }
+  const pm0 = PROVIDERS_LOCAL.find(x => x.id === provider);
+
+  let successCount = 0, failCount = 0;
+
+  for (let i = 0; i < prompts.length; i++) {
+    if (_batchCancelled) { log('⛔ 已取消'); break; }
+
+    const item = prompts[i];
+    const sc = SCREENS[item.screenIndex];
+    statusText.textContent = `正在生成第 ${i + 1}/${prompts.length} 张：${item.title || '...'}`;
+    countText.textContent = `${i}/${prompts.length}`;
+    progBar.style.width = Math.round((i / prompts.length) * 100) + '%';
+    log(`📝 [${i + 1}/${prompts.length}] ${item.title || '生成中'}…`);
+
+    try {
+      const payload = {
+        provider, key, endpoint,
+        images_b64: [],  // 批量详情页默认文生图
+        prompt: item.prompt,
+        fidelity: ($('#apiFidelity') && $('#apiFidelity').value) || '',
+        quality: ($('#apiQuality') && $('#apiQuality').value) || 'high',
+        size: sc.size || size,
+        n: '1',  // 每张只生成 1 张
+      };
+      if (pm0 && pm0.models && $('#apiModel')) payload.model = $('#apiModel').value;
+
+      const resp = await fetch(PROXY_URL, {method:'POST', headers: gh, body: JSON.stringify(payload)});
+      const j = await resp.json().catch(() => null);
+
+      if (!j || j.error) {
+        failCount++;
+        const errMsg = (j && j.error) || '接口无返回';
+        log(`❌ 第 ${i + 1} 张失败：${errMsg}`);
+        // 即使失败也更新屏幕的文字内容（这样用户至少能看到标题/文案）
+        sc.title = item.title; sc.subtitle = item.subtitle; sc.body = item.body; sc.tags = item.tags; sc.prompt = item.prompt;
+        refreshDetail();
+        continue;
+      }
+
+      const imgs = j.images || [];
+      if (!imgs.length) {
+        failCount++;
+        log(`❌ 第 ${i + 1} 张未返回图片`);
+        continue;
+      }
+
+      // 成功：设置图片 + 文字内容
+      setScreenImg(sc, imgs[0]);
+      sc.title = item.title; sc.subtitle = item.subtitle; sc.body = item.body; sc.tags = item.tags; sc.prompt = item.prompt;
+      successCount++;
+      log(`✅ 第 ${i + 1} 张成功 → 屏幕 ${sc.id}`);
+
+      // 切到当前屏幕让用户看到实时进展
+      cur = item.screenIndex; buildScreenList();
+
+      // 短暂延迟避免请求过快（部分服务商有限流）
+      await new Promise(r => setTimeout(r, 500));
+
+    } catch (err) {
+      failCount++;
+      log(`❌ 第 ${i + 1} 张异常：${err.message || err}`);
+    }
+  }
+
+  // 完成
+  progBar.style.width = '100%';
+  statusText.textContent = `完成！成功 ${successCount} 张，失败 ${failCount} 张`;
+  countText.textContent = `${prompts.length}/${prompts.length}`;
+  cancelBtn.style.display = 'none';
+  $('#btnBatchGen').disabled = false;
+
+  if (successCount > 0) {
+    toast(`🎉 批量生成完成！${successCount}/${prompts.length} 张成功，已自动填入屏幕 1-${prompts.length}`);
+    cur = 0; buildScreenList(); refreshDetail();
+  } else {
+    toast('⚠️ 全部生成失败，请检查 API Key 和网络后重试');
+  }
+};
+
+$('#btnBatchCancel').onclick = function(){
+  _batchCancelled = true;
+  toast('正在取消剩余生成…');
+};
 
 /* ============ 参考图库（IndexedDB） ============ */
 const REF_STORE='refs';let REF_LIB=[],REF_SEL=new Set();
