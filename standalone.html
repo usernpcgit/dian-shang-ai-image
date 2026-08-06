@@ -601,11 +601,13 @@ function initDragTabs(navSel, indSel, onActivate){
   const ind=document.querySelector(indSel); if(!ind) return;
   let state=null, suppressClick=false;
   // 每次重新读几何（防止布局变化导致指示器跑到 nav 外面）
+  // ★关键：cx 转成 nav-local（减掉 p.left），否则 maxL/minL 是 viewport、px 是 nav-local，
+  //        混用坐标导致 clamp 形同虚设，指示器会飘到 nav 外面（实测视频里直接飘出 100+ 像素）
   const geom=()=>{
     const p=nav.getBoundingClientRect();
     const items=[...nav.querySelectorAll('button')].map(b=>{
       const r=b.getBoundingClientRect();
-      return {b, cx:r.left+r.width/2, w:r.width};
+      return {b, cx:r.left+r.width/2-p.left, w:r.width};
     });
     return {p, items};
   };
@@ -636,8 +638,14 @@ function initDragTabs(navSel, indSel, onActivate){
     const span=(ri.cx-li.cx)||1, prog=Math.max(0,Math.min(1,(px-li.cx)/span));
     const w=li.w+(ri.w-li.w)*prog;                     // 宽度在两 tab 之间插值
     const first=items[0], last=items[items.length-1];
-    const minL=first.cx-first.w/2, maxL=last.cx-last.w/2;
-    const L=Math.max(minL,Math.min(maxL,px-w/2));      // 跟随指针并夹紧
+    // ★关键2：clamp 必须同时考虑 L 和 L+w。maxL=last.cx-last.w/2 只夹紧 L；
+    //          当 w>last.w（按钮不等宽或插值扩大）时，L+w 会冲出 nav 右边。
+    //          双重防御：navPadding 用 nav 实际宽度，不用 last 推导
+    const navPadding=5;     // 匹配 CSS nav.tabs{padding:5px}
+    const navInnerW=p.width-navPadding*2;   // nav 内容区宽度（去掉左右 padding）
+    const minL=Math.max(0, first.cx-first.w/2);
+    const maxL=Math.max(minL, navInnerW - w);
+    const L=Math.max(minL,Math.min(maxL,px-w/2));      // 跟随指针并双重夹紧（L 和 L+w）
     state.lastX=e.clientX;
     setInd(L,w);
   });
