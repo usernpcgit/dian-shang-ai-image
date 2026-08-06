@@ -961,7 +961,6 @@ function showImageChooser(imgs,sc){
 }
 /* ============ 生成模式切换 ============ */
 let GEN_MODE='t2i';
-const $=s=>document.getElementById(s);
 $('#genMode').addEventListener('click',e=>{const b=e.target.closest('button[data-mode]');if(!b)return;
   GEN_MODE=b.dataset.mode;const all=$('#genMode').querySelectorAll('button');all.forEach(x=>x.classList.toggle('active',x===b));
   const bp=$('#batchPanel'), sp=$('#singleGenPanel');
