@@ -166,7 +166,7 @@
   /* 单张模式：只显示当前屏的一项 */
   .preview-scroller.mode-single .preview-item:not(.current){display:none}
   .preview-scroller.mode-single .preview-item.current{display:block}
-  .preview-stack .sc-placeholder{aspect-ratio:2/3;background-color:#fff;background-size:contain;background-position:center;background-repeat:no-repeat;display:flex;align-items:center;justify-content:center;color:#999;font-size:13px;padding:20px;text-align:center;box-sizing:border-box;font-weight:700;letter-spacing:.5px}
+  .preview-stack .sc-placeholder{background-color:#fff;background-size:contain;background-position:center;background-repeat:no-repeat;display:flex;align-items:center;justify-content:center;color:#999;font-size:13px;padding:20px;text-align:center;box-sizing:border-box;font-weight:700;letter-spacing:.5px}
   .ios-pill{position:relative;display:flex;gap:4px;padding:5px;background:rgba(124,58,237,.12);border:1px solid rgba(124,58,237,.30);border-radius:999px;box-shadow:0 4px 16px rgba(0,0,0,.4), inset 0 1px 0 rgba(167,139,250,.12)}
   .func-tabs{width:100%;margin-bottom:10px}
   .func-tabs button{position:relative;flex:1;background:transparent;border:none;border-radius:999px;padding:9px 12px;cursor:pointer;text-align:center;color:var(--muted);z-index:1;transition:color .42s cubic-bezier(.16,1,.3,1);font-weight:800;font-size:15px;letter-spacing:.4px}
@@ -791,6 +791,10 @@ const SIZES={
   '1024x1024':{w:1024,h:1024,label:'主图 1:1'},
   '1536x1024':{w:1536,h:1024,label:'横版 3:2'}
 };
+function sizeAspectRatio(sizeStr){
+  const s=SIZES[sizeStr]||SIZES['1024x1536'];
+  return s.w/s.h;
+}
 const SCREENS=[
  {id:1,layout:'top',title:'仙气独角兽，为你而来',subtitle:'仿水晶猫眼石手串 / 精致满钻吊坠',tags:['自带仙气','显白百搭','梦幻点缀'],img:null,lineSpacing:1,charSpacing:1,fontScale:1,bgOpacity:1,padLR:64,padTB:50,prompt:'将这张手串产品图重制为清新梦幻的电商主图：乳白色猫眼质感仿水晶圆珠手串，搭配满钻银色独角兽吊坠，木纹桌面背景，柔和自然光晕，浅粉浅蓝色调，晶莹剔透，干净留白'},
  {id:2,layout:'bottom',title:'腕间一抹温柔，点亮气质',body:'莹润通透的仿水晶，自带温婉光泽。轻松百搭各种日常穿搭，举手投足间尽显温柔仙气。',tags:[],img:null,lineSpacing:1,charSpacing:1,fontScale:1,bgOpacity:1,padLR:64,padTB:50,prompt:'年轻女性白皙手腕特写，腕间佩戴乳白色猫眼手串与满钻独角兽吊坠，浅色毛衣背景，清新仙气，温柔显白'},
@@ -831,6 +835,7 @@ function rebuildPreviewStack(){
     }else{
       const ph=document.createElement('div');
       ph.className='sc-placeholder';
+      ph.style.aspectRatio=sizeAspectRatio(sc.size);
       if(PRODUCT_IMG){ ph.style.backgroundImage="url('"+PRODUCT_IMG+"')"; ph.innerHTML='<div style="background:rgba(255,255,255,.85);padding:6px 14px;border-radius:8px;font-size:12px">屏幕 '+(i+1)+' · 白底图</div>'; }
       else{ ph.innerHTML='<div>屏幕 '+(i+1)+'</div>'; }
       wrap.appendChild(ph);
@@ -856,6 +861,7 @@ function updatePreviewItem(idx){
   }else{
     const ph=document.createElement('div');
     ph.className='sc-placeholder';
+    ph.style.aspectRatio=sizeAspectRatio(sc.size);
     if(PRODUCT_IMG){ ph.style.backgroundImage="url('"+PRODUCT_IMG+"')"; ph.innerHTML='<div style="background:rgba(255,255,255,.85);padding:6px 14px;border-radius:8px;font-size:12px">屏幕 '+(idx+1)+' · 白底图</div>'; }
     else{ ph.innerHTML='<div>屏幕 '+(idx+1)+'</div>'; }
     wrap.appendChild(ph);
@@ -882,7 +888,7 @@ function buildStylePick(){const box=$('#stylePick');box.innerHTML='';
     b.innerHTML=`<span class="swatch" style="background:${s.swatch}"></span>${s.name}`;
     b.onclick=()=>{curStyle=s.id;buildStylePick();$('#stylePrefix').value=s.prefix;refreshDetail();};box.appendChild(b);});}
 $('#stylePrefix').value=getStyle().prefix;
-$('#fSize').onchange=e=>{curScreen().size=e.target.value;refreshDetail();};
+$('#fSize').onchange=e=>{curScreen().size=e.target.value;refreshDetail();updatePreviewItem(cur);};
 $('#fLine').oninput=e=>{curScreen().lineSpacing=parseFloat(e.target.value);$('#valLine').textContent=curScreen().lineSpacing.toFixed(1);refreshDetail();};
   $('#fBlock').oninput=e=>{curScreen().charSpacing=parseFloat(e.target.value);$('#valBlock').textContent=curScreen().charSpacing.toFixed(1);refreshDetail();};
   $('#fBg').oninput=e=>{curScreen().bgOpacity=parseFloat(e.target.value);$('#valBg').textContent=curScreen().bgOpacity.toFixed(2);refreshDetail();};
