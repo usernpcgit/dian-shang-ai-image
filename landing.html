@@ -34,9 +34,13 @@
   header.nav .logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,var(--brand),var(--brand2));
     display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:var(--shadow)}
   header.nav h1{font-size:17px;margin:0;font-weight:800;letter-spacing:.3px}
-  header.nav .links{display:flex;gap:22px;align-items:center}
-  header.nav .links a{font-size:14px;font-weight:600;color:var(--muted);transition:color .2s}
-  header.nav .links a:hover{color:var(--brand)}
+  header.nav .links{display:flex;gap:8px;align-items:center;position:relative;padding:5px;background:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.55);border-radius:999px;box-shadow:0 6px 20px rgba(30,80,140,.08), inset 0 1px 0 rgba(255,255,255,.55)}
+  header.nav .links a{position:relative;z-index:1;font-size:14px;font-weight:700;color:var(--muted);padding:7px 14px;border-radius:999px;transition:color .32s cubic-bezier(.16,1,.3,1);-webkit-tap-highlight-color:transparent}
+  header.nav .links a.active{color:var(--brand)}
+  /* iOS26 长按拖动指示器（落地页顶部链接） */
+  header.nav .link-indicator{position:absolute;top:5px;bottom:5px;background:rgba(255,255,255,.45);border:1px solid rgba(255,255,255,.72);border-radius:999px;box-shadow:0 2px 14px rgba(30,80,140,.12), inset 0 1px 2px rgba(255,255,255,.6);transition:left .58s cubic-bezier(.16,1,.3,1), width .58s cubic-bezier(.16,1,.3,1), background .32s;z-index:0;pointer-events:none}
+  header.nav .links.dragging{cursor:grabbing}
+  header.nav .links.dragging .link-indicator{transition:none!important;background:rgba(255,255,255,.55);border-color:rgba(255,255,255,.88)}
   header.nav .nav-cta{padding:9px 18px;font-size:14px}
   /* Hero */
   .hero{padding:74px 0 56px;text-align:center}
@@ -161,11 +165,12 @@
     <div class="logo">🛍️</div>
     <h1>电商AI Image</h1>
   </div>
-  <nav class="links">
-    <a href="#features">功能</a>
-    <a href="#examples">示例</a>
-    <a href="#pricing">价格</a>
-    <a href="#faq">常见问题</a>
+  <nav class="links" id="navLinks">
+    <div class="link-indicator" id="linksIndicator"></div>
+    <a href="#features" data-tab="features">功能</a>
+    <a href="#examples" data-tab="examples">示例</a>
+    <a href="#pricing" data-tab="pricing">价格</a>
+    <a href="#faq" data-tab="faq">常见问题</a>
   </nav>
   <a class="btn nav-cta" href="/tool">立即使用 ↗</a>
 </header>
@@ -414,6 +419,117 @@
   // 购买按钮
   document.getElementById('buy1').onclick = e=>{ e.preventDefault(); openPay('personal'); };
   document.getElementById('buy2').onclick = e=>{ e.preventDefault(); openPay('commercial'); };
+
+  /* ============ 落地页顶部链接：iOS26 长按拖动 + 松手吸附 + 平滑滚动 ============ */
+  function initDragTabs(navSel, indSel, onActivate){
+    const nav=document.querySelector(navSel); if(!nav) return;
+    const ind=document.querySelector(indSel); if(!ind) return;
+    if(!nav.style.touchAction) nav.style.touchAction='none';
+    nav.style.userSelect='none'; nav.style.webkitUserSelect='none'; nav.style.cursor='grab';
+    let state=null, suppressClick=false;
+    const geom=()=>{
+      const p=nav.getBoundingClientRect();
+      const items=[...nav.querySelectorAll('a[data-tab]')].map(b=>{
+        const r=b.getBoundingClientRect();
+        return {b, cx:r.left+r.width/2-p.left, w:r.width};
+      });
+      return {p, items};
+    };
+    const setInd=(L,w)=>{ind.style.left=L+'px';ind.style.width=w+'px';};
+    // 初始化 indicator 到当前 active
+    function syncInd(){
+      const active=nav.querySelector('a.active') || nav.querySelector('a[data-tab]');
+      if(!active) return;
+      const r=active.getBoundingClientRect(), p=nav.getBoundingClientRect();
+      setInd(r.left-p.left, r.width);
+    }
+    requestAnimationFrame(syncInd);
+    window.addEventListener('resize',()=>requestAnimationFrame(syncInd));
+    nav.addEventListener('pointerdown',e=>{
+      if(e.pointerType==='mouse'&&e.button!==0) return;
+      const g=geom(), active=nav.querySelector('a.active');
+      const ar=active?active.getBoundingClientRect():{left:g.p.left,width:g.p.width/nav.querySelectorAll('a[data-tab]').length};
+      state={startX:e.clientX,startLeft:ar.left-g.p.left,startW:ar.width,drag:false,lastX:e.clientX,t0:performance.now()};
+    });
+    nav.addEventListener('pointermove',e=>{
+      if(!state) return;
+      const dx=e.clientX-state.startX, hold=performance.now()-state.t0;
+      if(!state.drag){
+        if(hold>=170||Math.abs(dx)>=6){
+          state.drag=true; nav.classList.add('dragging');
+          try{nav.setPointerCapture(e.pointerId);}catch(err){}
+        } else return;
+      }
+      e.preventDefault();
+      const {p,items}=geom();
+      const px=e.clientX-p.left;
+      let li=items[0], ri=items[items.length-1];
+      for(const it of items){ if(it.cx<=px) li=it; if(it.cx>px){ri=it;break;} }
+      const span=(ri.cx-li.cx)||1, prog=Math.max(0,Math.min(1,(px-li.cx)/span));
+      const w=li.w+(ri.w-li.w)*prog;
+      const first=items[0], last=items[items.length-1];
+      const navPadding=5;
+      const navInnerW=p.width-navPadding*2;
+      const minL=Math.max(0, first.cx-first.w/2);
+      const maxL=Math.max(minL, navInnerW - w);
+      const L=Math.max(minL,Math.min(maxL,px-w/2));
+      state.lastX=e.clientX;
+      setInd(L,w);
+    });
+    const endDrag=e=>{
+      if(!state) return;
+      const wasDrag=state.drag, lastX=state.lastX;
+      nav.classList.remove('dragging'); state=null;
+      if(wasDrag){
+        const x=(e.clientX!=null?e.clientX:lastX);
+        const {items}=geom();
+        let best=items[0];
+        for(const it of items){ if(Math.abs(it.cx-x)<Math.abs(best.cx-x)) best=it; }
+        suppressClick=true; setTimeout(()=>{suppressClick=false;},250);
+        onActivate(best.b.dataset.tab);
+      }
+    };
+    nav.addEventListener('pointerup',endDrag);
+    nav.addEventListener('pointercancel',endDrag);
+    nav.addEventListener('click',e=>{ if(suppressClick){ e.stopPropagation(); e.preventDefault(); suppressClick=false; } },true);
+  }
+  function goSection(id){
+    const a=document.querySelector('#navLinks a[data-tab="'+id+'"]');
+    if(!a) return;
+    document.querySelectorAll('#navLinks a').forEach(x=>x.classList.toggle('active', x===a));
+    const target=document.getElementById(id);
+    if(target) target.scrollIntoView({behavior:'smooth', block:'start'});
+  }
+  initDragTabs('#navLinks','#linksIndicator',id=>goSection(id));
+  // 纯点击：仍走 a 标签 href 跳转（不进入 drag 模式时不调 onActivate）
+  // 但为了 active 高亮和一致体验，点击后也调 goSection
+  document.querySelectorAll('#navLinks a').forEach(a=>{
+    a.addEventListener('click',e=>{
+      // 如果不是被拖动吞掉的（suppressClick=true 是 capture phase 已处理），走正常流程
+      e.preventDefault();
+      goSection(a.dataset.tab);
+    });
+  });
+  // 滚动时同步 active（基于当前可见 section）
+  const sectionIds=['features','examples','pricing','faq'];
+  const sectionEls=sectionIds.map(id=>document.getElementById(id)).filter(Boolean);
+  if('IntersectionObserver' in window && sectionEls.length){
+    const obs=new IntersectionObserver(entries=>{
+      // 取最靠近顶部且在视口里的 section
+      const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top);
+      if(visible.length){
+        const id=visible[0].target.id;
+        document.querySelectorAll('#navLinks a').forEach(x=>x.classList.toggle('active', x.dataset.tab===id));
+        const a=document.querySelector('#navLinks a[data-tab="'+id+'"]');
+        if(a){
+          const r=a.getBoundingClientRect(), p=document.querySelector('#navLinks').getBoundingClientRect();
+          const ind=document.getElementById('linksIndicator');
+          ind.style.left=(r.left-p.left)+'px'; ind.style.width=r.width+'px';
+        }
+      }
+    },{rootMargin:'-30% 0px -60% 0px', threshold:0});
+    sectionEls.forEach(el=>obs.observe(el));
+  }
 </script>
 </body>
 </html>
