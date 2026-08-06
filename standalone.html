@@ -74,6 +74,9 @@
   nav.tabs{position:sticky;top:90px;margin:14px auto 10px;animation:navTabsSpring .7s cubic-bezier(0.34,1.56,0.64,1) both;display:flex;gap:2px;width:calc(100% - 32px);max-width:560px;padding:5px;flex-wrap:nowrap;background:linear-gradient(135deg,rgba(255,255,255,.34),rgba(255,255,255,.10));backdrop-filter:blur(28px) saturate(190%);-webkit-backdrop-filter:blur(28px) saturate(190%);border:1px solid rgba(255,255,255,.55);border-radius:999px;box-shadow:0 8px 28px rgba(30,80,140,.10), inset 0 1px 0 rgba(255,255,255,.55), inset 0 -1px 0 rgba(255,255,255,.12);z-index:49}
   nav.tabs::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:2;background:radial-gradient(140% 100% at 18% -20%,rgba(255,255,255,.42),rgba(255,255,255,0) 48%),linear-gradient(90deg,rgba(255,255,255,.14),rgba(255,255,255,0) 38%,rgba(255,255,255,0) 62%,rgba(255,255,255,.10))}
   nav.tabs .tab-indicator{position:absolute;top:5px;bottom:5px;background:transparent;backdrop-filter:blur(15px) saturate(165%);-webkit-backdrop-filter:blur(15px) saturate(165%);border:1px solid rgba(255,255,255,.3);border-radius:999px;box-shadow:0 2px 14px rgba(30,80,140,.10), inset 0 1px 2px rgba(255,255,255,.4);transition:left .65s cubic-bezier(0.34,1.56,0.64,1), width .65s cubic-bezier(0.34,1.56,0.64,1), background .32s;z-index:0;pointer-events:none}
+  nav.tabs{touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}
+  nav.tabs.dragging{cursor:grabbing}
+  nav.tabs.dragging .tab-indicator{transition:none!important}
   nav.tabs button{position:relative;flex:1;min-width:0;background:transparent;border:none;border-radius:10px;padding:9px 14px;cursor:pointer;text-align:center;color:var(--muted);z-index:1;transition:color .42s cubic-bezier(.16,1,.3,1);display:flex;flex-direction:row;align-items:center;justify-content:center;gap:7px}
   nav.tabs button .ic{font-size:17px;line-height:1;filter:grayscale(.35);transition:filter .42s cubic-bezier(.16,1,.3,1), transform .42s cubic-bezier(.16,1,.3,1)}
   nav.tabs button .t{font-weight:700;color:var(--muted);font-size:14px;white-space:nowrap;transition:color .42s cubic-bezier(.16,1,.3,1), font-weight .42s}
@@ -591,6 +594,66 @@ function switchTab(n){
 }
 $$('nav.tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
 const navCta=$('#navCta'); if(navCta) navCta.onclick=()=>switchTab('detail');
+/* ============ iOS26 风格：长按/按住 拖动切换 tab（指示器跟随指针，松手吸附最近项） ============ */
+function initDragTabs(navSel, indSel, onActivate){
+  const nav=document.querySelector(navSel); if(!nav) return;
+  const ind=document.querySelector(indSel); if(!ind) return;
+  let state=null, suppressClick=false;
+  const geom=()=>{
+    const p=nav.getBoundingClientRect();
+    const items=[...nav.querySelectorAll('button')].map(b=>{
+      const r=b.getBoundingClientRect();
+      return {b, cx:r.left+r.width/2, w:r.width};
+    });
+    return {p, items};
+  };
+  const setInd=(L,w)=>{ind.style.left=L+'px';ind.style.width=w+'px';};
+  nav.addEventListener('pointerdown',e=>{
+    if(e.pointerType==='mouse'&&e.button!==0) return;   // 只响应左键
+    const g=geom(), active=nav.querySelector('button.active');
+    const ar=active?active.getBoundingClientRect():{left:g.p.left,width:g.p.width/4};
+    state={g,startX:e.clientX,startLeft:ar.left-g.p.left,startW:ar.width,drag:false,lastX:e.clientX,t0:performance.now()};
+    try{nav.setPointerCapture(e.pointerId);}catch(err){}
+  });
+  nav.addEventListener('pointermove',e=>{
+    if(!state) return;
+    const dx=e.clientX-state.startX, hold=performance.now()-state.t0;
+    if(!state.drag){                       // 长按(≥170ms)或移动≥6px 进入拖动模式，区分"点击"
+      if(hold>=170||Math.abs(dx)>=6) state.drag=true; else return;
+    }
+    e.preventDefault();
+    const {p,items}=state.g;
+    const px=e.clientX-p.left;
+    let li=items[0], ri=items[items.length-1];
+    for(const it of items){ if(it.cx<=px) li=it; if(it.cx>px){ri=it;break;} }
+    const span=(ri.cx-li.cx)||1, prog=Math.max(0,Math.min(1,(px-li.cx)/span));
+    const w=li.w+(ri.w-li.w)*prog;                     // 宽度在两 tab 之间插值
+    const first=items[0], last=items[items.length-1];
+    const minL=first.cx-first.w/2, maxL=last.cx-last.w/2;
+    const L=Math.max(minL,Math.min(maxL,px-w/2));      // 跟随指针并夹紧
+    state.lastX=e.clientX;
+    nav.classList.add('dragging');                     // 拖动中禁用指示器动画
+    setInd(L,w);
+  });
+  const endDrag=e=>{
+    if(!state) return;
+    const wasDrag=state.drag, g=state.g, lastX=state.lastX;
+    nav.classList.remove('dragging');
+    state=null;
+    if(wasDrag){
+      const x=(e.clientX!=null?e.clientX:lastX);
+      let best=g.items[0];
+      for(const it of g.items){ if(Math.abs(it.cx-x)<Math.abs(best.cx-x)) best=it; }
+      suppressClick=true; setTimeout(()=>{suppressClick=false;},250);   // 吞掉拖动后自动触发的 click
+      onActivate(best.b.dataset.tab);                   // 弹簧吸附 + 切换视图
+    }
+  };
+  nav.addEventListener('pointerup',endDrag);
+  nav.addEventListener('pointercancel',endDrag);
+  nav.addEventListener('contextmenu',e=>e.preventDefault());   // 屏蔽长按右键菜单/系统菜单
+  nav.addEventListener('click',e=>{ if(suppressClick){ e.stopPropagation(); e.preventDefault(); suppressClick=false; } },true);
+}
+initDragTabs('nav.tabs','#tabIndicator',tabId=>switchTab(tabId));
 function updateScreenIndicator(){
   const ind=$('#screenIndicator'), active=$('#screenList button.active');
   if(!ind||!active) return;
