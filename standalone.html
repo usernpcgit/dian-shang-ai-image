@@ -899,14 +899,14 @@ $('#fFont').oninput=e=>{curScreen().fontScale=parseFloat(e.target.value);$('#val
 $('#fPadLR').oninput=e=>{curScreen().padLR=parseInt(e.target.value);$('#valPadLR').textContent=curScreen().padLR;refreshDetail();};
 $('#fPadTB').oninput=e=>{curScreen().padTB=parseInt(e.target.value);$('#valPadTB').textContent=curScreen().padTB;refreshDetail();};
 function downloadCanvas(c,name){c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);});}
-$('#btnExportOne').onclick=()=>{const sc=curScreen();if(!sc.img){toast('请先上传这张屏的视觉图');return;}
-  const a=document.createElement('a');a.href=sc.img;a.download='screen_'+String(sc.id).padStart(2,'0')+'.png';a.click();};
-$('#btnExportRaw').onclick=()=>{const sc=curScreen();if(!sc.img){toast('当前没有可导出的原图');return;}
-  const a=document.createElement('a');a.href=sc.img;a.download='raw_'+String(sc.id).padStart(2,'0')+'.png';a.click();};
-$('#btnExportAll').onclick=async()=>{let n=0;for(const sc of SCREENS){if(!sc.img)continue;
+const btnExportOne=$('#btnExportOne'); if(btnExportOne){ btnExportOne.onclick=()=>{const sc=curScreen();if(!sc.img){toast('请先上传这张屏的视觉图');return;}
+  const a=document.createElement('a');a.href=sc.img;a.download='screen_'+String(sc.id).padStart(2,'0')+'.png';a.click();}; }
+const btnExportRaw=$('#btnExportRaw'); if(btnExportRaw){ btnExportRaw.onclick=()=>{const sc=curScreen();if(!sc.img){toast('当前没有可导出的原图');return;}
+  const a=document.createElement('a');a.href=sc.img;a.download='raw_'+String(sc.id).padStart(2,'0')+'.png';a.click();}; }
+const btnExportAll=$('#btnExportAll'); if(btnExportAll){ btnExportAll.onclick=async()=>{let n=0;for(const sc of SCREENS){if(!sc.img)continue;
   const a=document.createElement('a');a.href=sc.img;a.download='screen_'+String(sc.id).padStart(2,'0')+'.png';a.click();
   n++;await new Promise(r=>setTimeout(r,300));}
-  toast(n?('已导出 '+n+' 张'):'没有可导出的屏（请先上传图片）');};
+  toast(n?('已导出 '+n+' 张'):'没有可导出的屏（请先上传图片）');}; }
 const PROXY_URL = location.origin.startsWith('http') ? '/api/gen' : 'http://localhost:8765/api/gen';
 function dataURLtoBlob(u){const h=u.split(',')[0];const m=h.match(/:(.*?);/)[1];const bin=atob(u.split(',')[1]);const arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return new Blob([arr],{type:m});}
 function setScreenImg(sc,img){sc.img=img;updatePreviewItem(SCREENS.indexOf(sc));}
