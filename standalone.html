@@ -168,9 +168,6 @@
   .preview-scroller.mode-single .preview-item.current{display:block}
   .preview-stack .sc-placeholder{aspect-ratio:2/3;background:linear-gradient(135deg,#1a1a24,#0d0d12);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;padding:20px;text-align:center;box-sizing:border-box;font-weight:700;letter-spacing:.5px}
   .ios-pill{position:relative;display:flex;gap:4px;padding:5px;background:rgba(124,58,237,.12);border:1px solid rgba(124,58,237,.30);border-radius:999px;box-shadow:0 4px 16px rgba(0,0,0,.4), inset 0 1px 0 rgba(167,139,250,.12)}
-  .screen-tabs{width:100%;justify-content:space-between}
-  .screen-tabs button{position:relative;flex:1;min-width:0;background:transparent;border:none;border-radius:999px;padding:9px 4px;cursor:pointer;text-align:center;color:var(--muted);z-index:1;transition:color .42s cubic-bezier(.16,1,.3,1),opacity .3s;font-weight:800;font-size:14px;letter-spacing:.3px}
-  .screen-tabs button.active{color:var(--brand)}
   .func-tabs{width:100%;margin-bottom:10px}
   .func-tabs button{position:relative;flex:1;background:transparent;border:none;border-radius:999px;padding:9px 12px;cursor:pointer;text-align:center;color:var(--muted);z-index:1;transition:color .42s cubic-bezier(.16,1,.3,1);font-weight:800;font-size:15px;letter-spacing:.4px}
   .func-tabs button.active{color:var(--brand)}
@@ -325,9 +322,6 @@
     <h3>制作这一屏</h3>
     <div class="work-area">
       <div class="left-col">
-        <div class="ios-pill screen-tabs" id="screenList">
-          <div class="pill-indicator" id="screenIndicator"></div>
-        </div>
         <div class="preview-scroller" id="previewScroller">
           <div class="preview-stack" id="previewStack"></div>
         </div>
@@ -699,17 +693,11 @@ function initDragTabs(navSel, indSel, onActivate){
 }
 initDragTabs('nav.tabs','#tabIndicator',btn=>switchTab(btn.dataset.tab));
 initDragTabs('#funcTabs','#funcIndicator',btn=>switchFunc(btn.dataset.func));
-initDragTabs('#screenList','#screenIndicator',btn=>switchScreen(parseInt(btn.dataset.tab,10)));
 // 通用：indicator 位置更新（left+width，rAF 节流防止掉帧）
 function applyIndTransform(ind, parent, rect){
   const L=rect.left-parent.left, w=rect.width;
   ind.style.left=L+'px';
   ind.style.width=w+'px';
-}
-function updateScreenIndicator(){
-  const ind=$('#screenIndicator'), active=$('#screenList button.active');
-  if(!ind||!active) return;
-  applyIndTransform(ind, active.parentElement.getBoundingClientRect(), active.getBoundingClientRect());
 }
 function updateFuncIndicator(){
   const ind=$('#funcIndicator'), active=$('#funcTabs button.active');
@@ -722,7 +710,7 @@ function switchFunc(n){
   requestAnimationFrame(updateFuncIndicator);
 }
 $$('#funcTabs button').forEach(b=>b.onclick=()=>switchFunc(b.dataset.func));
-function updateAllIndicators(){updateTabIndicator();updateScreenIndicator();updateFuncIndicator();}
+function updateAllIndicators(){updateTabIndicator();updateFuncIndicator();}
 window.addEventListener('resize',updateAllIndicators);
 
 /* ============ 日间 / 夜间模式 ============ */
@@ -882,14 +870,7 @@ function refreshDetail(){
   $('#valLine').textContent=(sc.lineSpacing||1).toFixed(1);$('#valBlock').textContent=(sc.charSpacing||1).toFixed(1);$('#valBg').textContent=(sc.bgOpacity||1).toFixed(2);$('#valFont').textContent=(sc.fontScale||1).toFixed(2);
   $('#valPadLR').textContent=sc.padLR||64;$('#valPadTB').textContent=sc.padTB||50;
 }
-function buildScreenList(){const box=$('#screenList');const ind=$('#screenIndicator');box.innerHTML='';if(ind)box.appendChild(ind);
-  SCREENS.forEach((s,i)=>{const b=document.createElement('button');
-    b.innerHTML = '<span class="t">'+s.id+'</span>' + (s.img ? '<span class="dot" style="position:absolute;top:4px;right:4px;width:7px;height:7px;border-radius:50%;background:#22c55e"></span>' : '');
-    b.dataset.tab=String(i);b.classList.toggle('active',i===cur);
-    if(!s.img) b.style.opacity='0.45';
-    b.onclick=()=>{switchScreen(i);};box.appendChild(b);});
-  requestAnimationFrame(updateScreenIndicator);}
-function switchScreen(i){cur=i;buildScreenList();refreshDetail();
+function switchScreen(i){cur=i;refreshDetail();
   // 滚动到对应预览项
   const el=document.getElementById('previewItem_'+cur);
   if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
@@ -959,9 +940,7 @@ $('#genMode').addEventListener('click',e=>{const b=e.target.closest('button[data
   }
   setPreviewMode(GEN_MODE);
 });
-// 切屏幕/切功能时，让预览跟随
-const _origSwitchScreen=switchScreen;
-switchScreen=function(i){_origSwitchScreen(i);setPreviewMode(GEN_MODE);};
+// 切功能时，让预览跟随
 const _origSwitchFunc=switchFunc;
 switchFunc=function(n){_origSwitchFunc(n);setPreviewMode(GEN_MODE);};
 
@@ -1091,7 +1070,7 @@ $('#btnBatchGen').onclick = async function(){
     const newId = SCREENS.length + 1;
     SCREENS.push({id:newId, layout:'bottom', title:'', subtitle:'', body:'', tags:[], img:null, lineSpacing:1, charSpacing:1, fontScale:1, bgOpacity:1, padLR:64, padTB:50, prompt:''});
   }
-  buildScreenList(); // 刷新屏幕标签
+  // 刷新界面
 
   // 显示进度 UI
   _batchCancelled = false;
@@ -1167,7 +1146,7 @@ $('#btnBatchGen').onclick = async function(){
       log(`✅ 第 ${i + 1} 张成功 → 屏幕 ${sc.id}`);
 
       // 切到当前屏幕让用户看到实时进展
-      cur = item.screenIndex; buildScreenList();
+      cur = item.screenIndex;
 
       // 短暂延迟避免请求过快（部分服务商有限流）
       await new Promise(r => setTimeout(r, 500));
@@ -1187,7 +1166,7 @@ $('#btnBatchGen').onclick = async function(){
 
   if (successCount > 0) {
     toast(`🎉 批量生成完成！${successCount}/${prompts.length} 张成功，已自动填入屏幕 1-${prompts.length}`);
-    cur = 0; buildScreenList(); refreshDetail();
+    cur = 0; refreshDetail();
   } else {
     toast('⚠️ 全部生成失败，请检查 API Key 和网络后重试');
   }
@@ -1348,7 +1327,7 @@ try{const k=localStorage.getItem('wb_apikey');if(k)$('#apiKey').value=k;}catch(e
 $('#apiKey').oninput=e=>{try{localStorage.setItem('wb_apikey',e.target.value.trim());}catch(x){}};
 try{const ep=localStorage.getItem(ENDPOINT_KEY);if(ep)$('#apiEndpoint').value=ep;}catch(e){}
 loadProviders();
-buildStylePick();buildScreenList();refreshDetail();showProductPreview();
+buildStylePick();refreshDetail();showProductPreview();
 setPreviewMode(GEN_MODE);   // 初始化预览模式（默认单张）
 
 /* ============ 提示词库 ============ */
