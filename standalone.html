@@ -166,7 +166,7 @@
   /* 单张模式：只显示当前屏的一项 */
   .preview-scroller.mode-single .preview-item:not(.current){display:none}
   .preview-scroller.mode-single .preview-item.current{display:block}
-  .preview-stack .sc-placeholder{aspect-ratio:2/3;background:linear-gradient(135deg,#1a1a24,#0d0d12);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;padding:20px;text-align:center;box-sizing:border-box;font-weight:700;letter-spacing:.5px}
+  .preview-stack .sc-placeholder{aspect-ratio:2/3;background-color:#fff;background-size:contain;background-position:center;background-repeat:no-repeat;display:flex;align-items:center;justify-content:center;color:#999;font-size:13px;padding:20px;text-align:center;box-sizing:border-box;font-weight:700;letter-spacing:.5px;border:2px solid rgba(124,58,237,.35);border-radius:10px}
   .ios-pill{position:relative;display:flex;gap:4px;padding:5px;background:rgba(124,58,237,.12);border:1px solid rgba(124,58,237,.30);border-radius:999px;box-shadow:0 4px 16px rgba(0,0,0,.4), inset 0 1px 0 rgba(167,139,250,.12)}
   .func-tabs{width:100%;margin-bottom:10px}
   .func-tabs button{position:relative;flex:1;background:transparent;border:none;border-radius:999px;padding:9px 12px;cursor:pointer;text-align:center;color:var(--muted);z-index:1;transition:color .42s cubic-bezier(.16,1,.3,1);font-weight:800;font-size:15px;letter-spacing:.4px}
@@ -810,8 +810,8 @@ try{const p=localStorage.getItem('wb_product');if(p)PRODUCT_IMG=p;}catch(e){}
 function showProductPreview(){const box=$('#productPrev');if(PRODUCT_IMG){box.style.display='flex';$('#productThumb').src=PRODUCT_IMG;$('#productName').textContent='底图已载入（图生图用）';}else{box.style.display='none';}}
 $('#fProduct').onchange=async e=>{const f=e.target.files[0];if(!f)return;
   const u=await compressImage(f,1024);
-  PRODUCT_IMG=u;try{localStorage.setItem('wb_product',u);}catch(e){}showProductPreview();toast('底图已载入（已压缩，生图更快）');};
-$('#btnProductClear').onclick=()=>{PRODUCT_IMG=null;try{localStorage.removeItem('wb_product');}catch(e){}showProductPreview();$('#fProduct').value='';toast('已移除白底图');};
+  PRODUCT_IMG=u;try{localStorage.setItem('wb_product',u);}catch(e){}showProductPreview();rebuildPreviewStack();toast('底图已载入（已压缩，生图更快）');};
+$('#btnProductClear').onclick=()=>{PRODUCT_IMG=null;try{localStorage.removeItem('wb_product');}catch(e){}showProductPreview();rebuildPreviewStack();$('#fProduct').value='';toast('已移除白底图');};
 const previewStack=$('#previewStack');
 function loadImg(u){return new Promise(r=>{const im=new Image();im.onload=()=>r(im);im.src=u;});}
 
@@ -831,7 +831,8 @@ function rebuildPreviewStack(){
     }else{
       const ph=document.createElement('div');
       ph.className='sc-placeholder';
-      ph.innerHTML='<div>屏幕 '+(i+1)+'</div>';
+      if(PRODUCT_IMG){ ph.style.backgroundImage="url('"+PRODUCT_IMG+"')"; ph.innerHTML='<div style="background:rgba(255,255,255,.85);padding:6px 14px;border-radius:8px;font-size:12px">屏幕 '+(i+1)+' · 白底图</div>'; }
+      else{ ph.innerHTML='<div>屏幕 '+(i+1)+'</div>'; }
       wrap.appendChild(ph);
     }
     previewStack.appendChild(wrap);
@@ -855,7 +856,8 @@ function updatePreviewItem(idx){
   }else{
     const ph=document.createElement('div');
     ph.className='sc-placeholder';
-    ph.innerHTML='<div>屏幕 '+(idx+1)+'</div>';
+    if(PRODUCT_IMG){ ph.style.backgroundImage="url('"+PRODUCT_IMG+"')"; ph.innerHTML='<div style="background:rgba(255,255,255,.85);padding:6px 14px;border-radius:8px;font-size:12px">屏幕 '+(idx+1)+' · 白底图</div>'; }
+    else{ ph.innerHTML='<div>屏幕 '+(idx+1)+'</div>'; }
     wrap.appendChild(ph);
   }
   old.parentNode.replaceChild(wrap,old);
