@@ -613,13 +613,17 @@ function initDragTabs(navSel, indSel, onActivate){
     const g=geom(), active=nav.querySelector('button.active');
     const ar=active?active.getBoundingClientRect():{left:g.p.left,width:g.p.width/4};
     state={g,startX:e.clientX,startLeft:ar.left-g.p.left,startW:ar.width,drag:false,lastX:e.clientX,t0:performance.now()};
-    try{nav.setPointerCapture(e.pointerId);}catch(err){}
+    // 注意：不在此处捕获指针！否则普通点击的 click 事件会被重定向到 nav，按钮 onclick 不触发（桌面点按失效的根因）
   });
   nav.addEventListener('pointermove',e=>{
     if(!state) return;
     const dx=e.clientX-state.startX, hold=performance.now()-state.t0;
     if(!state.drag){                       // 长按(≥170ms)或移动≥6px 进入拖动模式，区分"点击"
-      if(hold>=170||Math.abs(dx)>=6) state.drag=true; else return;
+      if(hold>=170||Math.abs(dx)>=6){
+        state.drag=true;
+        nav.classList.add('dragging');     // 拖动中禁用指示器动画
+        try{nav.setPointerCapture(e.pointerId);}catch(err){}   // 仅进入拖动才捕获，保证普通点击正常
+      } else return;
     }
     e.preventDefault();
     const {p,items}=state.g;
@@ -632,7 +636,6 @@ function initDragTabs(navSel, indSel, onActivate){
     const minL=first.cx-first.w/2, maxL=last.cx-last.w/2;
     const L=Math.max(minL,Math.min(maxL,px-w/2));      // 跟随指针并夹紧
     state.lastX=e.clientX;
-    nav.classList.add('dragging');                     // 拖动中禁用指示器动画
     setInd(L,w);
   });
   const endDrag=e=>{
