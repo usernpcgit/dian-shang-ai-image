@@ -73,7 +73,8 @@
   @keyframes navTabsSpring{0%{transform:translateY(-12px) scale(.96);opacity:.5}100%{transform:translateY(0) scale(1);opacity:1}}
   nav.tabs{position:sticky;top:90px;margin:14px auto 10px;animation:navTabsSpring .7s cubic-bezier(0.34,1.56,0.64,1) both;display:flex;gap:2px;width:calc(100% - 32px);max-width:560px;padding:5px;flex-wrap:nowrap;background:linear-gradient(135deg,rgba(255,255,255,.34),rgba(255,255,255,.10));backdrop-filter:blur(28px) saturate(190%);-webkit-backdrop-filter:blur(28px) saturate(190%);border:1px solid rgba(255,255,255,.55);border-radius:999px;box-shadow:0 8px 28px rgba(30,80,140,.10), inset 0 1px 0 rgba(255,255,255,.55), inset 0 -1px 0 rgba(255,255,255,.12);z-index:49}
   nav.tabs::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:2;background:radial-gradient(140% 100% at 18% -20%,rgba(255,255,255,.42),rgba(255,255,255,0) 48%),linear-gradient(90deg,rgba(255,255,255,.14),rgba(255,255,255,0) 38%,rgba(255,255,255,0) 62%,rgba(255,255,255,.10))}
-  nav.tabs .tab-indicator{position:absolute;top:5px;bottom:5px;background:transparent;backdrop-filter:blur(15px) saturate(165%);-webkit-backdrop-filter:blur(15px) saturate(165%);border:1px solid rgba(255,255,255,.3);border-radius:999px;box-shadow:0 2px 14px rgba(30,80,140,.10), inset 0 1px 2px rgba(255,255,255,.4);transition:left .65s cubic-bezier(0.34,1.56,0.64,1), width .65s cubic-bezier(0.34,1.56,0.64,1), background .32s;z-index:0;pointer-events:none}
+  nav.tabs .tab-indicator{position:absolute;top:5px;bottom:5px;background:rgba(255,255,255,.06);backdrop-filter:blur(15px) saturate(165%);-webkit-backdrop-filter:blur(15px) saturate(165%);border:1px solid rgba(255,255,255,.55);border-radius:999px;box-shadow:0 2px 14px rgba(30,80,140,.12), inset 0 1px 2px rgba(255,255,255,.5);transition:left .65s cubic-bezier(0.34,1.56,0.64,1), width .65s cubic-bezier(0.34,1.56,0.64,1), background .32s, border-color .32s, box-shadow .32s;z-index:0;pointer-events:none}
+  nav.tabs.dragging .tab-indicator{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.78);box-shadow:0 3px 18px rgba(30,80,140,.18), inset 0 1px 2px rgba(255,255,255,.65)}
   nav.tabs{touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}
   nav.tabs.dragging{cursor:grabbing}
   nav.tabs.dragging .tab-indicator{transition:none!important}
@@ -599,6 +600,7 @@ function initDragTabs(navSel, indSel, onActivate){
   const nav=document.querySelector(navSel); if(!nav) return;
   const ind=document.querySelector(indSel); if(!ind) return;
   let state=null, suppressClick=false;
+  // 每次重新读几何（防止布局变化导致指示器跑到 nav 外面）
   const geom=()=>{
     const p=nav.getBoundingClientRect();
     const items=[...nav.querySelectorAll('button')].map(b=>{
@@ -612,7 +614,7 @@ function initDragTabs(navSel, indSel, onActivate){
     if(e.pointerType==='mouse'&&e.button!==0) return;   // 只响应左键
     const g=geom(), active=nav.querySelector('button.active');
     const ar=active?active.getBoundingClientRect():{left:g.p.left,width:g.p.width/4};
-    state={g,startX:e.clientX,startLeft:ar.left-g.p.left,startW:ar.width,drag:false,lastX:e.clientX,t0:performance.now()};
+    state={startX:e.clientX,startLeft:ar.left-g.p.left,startW:ar.width,drag:false,lastX:e.clientX,t0:performance.now()};
     // 注意：不在此处捕获指针！否则普通点击的 click 事件会被重定向到 nav，按钮 onclick 不触发（桌面点按失效的根因）
   });
   nav.addEventListener('pointermove',e=>{
@@ -626,7 +628,8 @@ function initDragTabs(navSel, indSel, onActivate){
       } else return;
     }
     e.preventDefault();
-    const {p,items}=state.g;
+    // ★关键：每次重新读几何（不用 pointerdown 时的缓存），防止布局/动画变化导致指示器跑到 nav 外
+    const {p,items}=geom();
     const px=e.clientX-p.left;
     let li=items[0], ri=items[items.length-1];
     for(const it of items){ if(it.cx<=px) li=it; if(it.cx>px){ri=it;break;} }
@@ -640,13 +643,15 @@ function initDragTabs(navSel, indSel, onActivate){
   });
   const endDrag=e=>{
     if(!state) return;
-    const wasDrag=state.drag, g=state.g, lastX=state.lastX;
+    const wasDrag=state.drag, lastX=state.lastX;
     nav.classList.remove('dragging');
     state=null;
     if(wasDrag){
       const x=(e.clientX!=null?e.clientX:lastX);
-      let best=g.items[0];
-      for(const it of g.items){ if(Math.abs(it.cx-x)<Math.abs(best.cx-x)) best=it; }
+      // 用最新几何找最近 tab
+      const {items}=geom();
+      let best=items[0];
+      for(const it of items){ if(Math.abs(it.cx-x)<Math.abs(best.cx-x)) best=it; }
       suppressClick=true; setTimeout(()=>{suppressClick=false;},250);   // 吞掉拖动后自动触发的 click
       onActivate(best.b.dataset.tab);                   // 弹簧吸附 + 切换视图
     }
