@@ -1029,6 +1029,11 @@ class H(BaseHTTPRequestHandler):
                 body = f.read()
             self.send_response(200)
             self.send_header("Content-Type", ctype)
+            # 门禁/工具页禁止浏览器缓存：避免用户端长期缓存旧版 standalone.html，
+            # 导致「点解锁没反应」等旧 bug 复现（旧页面门禁逻辑可能被改过）。
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
             self._cors()
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
