@@ -329,8 +329,6 @@
       <div class="right-col">
         <div class="ios-pill func-tabs" id="funcTabs">
           <button data-func="content" class="active"><span class="t">内容</span></button>
-          <button data-func="font"><span class="t">字体</span></button>
-          <button data-func="bg"><span class="t">背景</span></button>
           <button data-func="api"><span class="t">API</span></button>
           <div class="pill-indicator" id="funcIndicator"></div>
         </div>
@@ -412,22 +410,6 @@
                   </div><!-- /singleGenPanel -->
                 </div>
               </div>
-          </div>
-          <div class="func-panel" data-func="font">
-            <div class="sg">
-              <div style="font-weight:800;color:var(--brand);font-size:13px;margin-bottom:8px">字体与排版调节</div>
-              <div class="slider-row"><label>字体大小</label><input type="range" id="fFont" min="0.6" max="1.6" step="0.05" value="1"><span class="val" id="valFont">1.00</span></div>
-              <div class="slider-row"><label>字体行间距</label><input type="range" id="fLine" min="0.6" max="2.0" step="0.1" value="1"><span class="val" id="valLine">1.0</span></div>
-              <div class="slider-row"><label>字体间距</label><input type="range" id="fBlock" min="0.6" max="2.0" step="0.1" value="1"><span class="val" id="valBlock">1.0</span></div>
-              <div class="slider-row"><label>左右间距</label><input type="range" id="fPadLR" min="20" max="180" step="4" value="64"><span class="val" id="valPadLR">64</span></div>
-              <div class="slider-row"><label>上下间距</label><input type="range" id="fPadTB" min="20" max="200" step="4" value="50"><span class="val" id="valPadTB">50</span></div>
-            </div>
-          </div>
-          <div class="func-panel" data-func="bg">
-            <div class="sg">
-              <div style="font-weight:800;color:var(--brand);font-size:13px;margin-bottom:8px">背景遮罩</div>
-              <div class="slider-row"><label>背景深浅</label><input type="range" id="fBg" min="0.2" max="1.0" step="0.05" value="1"><span class="val" id="valBg">1.00</span></div>
-            </div>
           </div>
           <div class="func-panel" data-func="api">
             <div class="api-panel">
@@ -875,10 +857,6 @@ function refreshDetail(){
   const sc=curScreen();
   $('#fSize').value=sc.size||'1024x1536';
   $('#genChoices').style.display='none';
-  $('#fLine').value=sc.lineSpacing||1;$('#fBlock').value=sc.charSpacing||1;$('#fBg').value=sc.bgOpacity||1;$('#fFont').value=sc.fontScale||1;
-  $('#fPadLR').value=sc.padLR||64;$('#fPadTB').value=sc.padTB||50;
-  $('#valLine').textContent=(sc.lineSpacing||1).toFixed(1);$('#valBlock').textContent=(sc.charSpacing||1).toFixed(1);$('#valBg').textContent=(sc.bgOpacity||1).toFixed(2);$('#valFont').textContent=(sc.fontScale||1).toFixed(2);
-  $('#valPadLR').textContent=sc.padLR||64;$('#valPadTB').textContent=sc.padTB||50;
 }
 function switchScreen(i){cur=i;refreshDetail();
   // 滚动到对应预览项
@@ -891,21 +869,6 @@ function buildStylePick(){const box=$('#stylePick');box.innerHTML='';
     b.onclick=()=>{curStyle=s.id;buildStylePick();$('#stylePrefix').value=s.prefix;refreshDetail();};box.appendChild(b);});}
 $('#stylePrefix').value=getStyle().prefix;
 $('#fSize').onchange=e=>{curScreen().size=e.target.value;refreshDetail();updatePreviewItem(cur);};
-$('#fLine').oninput=e=>{curScreen().lineSpacing=parseFloat(e.target.value);$('#valLine').textContent=curScreen().lineSpacing.toFixed(1);refreshDetail();};
-  $('#fBlock').oninput=e=>{curScreen().charSpacing=parseFloat(e.target.value);$('#valBlock').textContent=curScreen().charSpacing.toFixed(1);refreshDetail();};
-  $('#fBg').oninput=e=>{curScreen().bgOpacity=parseFloat(e.target.value);$('#valBg').textContent=curScreen().bgOpacity.toFixed(2);refreshDetail();};
-  $('#fFont').oninput=e=>{curScreen().fontScale=parseFloat(e.target.value);$('#valFont').textContent=curScreen().fontScale.toFixed(2);refreshDetail();};
-  $('#fPadLR').oninput=e=>{curScreen().padLR=parseInt(e.target.value);$('#valPadLR').textContent=curScreen().padLR;refreshDetail();};
-  $('#fPadTB').oninput=e=>{curScreen().padTB=parseInt(e.target.value);$('#valPadTB').textContent=curScreen().padTB;refreshDetail();};
-  // 滑动时才显示数值（mousedown/touchstart 加 dragging，松开移除）
-  ['fFont','fLine','fBlock','fBg','fPadLR','fPadTB'].forEach(id=>{
-    const el=document.getElementById(id);if(!el)return;
-    const row=el.closest('.slider-row');
-    const on=()=>row&&row.classList.add('dragging');
-    const off=()=>row&&row.classList.remove('dragging');
-    el.addEventListener('mousedown',on);el.addEventListener('touchstart',on,{passive:true});
-    el.addEventListener('mouseup',off);el.addEventListener('touchend',off);el.addEventListener('blur',off);
-  });
 function downloadCanvas(c,name){c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);});}
 const btnExportOne=$('#btnExportOne'); if(btnExportOne){ btnExportOne.onclick=()=>{const sc=curScreen();if(!sc.img){toast('请先上传这张屏的视觉图');return;}
   const a=document.createElement('a');a.href=sc.img;a.download='screen_'+String(sc.id).padStart(2,'0')+'.png';a.click();}; }
