@@ -544,6 +544,18 @@
     </div>
     <div id="productGrid" style="margin-top:10px"></div>
   </div>
+
+  <!-- 素材图库：上传/筛选/预览个人素材图（脚本 uploadGallery/renderGallery 依赖下面 4 个元素） -->
+  <div class="card" style="margin-top:14px">
+    <h3 style="margin-top:0;display:flex;justify-content:space-between;align-items:center"><span>🖼️ 素材图库</span>
+      <label class="btn sm" style="cursor:pointer;margin:0">＋ 上传图片<input type="file" id="gUpload" accept="image/*" multiple style="display:none"></label>
+    </h3>
+    <div class="row" style="margin-bottom:10px">
+      <div><label>按标签筛选</label><input type="text" id="gFilterTag" placeholder="标签关键词，如 爆款"></div>
+      <div><label>按备注筛选</label><input type="text" id="gFilterNote" placeholder="备注关键词"></div>
+    </div>
+    <div id="galleryGrid" class="gallery-grid"></div>
+  </div>
 </section>
 
 <!-- ============ 使用说明 ============ -->
