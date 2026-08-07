@@ -150,10 +150,6 @@
   button.danger{background:var(--panel);color:var(--danger);border:1.5px solid var(--danger);padding:8px 15px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700}
   button.sm{font-size:12.5px;padding:7px 13px}
   /* 详情页 */
-  .style-pick{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 4px}
-  .style-pick button{background:var(--panel);border:1.5px solid var(--line);border-radius:12px;padding:10px 16px;cursor:pointer;font-size:15px;font-weight:800;letter-spacing:.5px;display:flex;align-items:center;gap:9px;color:var(--ink)}
-  .style-pick button.active{border-color:var(--brand);box-shadow:0 0 0 2px rgba(124,58,237,.30);color:var(--brand)}
-  .swatch{width:18px;height:18px;border-radius:50%;border:1.5px solid rgba(255,255,255,.15);flex-shrink:0}
   .work-area{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
   .left-col{flex:0 0 320px;display:flex;flex-direction:column;gap:14px;position:sticky;top:0;align-self:flex-start}
   .right-col{flex:1;min-width:300px}
@@ -295,14 +291,6 @@
       <div class="step"><b>③ AI 生图</b><span>点「AI 生成这张屏」，白底图+提示词变场景图</span></div>
       <div class="step"><b>④ 导出</b><span>点「导出这张」或「全部 10 张」</span></div>
     </div>
-  </div>
-
-  <div class="card">
-    <h3>先挑一个风格</h3>
-    <p class="desc">风格决定整体配色和"生图时的画面调性"。想换风格，点这里切换即可，所有屏一起变。</p>
-    <div class="style-pick" id="stylePick"></div>
-    <label>当前风格的生图提示词前缀（给 AI 生图用，可改）</label>
-    <input type="text" id="stylePrefix" placeholder="例如：清新梦幻、浅粉浅蓝、仙气高级感">
   </div>
 
   <div class="card">
@@ -496,7 +484,6 @@
     <ol>
       <li>打开「做详情页」页（默认就在这）。</li>
       <li>最上方「<b>第 0 步</b>」上传一张<b>产品白底图</b>（图上只有产品、背景纯白/透明最好）。它是 AI 生图的底图，10 屏共用，只需传一次。</li>
-      <li>点「<b>先挑一个风格</b>」选一套配色（默认是<b>天空蓝</b>，还有甜粉梦幻 / 高级黑金 / 清新森系 / 国潮 / 简约白）。</li>
       <li>上方点 <b>第几屏</b>，填标题/文案，右边<strong>实时预览</strong>效果。</li>
       <li>切到「<b>内容</b>」面板，写一句<strong>提示词</strong>（想让 AI 生成什么样的电商图，越具体越好），可选上传底图 / 参考图，点「🤖 <b>生成电商图</b>」，AI 直接出图放入本屏。也可在下方「叠字内容」填标题文案叠加导出。</li>
       <li>满意了点「<b>导出这张 PNG</b>」，或「<b>导出全部 10 张</b>」一次性出片。</li>
@@ -741,30 +728,6 @@ try{ applyTheme((localStorage.getItem('wb_theme')||'auto')); }catch(e){}
 requestAnimationFrame(updateAllIndicators);
 window.addEventListener('load',updateAllIndicators);
 
-/* ============ 风格包 ============ */
-const STYLES=[
-  {id:'sky',name:'天空蓝',swatch:'#2E9BE6',
-   colors:{title:[26,90,140],subtitle:[46,120,170],body:[70,100,125],tag_bg:[232,243,253],tag_color:[40,120,180],gradient:[235,246,253]},
-   prefix:'清新通透的电商产品图：天空蓝色调、干净明亮、柔和自然光、清爽留白、轻盈高级感，画面不要出现任何文字'},
-  {id:'sweet',name:'甜粉梦幻',swatch:'#E8639B',
-   colors:{title:[199,92,153],subtitle:[214,120,170],body:[140,105,130],tag_bg:[255,244,250],tag_color:[214,110,165],gradient:[255,235,244]},
-   prefix:'清新梦幻的电商产品图：浅粉浅蓝色调、仙气高级感、柔和自然光、晶莹剔透、干净留白，画面不要出现任何文字'},
-  {id:'gold',name:'高级黑金',swatch:'#1A1A1A',
-   colors:{title:[212,175,110],subtitle:[200,170,120],body:[210,210,210],tag_bg:[30,30,30],tag_color:[220,180,110],gradient:[20,20,20]},
-   prefix:'轻奢高级感电商产品图：黑金配色、金属质感、光影层次、极简留白、低调奢华，画面不要出现任何文字'},
-  {id:'forest',name:'清新森系',swatch:'#5BA87C',
-   colors:{title:[58,110,78],subtitle:[90,140,110],body:[80,100,90],tag_bg:[240,248,242],tag_color:[60,130,95],gradient:[235,247,240]},
-   prefix:'清新森系电商产品图：自然绿白、日系干净、柔和 daylight、植物质感、大量留白，画面不要出现任何文字'},
-  {id:'guochao',name:'国潮复古',swatch:'#C0392B',
-   colors:{title:[176,40,30],subtitle:[200,90,60],body:[90,60,55],tag_bg:[250,242,235],tag_color:[180,50,40],gradient:[248,238,230]},
-   prefix:'国潮复古风电商产品图：中国红与金、传统纹样、喜庆典雅、质感厚重、留白构图，画面不要出现任何文字'},
-  {id:'minimal',name:'简约白底',swatch:'#EEEEEE',
-   colors:{title:[40,40,40],subtitle:[90,90,90],body:[70,70,70],tag_bg:[245,245,245],tag_color:[60,60,60],gradient:[255,255,255]},
-   prefix:'极简电商产品图：纯白背景、产品居中、干净专业、柔和阴影、商业摄影感，画面不要出现任何文字'}
-];
-let curStyle='sky';
-const getStyle=()=>STYLES.find(s=>s.id===curStyle)||STYLES[0];
-
 /* ============ 详情页叠文案 ============ */
 const F={title:48,title_main:56,subtitle:30,body:28,tag:24};
 const PAD=64,TITLE_LH=64,SUB_LH=40,BODY_LH=40,TAG_H=40;
@@ -863,11 +826,6 @@ function switchScreen(i){cur=i;refreshDetail();
   const el=document.getElementById('previewItem_'+cur);
   if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
 }
-function buildStylePick(){const box=$('#stylePick');box.innerHTML='';
-  STYLES.forEach(s=>{const b=document.createElement('button');b.classList.toggle('active',s.id===curStyle);
-    b.innerHTML=`<span class="swatch" style="background:${s.swatch}"></span>${s.name}`;
-    b.onclick=()=>{curStyle=s.id;buildStylePick();$('#stylePrefix').value=s.prefix;refreshDetail();};box.appendChild(b);});}
-$('#stylePrefix').value=getStyle().prefix;
 $('#fSize').onchange=e=>{curScreen().size=e.target.value;refreshDetail();updatePreviewItem(cur);};
 function downloadCanvas(c,name){c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);});}
 const btnExportOne=$('#btnExportOne'); if(btnExportOne){ btnExportOne.onclick=()=>{const sc=curScreen();if(!sc.img){toast('请先上传这张屏的视觉图');return;}
@@ -1300,7 +1258,7 @@ try{const k=localStorage.getItem('wb_apikey');if(k)$('#apiKey').value=k;}catch(e
 $('#apiKey').oninput=e=>{try{localStorage.setItem('wb_apikey',e.target.value.trim());}catch(x){}};
 try{const ep=localStorage.getItem(ENDPOINT_KEY);if(ep)$('#apiEndpoint').value=ep;}catch(e){}
 loadProviders();
-buildStylePick();rebuildPreviewStack();refreshDetail();showProductPreview();
+rebuildPreviewStack();refreshDetail();showProductPreview();
 setPreviewMode(GEN_MODE);   // 初始化预览模式（默认单张）
 
 /* ============ 提示词库 ============ */
