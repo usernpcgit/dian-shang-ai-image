@@ -255,6 +255,25 @@
   .ref-grid .ritem .del{position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.7);color:#fff;border:none;font-size:11px;line-height:18px;cursor:pointer}
   .ref-grid .ritem .tick{position:absolute;left:3px;bottom:3px;background:var(--brand);color:#fff;border-radius:50%;width:16px;height:16px;font-size:10px;line-height:16px;text-align:center;display:none}
   .ref-grid .ritem.sel .tick{display:block}
+  /* ============ 竞品情报库卡片 ============ */
+  .pcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px;box-shadow:var(--shadow)}
+  .pcard.refed{border-color:var(--brand);box-shadow:0 0 0 2px rgba(124,58,237,.25),var(--shadow)}
+  .pc-head{display:flex;gap:12px;align-items:flex-start}
+  .pthumb{width:66px;height:66px;border-radius:10px;object-fit:cover;flex-shrink:0;background:var(--panel2);border:1px solid var(--line)}
+  .pthumb-empty{width:66px;height:66px;border-radius:10px;flex-shrink:0;background:var(--panel2);border:1px dashed var(--line);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted);text-align:center;padding:4px}
+  .pc-meta{flex:1;min-width:0}
+  .pc-title{font-weight:800;font-size:14.5px;color:var(--ink);margin-bottom:6px;word-break:break-word}
+  .pbadge{display:inline-block;background:rgba(124,58,237,.18);border:1px solid rgba(124,58,237,.4);color:#C4B5FD;font-size:11.5px;font-weight:800;padding:2px 9px;border-radius:999px;margin-right:6px}
+  .pc-tags{display:flex;flex-wrap:wrap;margin-top:8px}
+  .pc-analysis{margin-top:10px;padding:10px 12px;border-radius:10px;background:rgba(124,58,237,.06);border:1px solid rgba(124,58,237,.18);font-size:12.5px;color:var(--muted);line-height:1.65}
+  .pc-analysis b{color:#C4B5FD}
+  .pc-analysis details{margin-top:8px}
+  .pc-analysis summary{cursor:pointer;color:#C4B5FD;font-weight:800;font-size:12.5px;outline:none}
+  .pc-det{margin-top:6px;font-size:12px;color:var(--muted);line-height:1.6}
+  .pc-det b{color:#C4B5FD;display:block;margin-top:7px}
+  .pc-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .pc-actions .ghost.sm{padding:5px 12px}
+  .pc-actions a.ghost.sm{text-decoration:none;display:inline-flex;align-items:center}
 </style>
 </head>
 <body>
@@ -454,23 +473,73 @@
   </div>
 </section>
 
-<!-- ============ 素材库 ============ -->
+<!-- ============ 素材库（竞品情报） ============ -->
 <section class="view" id="view-gallery">
   <div class="guide">
-    <h4>🖼️ 素材库是干嘛的？</h4>
-    <p class="muted" style="margin:0">把做好的图、参考图传进来，打标签、写备注、点开看大图、下载或删除。存在你浏览器里，关了再开还在。</p>
-  </div>
-  <div class="card">
-    <h3>上传素材（可一次选多张）</h3>
-    <input type="file" id="gUpload" accept="image/*" multiple>
-  </div>
-  <div class="card">
-    <h3>筛选</h3>
-    <div class="row">
-      <div><label>按标签筛选</label><input type="text" id="gFilterTag" placeholder="如：主图"></div>
-      <div><label>按备注关键词</label><input type="text" id="gFilterNote" placeholder="如：待修"></div>
+    <h4>🔍 竞品情报库</h4>
+    <p class="muted" style="margin:0">上传各平台<strong>高销量商品</strong>的链接和主图，AI 分析它的主图套路、标题策略、SKU 设计、详情页逻辑。把竞品标记为「生图学习参考」，生成时 AI 会自动偷师这些套路，生图更聪明高效。</p>
+    <div id="refStatusBar" style="margin-top:10px;padding:8px 12px;border-radius:10px;background:rgba(124,58,237,.05);border:1px solid rgba(124,58,237,.15);font-size:12px;display:none">
+      📚 当前 <b id="refCountActive">0</b> 个竞品作为生图学习参考，生成时会自动注入分析结论。
+      <button class="ghost sm" id="btnClearRefs" type="button" style="margin-left:8px;padding:3px 10px">清空</button>
     </div>
-    <div class="gallery-grid" id="galleryGrid" style="margin-top:14px"></div>
+  </div>
+
+  <!-- 添加竞品 -->
+  <div class="card">
+    <h3 style="margin-top:0">添加竞品</h3>
+    <div class="row" style="margin-bottom:10px">
+      <div><label>商品链接</label><input type="text" id="pUrl" placeholder="粘贴商品页 URL（淘宝/京东/拼多多/抖音/1688/Amazon...）"></div>
+      <div><label>所属平台</label>
+        <select id="pPlatform">
+          <option value="">— 自动识别 —</option>
+          <option value="taobao">淘宝 / 天猫</option>
+          <option value="jd">京东</option>
+          <option value="pdd">拼多多</option>
+          <option value="douyin">抖音电商</option>
+          <option value="1688">1688</option>
+          <option value="amazon">Amazon</option>
+          <option value="other">其他</option>
+        </select>
+      </div>
+    </div>
+    <div class="row" style="margin-bottom:10px">
+      <div><label>商品标题（必填，影响分析质量）</label><input type="text" id="pTitle2" placeholder="复制商品标题粘贴到这里"></div>
+      <div><label>类目</label><input type="text" id="pCategory2" placeholder="如：饰品/手链、服装/连衣裙"></div>
+    </div>
+    <div style="margin-bottom:10px">
+      <label>主图截图或图片（上传 1 张，AI 会分析构图/配色/拍摄角度）</label>
+      <input type="file" id="pMainImg" accept="image/*">
+    </div>
+    <div class="row" style="margin-bottom:10px">
+      <div><label>价格区间（可选）</label><input type="text" id="pPrice" placeholder="如：29.9-89 或 ¥199"></div>
+      <div><label>备注标签（逗号分隔，可选）</label><input type="text" id="pTags2" placeholder="如：爆款,新品,直播款"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn" id="btnAnalyzeProduct" style="flex:1">🤖 AI 分析竞品</button>
+      <button class="ghost" id="btnQuickAdd" type="button" style="padding:8px 16px;border-radius:12px">快速存入（暂不分析）</button>
+    </div>
+    <div id="analysisProgress" style="display:none;margin-top:10px;padding:10px;border-radius:10px;background:rgba(124,58,237,.04);border:1px solid rgba(124,58,237,.15)">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px"><span id="analysisStatusText">正在分析…</span></div>
+      <div style="height:4px;background:rgba(124,58,237,.1);border-radius:2px;overflow:hidden"><div id="analysisBar" style="height:100%;background:var(--brand);border-radius:2px;width:0%;transition:width .4s"></div></div>
+      <div id="analysisResultText" style="margin-top:8px;font-size:12px;color:var(--muted);max-height:80px;overflow-y:auto"></div>
+    </div>
+  </div>
+
+  <!-- 筛选 + 列表 -->
+  <div class="card">
+    <h3 style="margin-top:0;display:flex;justify-content:space-between;align-items:center"><span>已存竞品 (<span id="productCount">0</span>)</span>
+      <button class="ghost sm" id="btnExportProducts" type="button">📦 导出备份 JSON</button>
+    </h3>
+    <div class="row" style="margin-bottom:10px">
+      <div><label>按平台筛选</label>
+        <select id="pfPlatform"><option value="">全部平台</option>
+          <option value="taobao">淘宝/天猫</option><option value="jd">京东</option><option value="pdd">拼多多</option>
+          <option value="douyin">抖音</option><option value="1688">1688</option><option value="amazon">Amazon</option><option value="other">其他</option>
+        </select>
+      </div>
+      <div><label>按关键词搜索</label><input type="text" id="pfKeyword" placeholder="搜索标题/备注/分析内容"></div>
+    </div>
+    <div id="productGrid" style="margin-top:10px"></div>
   </div>
 </section>
 
@@ -1027,6 +1096,8 @@ $('#btnBatchGen').onclick = async function(){
   const pm0 = PROVIDERS_LOCAL.find(x => x.id === provider);
 
   let successCount = 0, failCount = 0;
+  const _compCtxBatch=getCompetitorContext();
+  if(_compCtxBatch){log('🧠 已融入 '+PROD_REF.size+' 个竞品分析套路到每张图');}
 
   for (let i = 0; i < prompts.length; i++) {
     if (_batchCancelled) { log('⛔ 已取消'); break; }
@@ -1042,7 +1113,7 @@ $('#btnBatchGen').onclick = async function(){
       const payload = {
         provider, key, endpoint,
         images_b64: [],  // 批量详情页默认文生图
-        prompt: item.prompt,
+        prompt: item.prompt + (_compCtxBatch||''),
         fidelity: ($('#apiFidelity') && $('#apiFidelity').value) || '',
         quality: ($('#apiQuality') && $('#apiQuality').value) || 'high',
         size: sc.size || size,
@@ -1127,13 +1198,200 @@ $('#btnAddRef').onclick=()=>$('#fRef').click();
 $('#fRef').onchange=async e=>{for(const f of e.target.files){const u=await compressImage(f,1024);await refPut({id:'r'+Date.now()+Math.random().toString(36).slice(2,5),name:f.name,data:u});}e.target.value='';renderRefs();updateRefCount();toast('参考图已加入图库');};
 function compressImage(file,maxW){return new Promise((res,rej)=>{const rd=new FileReader();rd.onload=()=>{const img=new Image();img.onload=()=>{let w=img.width,h=img.height;const s=Math.min(1,maxW/w);const cw=Math.round(w*s),ch=Math.round(h*s);const cv=document.createElement('canvas');cv.width=cw;cv.height=ch;cv.getContext('2d').drawImage(img,0,0,cw,ch);res(cv.toDataURL('image/jpeg',0.82));};img.onerror=rej;img.src=rd.result;};rd.onerror=rej;rd.readAsDataURL(file);});}
 
+/* ============ 竞品情报库（IndexedDB） ============ */
+const PROD_STORE='products';let PROD_LIB=[],PROD_REF=new Set();
+function prodAll(){return new Promise((res,rej)=>{const tx=dbp.transaction(PROD_STORE,'readonly').objectStore(PROD_STORE).getAll();tx.onsuccess=()=>res(tx.result);tx.onerror=()=>rej(tx.error);});}
+function prodPut(o){return new Promise((res,rej)=>{const tx=dbp.transaction(PROD_STORE,'readwrite').objectStore(PROD_STORE).put(o);tx.onsuccess=()=>res();tx.onerror=()=>rej(tx.error);});}
+function prodDel(id){return new Promise((res,rej)=>{const tx=dbp.transaction(PROD_STORE,'readwrite').objectStore(PROD_STORE).delete(id);tx.onsuccess=()=>res();tx.onerror=()=>rej(tx.error);});}
+const PLATFORM_LABEL={taobao:'淘宝/天猫',jd:'京东',pdd:'拼多多',douyin:'抖音电商',1688:'1688',amazon:'Amazon',other:'其他'};
+function escapeHtml(s){return (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+/* —— 竞品分析（前端启发式 mock；后端就绪后替换为真实大模型分析，签名保持一致 —— */
+function mockAnalyze(p){
+  const title=(p.title||'').trim();
+  const plat=(PLATFORM_LABEL[p.platform]||'该平台');
+  const tSnippet=title?('「'+title.slice(0,14)+(title.length>14?'…':'')+'」'):'品类热词';
+  const main=[
+    '主图采用纯白/浅色干净背景，产品居中大图，第一眼聚焦商品本身，符合'+plat+'高转化主图惯例',
+    '主图构图留白充足、弱化文字干扰，用柔光打亮产品质感，提升点击率',
+    (p.main_image?'已上传主图，建议复用其「构图 / 配色 / 拍摄角度」作为自家生图模板':'未上传主图，建议补一张竞品主图用于构图偷师')
+  ];
+  const titleIns=[
+    '标题嵌入核心卖点词（如 '+tSnippet+'），命中搜索流量',
+    '标题结构：品类词 + 属性词 + 场景词 + 营销词，覆盖'+plat+'搜索召回',
+    '建议自家标题沿用「痛点词 + 利益点 + 人群/场景」的排布，提升搜索曝光'
+  ];
+  const sku=[
+    'SKU 按「颜色 / 规格 / 套餐」做矩阵组合，给买家充足选择且拉高客单',
+    'SKU 主图统一风格，缩略图一眼区分，降低选择成本',
+    '建议自家 SKU 图沿用竞品的配色与排版节奏，保持系列感'
+  ];
+  const detail=[
+    '详情页首屏用「场景图 + 卖点标签」快速建立信任，前 3 屏讲清为什么买',
+    '详情页用对比图 / 尺寸图 / 材质特写打消疑虑，降低退货率',
+    '建议自家详情页套用竞品的「痛点 → 卖点 → 证据 → 促销」叙事顺序'
+  ];
+  const summary='综合判断：高销量来自「主图强聚焦 + 标题命中搜索 + SKU 矩阵提客单 + 详情页强信任」四件套协同；可复用的生图套路：干净留白主图 + 柔光质感 + 场景化卖点图 + 统一系列调性。';
+  return {summary,main_image:main,title:titleIns,sku,detail};
+}
+
+/* —— 表单读取 —— */
+async function readProductForm(){
+  const f={
+    url:($('#pUrl').value||'').trim(),
+    platform:$('#pPlatform').value||'',
+    title:($('#pTitle2').value||'').trim(),
+    category:($('#pCategory2').value||'').trim(),
+    price:($('#pPrice').value||'').trim(),
+    tags:($('#pTags2').value||'').split(',').map(s=>s.trim()).filter(Boolean),
+    main_image:null
+  };
+  if(!f.title){toast('请填写商品标题（影响分析质量）');$('#pTitle2').focus();return null;}
+  const fi=$('#pMainImg');
+  if(fi.files&&fi.files[0]){try{f.main_image=await compressImage(fi.files[0],1024);}catch(e){console.warn('主图压缩失败',e);}}
+  return f;
+}
+function resetProductForm(){$('#pUrl').value='';$('#pTitle2').value='';$('#pCategory2').value='';$('#pPrice').value='';$('#pTags2').value='';$('#pMainImg').value='';$('#pPlatform').value='';}
+
+/* —— 进度动画 —— */
+async function runAnalysisProgress(){
+  const prog=$('#analysisProgress'),bar=$('#analysisBar'),status=$('#analysisStatusText'),resEl=$('#analysisResultText');
+  prog.style.display='block';bar.style.width='0%';resEl.textContent='';resEl.innerHTML='';
+  const steps=[{t:'识别平台与主图…',w:18},{t:'拆解标题与关键词…',w:42},{t:'分析 SKU 与配色…',w:66},{t:'总结高销量原因…',w:86},{t:'生成生图偷师建议…',w:100}];
+  for(const s of steps){status.textContent=s.t;bar.style.width=s.w+'%';await new Promise(r=>setTimeout(r,420));}
+}
+
+/* —— 添加 + 分析 —— */
+$('#btnAnalyzeProduct').onclick=async()=>{
+  const f=await readProductForm();if(!f)return;
+  await runAnalysisProgress();
+  const analysis=mockAnalyze(f);
+  $('#analysisResultText').innerHTML='<strong>📌 高销量原因：</strong>'+escapeHtml(analysis.summary)+
+    '<br><br><strong>🖼 主图：</strong><br>'+analysis.main_image.map(e=>'· '+escapeHtml(e)).join('<br>')+
+    '<br><strong>🏷 标题：</strong><br>'+analysis.title.map(e=>'· '+escapeHtml(e)).join('<br>');
+  const rec={id:'p'+Date.now()+Math.random().toString(36).slice(2,5),...f,analysis,isRef:false,created_at:Date.now()};
+  await prodPut(rec);PROD_LIB=await prodAll().catch(()=>[]);renderProductGrid();updateRefStatus();resetProductForm();
+  toast('竞品分析完成并存入情报库');
+};
+$('#btnQuickAdd').onclick=async()=>{
+  const f=await readProductForm();if(!f)return;
+  const rec={id:'p'+Date.now()+Math.random().toString(36).slice(2,5),...f,analysis:null,isRef:false,created_at:Date.now()};
+  await prodPut(rec);PROD_LIB=await prodAll().catch(()=>[]);renderProductGrid();updateRefStatus();resetProductForm();
+  toast('已快速存入情报库');
+};
+
+/* —— 列表渲染 —— */
+function renderProductGrid(){
+  const grid=$('#productGrid');if(!grid)return;
+  const fp=$('#pfPlatform').value||'',kw=($('#pfKeyword').value||'').toLowerCase();
+  let list=PROD_LIB.filter(x=>{
+    if(fp&&x.platform!==fp)return false;
+    if(kw){const hay=(x.title+' '+(x.tags||[]).join(' ')+' '+(x.analysis?x.analysis.summary:'')+' '+(x.category||'')).toLowerCase();if(!hay.includes(kw))return false;}
+    return true;
+  });
+  if($('#productCount'))$('#productCount').textContent=PROD_LIB.length;
+  grid.innerHTML='';
+  if(!list.length){grid.innerHTML='<div class="muted" style="padding:16px;text-align:center">还没有竞品，先在上方粘贴高销量商品链接并点「🤖 AI 分析竞品」。</div>';return;}
+  list.forEach(x=>{
+    const card=document.createElement('div');card.className='pcard'+(x.isRef?' refed':'');
+    const thumb=x.main_image?'<img class="pthumb" src="'+x.main_image+'">':'<div class="pthumb-empty">无主图</div>';
+    const tagHtml=(x.tags||[]).map(t=>'<span class="ptag">'+escapeHtml(t)+'</span>').join('');
+    const an=x.analysis;
+    let analysisHtml;
+    if(an){
+      let detail='';
+      if(an.main_image){
+        detail='<details><summary>主图 / 标题 / SKU / 详情 偷师点</summary><div class="pc-det">'+
+          '<b>🖼 主图</b>'+an.main_image.map(e=>'· '+escapeHtml(e)).join('<br>')+
+          '<b>🏷 标题</b>'+an.title.map(e=>'· '+escapeHtml(e)).join('<br>')+
+          '<b>🧩 SKU</b>'+an.sku.map(e=>'· '+escapeHtml(e)).join('<br>')+
+          '<b>📄 详情页</b>'+an.detail.map(e=>'· '+escapeHtml(e)).join('<br>')+
+          '</div></details>';
+      }
+      analysisHtml='<div class="pc-analysis"><b>📌 高销量原因：</b>'+escapeHtml(an.summary)+detail+'</div>';
+    }else{
+      analysisHtml='<div class="muted" style="font-size:12px;margin-top:8px">尚未分析（点卡片上的「分析」补分析）</div>';
+    }
+    card.innerHTML=
+      '<div class="pc-head">'+thumb+'<div class="pc-meta"><div class="pc-title">'+escapeHtml(x.title||'(未命名)')+'</div>'+
+      '<div><span class="pbadge">'+(PLATFORM_LABEL[x.platform]||'其他')+'</span>'+
+      (x.category?'<span class="muted">'+escapeHtml(x.category)+'</span>':'')+
+      (x.price?' <span class="muted">'+escapeHtml(x.price)+'</span>':'')+'</div></div></div>'+
+      (tagHtml?'<div class="pc-tags">'+tagHtml+'</div>':'')+
+      analysisHtml+
+      '<div class="pc-actions">'+
+        '<button class="ghost sm" data-act="ref" type="button">'+(x.isRef?'✓ 已设为生图参考':'设为生图参考')+'</button>'+
+        '<button class="ghost sm" data-act="analyze" type="button">分析</button>'+
+        (x.url?'<a class="ghost sm" href="'+encodeURI(x.url)+'" target="_blank" rel="noopener">链接</a>':'')+
+        '<button class="ghost sm danger" data-act="del" type="button">删除</button>'+
+      '</div>';
+    card.querySelector('[data-act="ref"]').onclick=async()=>{x.isRef=!x.isRef;await prodPut(x);PROD_LIB=await prodAll().catch(()=>[]);renderProductGrid();updateRefStatus();};
+    card.querySelector('[data-act="del"]').onclick=async()=>{await prodDel(x.id);PROD_LIB=await prodAll().catch(()=>[]);renderProductGrid();updateRefStatus();};
+    const ab=card.querySelector('[data-act="analyze"]');if(ab)ab.onclick=()=>reAnalyze(x);
+    grid.appendChild(card);
+  });
+}
+
+/* —— 重新分析已存竞品 —— */
+async function reAnalyze(x){
+  await runAnalysisProgress();
+  x.analysis=mockAnalyze(x);await prodPut(x);PROD_LIB=await prodAll().catch(()=>[]);
+  $('#analysisResultText').innerHTML='<strong>📌 高销量原因：</strong>'+escapeHtml(x.analysis.summary);
+  renderProductGrid();updateRefStatus();toast('已重新分析');
+}
+
+/* —— 生图参考状态 —— */
+function updateRefStatus(){
+  PROD_REF=new Set(PROD_LIB.filter(x=>x.isRef).map(x=>x.id));
+  const n=PROD_REF.size;
+  if($('#refCountActive'))$('#refCountActive').textContent=n;
+  if($('#refStatusBar'))$('#refStatusBar').style.display=n>0?'block':'none';
+}
+$('#btnClearRefs').onclick=async()=>{
+  for(const x of PROD_LIB){if(x.isRef){x.isRef=false;await prodPut(x);}}
+  PROD_LIB=await prodAll().catch(()=>[]);renderProductGrid();updateRefStatus();toast('已清空生图参考');
+};
+
+/* —— 筛选 —— */
+$('#pfPlatform').onchange=renderProductGrid;
+$('#pfKeyword').oninput=renderProductGrid;
+
+/* —— 导出备份 —— */
+$('#btnExportProducts').onclick=function(){
+  if(!PROD_LIB.length){toast('情报库为空，无可导出');return;}
+  const blob=new Blob([JSON.stringify(PROD_LIB,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='竞品情报库_'+new Date().toISOString().slice(0,10)+'.json';a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  toast('已导出 '+PROD_LIB.length+' 条竞品');
+};
+
+/* —— 生图联动：把标记为「生图学习参考」的竞品分析注入提示词 —— */
+function getCompetitorContext(){
+  const refs=PROD_LIB.filter(x=>x.isRef&&x.analysis);
+  if(!refs.length)return '';
+  let s='\n\n【竞品学习参考 · 自动注入】以下为已标记的高销量竞品分析结论，请融合其套路提升本次生图质量：\n';
+  refs.forEach((x,i)=>{
+    s+='\n('+(i+1)+') '+(x.title||'竞品')+(x.platform?(' ['+(PLATFORM_LABEL[x.platform]||x.platform)+']'):'')+'：\n';
+    s+='高销量原因：'+(x.analysis.summary||'')+'\n';
+    if(x.analysis.main_image)s+='主图套路：'+x.analysis.main_image.join('；')+'\n';
+    if(x.analysis.title)s+='标题策略：'+x.analysis.title.join('；')+'\n';
+    if(x.analysis.sku)s+='SKU 设计：'+x.analysis.sku.join('；')+'\n';
+    if(x.analysis.detail)s+='详情页逻辑：'+x.analysis.detail.join('；')+'\n';
+  });
+  s+='\n请在不照搬文案的前提下，借鉴上述构图 / 配色 / 卖点呈现 / 叙事顺序，让本次生图更贴近高转化电商风格。';
+  return s;
+}
+
 /* ============ 文生图/图生图：自由提示词 → 调大模型 ============ */
 function genOne(){
   const sc=curScreen();
   const provider=$('#apiProvider').value;
   const key=$('#apiKey').value.trim();
   const endpoint=$('#apiEndpoint').value.trim();
-  const prompt=($('#fPrompt').value||'').trim();
+  let prompt=($('#fPrompt').value||'').trim();
+  const _compCtx=getCompetitorContext();
+  if(_compCtx){prompt+='\n'+_compCtx;}
   if(!prompt){toast('请先在上面写提示词');switchFunc('content');$('#fPrompt').focus();return;}
   const refs=REF_LIB.filter(x=>REF_SEL.has(x.id)).map(x=>x.data);
   let images=[];
@@ -1148,7 +1406,7 @@ function genOne(){
   const payload={provider,key,endpoint,images_b64:images,prompt,fidelity:$('#apiFidelity').value,quality:$('#apiQuality').value,size:sc.size||'1024x1536',n:$('#apiCount').value||'1'};
   const pm0=PROVIDERS_LOCAL.find(x=>x.id===provider);
   if(pm0 && pm0.models && pm0.models.length && $('#apiModel')){payload.model=$('#apiModel').value;}
-  const hint=$('#genHint');hint.style.display='block';hint.textContent='⏳ 正在生成（约 10–60 秒，请耐心等待）…';
+  const hint=$('#genHint');hint.style.display='block';hint.textContent='⏳ 正在生成（约 10–60 秒，请耐心等待）…'+(_compCtx?'（已融入 '+PROD_REF.size+' 个竞品分析套路）':'');
   $('#genChoices').style.display='none';toast('正在生图…');
   // 携带动态访问码（测试阶段门禁）：无码时后端会直接 401 拒绝
   const tk=(window.__accessToken&&window.__accessToken())||'';
@@ -1290,8 +1548,8 @@ $('#pSearch').oninput=renderPrompts;renderPrompts();
 
 /* ============ 素材库 ============ */
 const DB='wb_gallery';let dbp=null;
-function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open(DB,2);
-  r.onupgradeneeded=()=>{const db=r.result;if(!db.objectStoreNames.contains('imgs'))db.createObjectStore('imgs',{keyPath:'id'});if(!db.objectStoreNames.contains('refs'))db.createObjectStore('refs',{keyPath:'id'});};
+function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open(DB,3);
+  r.onupgradeneeded=()=>{const db=r.result;if(!db.objectStoreNames.contains('imgs'))db.createObjectStore('imgs',{keyPath:'id'});if(!db.objectStoreNames.contains('refs'))db.createObjectStore('refs',{keyPath:'id'});if(!db.objectStoreNames.contains('products'))db.createObjectStore('products',{keyPath:'id'});};
   r.onsuccess=()=>{dbp=r.result;res(dbp);};r.onerror=()=>rej(r.error);});}
 function dbAll(){return new Promise((res,rej)=>{const tx=dbp.transaction('imgs','readonly').objectStore('imgs').getAll();tx.onsuccess=()=>res(tx.result);tx.onerror=()=>rej(tx.error);});}
 function dbPut(o){return new Promise((res,rej)=>{const tx=dbp.transaction('imgs','readwrite').objectStore('imgs').put(o);tx.onsuccess=()=>res();tx.onerror=()=>rej(tx.error);});}
@@ -1316,7 +1574,7 @@ $('#modalSave').onclick=async()=>{if(!curImg)return;curImg.tags=$('#modalTags').
 $('#modalDel').onclick=async()=>{if(!curImg)return;await dbDel(curImg.id);renderGallery();toast('已删除');$('#modal').classList.remove('show');};
 $('#gUpload').onchange=e=>uploadGallery(e.target.files);
 $('#gFilterTag').oninput=renderGallery;$('#gFilterNote').oninput=renderGallery;
-openDB().then(()=>{renderGallery();renderRefs();rebuildPreviewStack();}).catch(()=>{toast('画廊存储不可用（浏览器限制），可重试');rebuildPreviewStack();});
+openDB().then(async()=>{renderGallery();renderRefs();PROD_LIB=await prodAll().catch(()=>[]);renderProductGrid();updateRefStatus();rebuildPreviewStack();}).catch(()=>{toast('画廊存储不可用（浏览器限制），可重试');rebuildPreviewStack();});
 
 /* ===== 动态访问码门禁（测试阶段分享保护） =====
    双保险：前端全屏遮罩拦截交互 + 后端 /api/gen 硬性校验访问码。
