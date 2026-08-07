@@ -24,7 +24,7 @@
                          无码/无效/过期 -> 401 {"error":"访问码无效或已过期..."}
                          成功 -> {"images":["data:image/png;base64,..."]} 或 {"error":"原因"}
 """
-import os, sys, json, base64, time, io, hashlib
+import os, sys, json, base64, time, io, hashlib, re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import requests
 
@@ -786,6 +786,232 @@ def gen_image(data):
     return imgs, localize_error(err)
 
 
+# ─────────── 竞品智能分析（智谱 GLM：文本 + 视觉） ───────────
+# 复用电商 AI Image 已配置的 ZHIPU_API_KEY（与 model-eyes 同源）。
+# 有主图 -> GLM-4V 多模态真「看」图；无主图 -> GLM 文本模型拆标题/SKU/详情页。
+# 返回固定 schema：{summary, main_image[], title[], sku[], detail[]}，与前端卡片渲染字段一一对应。
+ZHIPU_API = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+
+
+def _call_zhipu(key, model, messages, timeout=70):
+    headers = {"Authorization": "Bearer " + key, "Content-Type": "application/json"}
+    payload = {"model": model, "messages": messages, "temperature": 0.6}
+    try:
+        r = S.post(ZHIPU_API, headers=headers, json=payload, timeout=timeout)
+    except Exception as e:
+        return None, "调用智谱 API 失败：" + str(e)
+    if r.status_code != 200:
+        return None, localize_error("智谱 API 返回 %d：%s" % (r.status_code, r.text[:300]))
+    try:
+        j = r.json()
+        return j["choices"][0]["message"]["content"], None
+    except Exception as e:
+        return None, "解析智谱返回失败：" + str(e)
+
+
+def _extract_json(text):
+    if not text:
+        return None
+    s = text.strip()
+    # 去掉可能的 ```json … ``` 围栏
+    if s.startswith("```"):
+        lines = s.split("\n")
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        s = "\n".join(lines).strip()
+    try:
+        return json.loads(s)
+    except Exception:
+        pass
+    a = s.find("{"); b = s.rfind("}")
+    if a != -1 and b != -1 and b > a:
+        try:
+            return json.loads(s[a:b + 1])
+        except Exception:
+            return None
+    return None
+
+
+def _as_list(v):
+    if isinstance(v, list):
+        out = []
+        for x in v:
+            if isinstance(x, str):
+                s = x.strip()
+                if s:
+                    out.append(s)
+            elif isinstance(x, dict):
+                # 模型偶尔把数组元素写成嵌套对象，压成可读短句兜底
+                s = "；".join("%s：%s" % (k, val) for k, val in x.items() if val not in (None, ""))
+                if s:
+                    out.append(s)
+            else:
+                s = str(x).strip()
+                if s:
+                    out.append(s)
+        return out
+    if isinstance(v, str) and v.strip():
+        return [v.strip()]
+    return []
+
+
+def analyze_competitor(data):
+    key = (data.get("zhitu_key") or os.environ.get("ZHIPU_API_KEY") or "").strip()
+    if not key:
+        return None, "未配置 ZHIPU_API_KEY（请在运行 proxy.py 的环境里设置智谱 API Key，与 model-eyes 同源）"
+    title = (data.get("title") or "").strip()
+    category = (data.get("category") or "").strip()
+    platform = (data.get("platform") or "").strip()
+    price = (data.get("price") or "").strip()
+    url = (data.get("url") or "").strip()
+    main_b64 = data.get("main_image") or data.get("main_image_b64") or None
+    if main_b64 and "," in main_b64:
+        main_b64 = main_b64.split(",", 1)[1]
+
+    meta = []
+    if title: meta.append("商品标题：" + title)
+    if category: meta.append("类目：" + category)
+    if platform: meta.append("平台：" + platform)
+    if price: meta.append("价格区间：" + price)
+    if url: meta.append("商品链接：" + url)
+    meta_txt = "\n".join(meta) if meta else "（未提供文字信息，仅凭主图分析）"
+
+    schema = ('请只输出一个严格 JSON 对象，不要任何多余文字/解释。字段与要求：\n'
+              '  "summary": 一句话总结该商品高销量的核心原因；\n'
+              '  "main_image": 主图套路数组(3-5条)，每条是一句中文短句，聚焦构图/配色/拍摄角度/留白/光影；\n'
+              '  "title": 标题策略数组(3-5条)，每条是一句中文短句，聚焦关键词布局/搜索命中/卖点排序；\n'
+              '  "sku": SKU设计数组(2-4条)，每条是一句中文短句，聚焦规格矩阵/组合套餐/缩略图节奏；\n'
+              '  "detail": 详情页逻辑数组(3-5条)，每条是一句中文短句，聚焦首屏信任/叙事顺序/对比图/促单。\n'
+              '【硬性格式要求】四个数组里的每一个元素都必须是「纯字符串短句」，'
+              '严禁使用对象/字典/嵌套 JSON（例如不要写 {"composition":"..."} 这种，直接写成一句中文）。\n'
+              '每条务必具体、可操作，指向「可复用到自家生图/文案的套路」，严禁空话套话。')
+
+    if main_b64:
+        try:
+            img_fmt = detect_fmt(base64.b64decode(main_b64))[1]
+        except Exception:
+            img_fmt = "image/jpeg"
+        data_url = "data:" + img_fmt + ";base64," + main_b64
+        text = ("你是资深电商运营分析师。下面是一件高销量商品的【主图 + 文字信息】，"
+                "请分析它高销量的原因，重点拆：主图构图/配色/拍摄角度、标题关键词策略、SKU 矩阵设计、详情页叙事逻辑。\n"
+                "商品信息：\n" + meta_txt + "\n\n" + schema)
+        messages = [{"role": "user", "content": [
+            {"type": "text", "text": text},
+            {"type": "image_url", "image_url": {"url": data_url}}
+        ]}]
+        content, err = _call_zhipu(key, "glm-4v-flash", messages)
+    else:
+        text = ("你是资深电商运营分析师。下面是一件高销量商品的文字信息，"
+                "请分析它高销量的原因，重点拆：主图套路、标题关键词策略、SKU 矩阵设计、详情页叙事逻辑。\n"
+                "商品信息：\n" + meta_txt + "\n\n" + schema)
+        messages = [{"role": "user", "content": text}]
+        content, err = _call_zhipu(key, "glm-4-flash", messages)
+    if err:
+        return None, err
+    obj = _extract_json(content)
+    if not obj or not isinstance(obj, dict):
+        return None, "模型未返回有效 JSON：" + str(content)[:200]
+    result = {
+        "summary": str(obj.get("summary") or "").strip(),
+        "main_image": _as_list(obj.get("main_image")),
+        "title": _as_list(obj.get("title")),
+        "sku": _as_list(obj.get("sku")),
+        "detail": _as_list(obj.get("detail")),
+    }
+    if not result["summary"] and not (result["main_image"] or result["title"] or result["sku"] or result["detail"]):
+        return None, "模型返回内容为空"
+    return result, None
+
+
+# ─────────── 商品链接自动抓取（服务端代抓，绕过浏览器 CORS/反爬） ───────────
+# 只贴链接 -> 自动识别平台、抓标题/主图/价格，能抓多少抓多少；抓不到也不阻塞，前端可手动补。
+def _detect_platform_from_url(url):
+    u = (url or "").lower()
+    if "taobao.com" in u or "tmall.com" in u:
+        return "taobao"
+    if "jd.com" in u or "jingdong.com" in u:
+        return "jd"
+    if "pinduoduo.com" in u or "pdd.com" in u or "yangkeduo" in u:
+        return "pdd"
+    if "douyin.com" in u or "iesdouyin.com" in u or "tiktok.com" in u:
+        return "douyin"
+    if "1688.com" in u:
+        return "1688"
+    if "amazon" in u:
+        return "amazon"
+    return "other"
+
+
+def fetch_product(url):
+    if not url or not url.startswith(("http://", "https://")):
+        return None, "链接格式不正确（需以 http/https 开头）"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                      "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9",
+    }
+    try:
+        r = S.get(url, headers=headers, timeout=15, allow_redirects=True)
+    except Exception as e:
+        return None, "抓取商品页失败：" + str(e)
+    if r.status_code != 200:
+        return None, "抓取商品页返回 %d" % r.status_code
+    html = r.text
+
+    def _meta(prop):
+        m = re.search(r'<meta[^>]+property=["\']%s["\'][^>]+content=["\']([^"\']+)' % re.escape(prop), html, re.I)
+        if not m:
+            m = re.search(r'<meta[^>]+name=["\']%s["\'][^>]+content=["\']([^"\']+)' % re.escape(prop), html, re.I)
+        return m.group(1).strip() if m else ""
+
+    title = _meta("og:title") or _meta("title")
+    if not title:
+        m = re.search(r"<title[^>]*>([^<]+)</title>", html, re.I)
+        if m:
+            title = m.group(1).strip()
+    img_url = ""
+    for prop in ("og:image:secure_url", "og:image", "twitter:image", "image"):
+        v = _meta(prop)
+        if v:
+            img_url = v.strip()
+            break
+    price = _meta("og:price:amount") or _meta("product:price:amount")
+    if not price:
+        mp = re.search(r'itemprop=["\']price["\'][^>]+content=["\']([^"\']+)', html, re.I)
+        if mp:
+            price = mp.group(1).strip()
+    else:
+        price = price.strip()
+    if not price:
+        mp = re.search(r'["\']price["\']\s*:\s*["\']?([\d.]+)', html)
+        if mp:
+            price = mp.group(1).strip()
+    platform = _detect_platform_from_url(url)
+
+    image_data_url = None
+    if img_url:
+        try:
+            if img_url.startswith("//"):
+                img_url = "https:" + img_url
+            ir = S.get(img_url, headers=headers, timeout=15)
+            if ir.status_code == 200 and ir.content:
+                fmt = detect_fmt(ir.content)[1]
+                image_data_url = "data:%s;base64,%s" % (fmt, base64.b64encode(ir.content).decode("ascii"))
+        except Exception:
+            image_data_url = None
+
+    return {
+        "title": title,
+        "image_data_url": image_data_url,
+        "price": price,
+        "platform": platform,
+        "note": "已尽力自动抓取；部分平台（淘宝/拼多多等）反爬较强，可能只拿到部分信息，可手动补。",
+    }, None
+
+
 class H(BaseHTTPRequestHandler):
     def _cors(self):
         self.send_header("Access-Control-Allow-Origin", "*")
@@ -854,6 +1080,12 @@ class H(BaseHTTPRequestHandler):
             return
         if self.path == "/api/unlock":
             self._handle_unlock()
+            return
+        if self.path == "/api/analyze-competitor":
+            self._handle_analyze()
+            return
+        if self.path == "/api/fetch-product":
+            self._handle_fetch_product()
             return
         if self.path != "/api/gen":
             self.send_response(404)
@@ -961,6 +1193,58 @@ class H(BaseHTTPRequestHandler):
         self._send_json(200, {"valid": True, "exp": info.get("exp"),
                               "remaining_hours": info.get("remaining_hours"),
                               "note": info.get("note"), "mu": mu, "uses_left": left})
+
+    def _handle_analyze(self):
+        # 竞品智能分析：用服务端已配置的智谱 Key；云端公网需访问码门禁，防别人刷爆额度。
+        try:
+            ln = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(ln)
+            data = json.loads(body or b"{}")
+        except Exception:
+            self._send_json(400, {"error": "请求解析失败"})
+            return
+        token = (self.headers.get("Authorization") or "").replace("Bearer ", "", 1).strip()
+        if not token:
+            token = (self.headers.get("X-Access-Token") or "").strip()
+        ok, info, kind = resolve_credential(token)
+        if not ok:
+            self._send_json(401, {"error": "访问码无效或已过期，请先在页面输入正确的动态访问码。（" + info.get("error", "") + "）"})
+            return
+        try:
+            result, err = analyze_competitor(data)
+        except Exception as e:
+            self._send_json(200, {"error": "分析失败：" + str(e)})
+            return
+        if err:
+            self._send_json(200, {"error": err})
+        else:
+            self._send_json(200, result)
+
+    def _handle_fetch_product(self):
+        # 商品链接自动抓取：服务端代抓，绕过浏览器 CORS/反爬；同样需访问码门禁。
+        try:
+            ln = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(ln)
+            data = json.loads(body or b"{}")
+        except Exception:
+            self._send_json(400, {"error": "请求解析失败"})
+            return
+        token = (self.headers.get("Authorization") or "").replace("Bearer ", "", 1).strip()
+        if not token:
+            token = (self.headers.get("X-Access-Token") or "").strip()
+        ok, info, kind = resolve_credential(token)
+        if not ok:
+            self._send_json(401, {"error": "访问码无效或已过期，请先在页面输入正确的动态访问码。（" + info.get("error", "") + "）"})
+            return
+        try:
+            result, err = fetch_product(data.get("url", ""))
+        except Exception as e:
+            self._send_json(200, {"error": "抓取失败：" + str(e)})
+            return
+        if err:
+            self._send_json(200, {"error": err})
+        else:
+            self._send_json(200, result)
 
     def log_message(self, *a):
         pass

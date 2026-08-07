@@ -1,8 +1,9 @@
-# 部署到 Render.com 免费版，得到一个「带代理的在线版」公网链接（AI 生图可直接用）
+# 部署到 Render.com 免费版，得到一个「带代理的在线版」公网链接（AI 生图 + 竞品分析可直接用）
 # 用法：
-#   1. 把 workbench/ 目录推到你的 GitHub 仓库
+#   1. 把本目录推到你的 GitHub 仓库
 #   2. 打开 https://dashboard.render.com → New → Blueprint → 选该仓库 → 部署
-#   3. 部署完会得到一个 https://xxxx.onrender.com 的公网链接，打开即用 AI 生图
+#   3. 部署时在 Render 控制台填入下方 ZHIPU_API_KEY（分析竞品用，与 model-eyes 同源）
+#   4. 部署完得到一个 https://xxxx.onrender.com 的公网链接，打开 /tool 即用
 services:
   - type: web
     name: self-ai-image
@@ -16,3 +17,7 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.13"
+      # 竞品分析（智谱 GLM）用的 Key，云端必须在这里配置，否则分析会报「未配置 ZHIPU_API_KEY」
+      - key: ZHIPU_API_KEY
+        sync: false
+
