@@ -1380,7 +1380,10 @@ async function realAnalyze(f){
         main_image:Array.isArray(result.main_image)?result.main_image:[],
         title:Array.isArray(result.title)?result.title:[],
         sku:Array.isArray(result.sku)?result.sku:[],
-        detail:Array.isArray(result.detail)?result.detail:[]
+        detail:Array.isArray(result.detail)?result.detail:[],
+        marketing:Array.isArray(result.marketing)?result.marketing:[],
+        price_strategy:Array.isArray(result.price_strategy)?result.price_strategy:[],
+        social_proof:Array.isArray(result.social_proof)?result.social_proof:[]
       };
     }
     if(sv.status==='error'){
@@ -1442,7 +1445,11 @@ $('#btnAnalyzeProduct').onclick=async()=>{
     $('#analysisResultText').innerHTML='<strong>📌 高销量原因：</strong>'+escapeHtml(analysis.summary)+
       '<br><br><strong>🖼 主图套路：</strong><br>'+analysis.main_image.map(e=>'· '+escapeHtml(e)).join('<br>')+
       '<br><strong>🏷 标题策略：</strong><br>'+analysis.title.map(e=>'· '+escapeHtml(e)).join('<br>')+
-      '<br><strong>📄 详情页逻辑：</strong><br>'+analysis.detail.map(e=>'· '+escapeHtml(e)).join('<br>');
+      (analysis.sku&&analysis.sku.length?'<br><strong>📦 SKU 设计：</strong><br>'+analysis.sku.map(e=>'· '+escapeHtml(e)).join('<br>'):'')+
+      '<br><strong>📄 详情页逻辑：</strong><br>'+analysis.detail.map(e=>'· '+escapeHtml(e)).join('<br>')+
+      (analysis.marketing&&analysis.marketing.length?'<br><strong>🎯 营销与推广：</strong><br>'+analysis.marketing.map(e=>'· '+escapeHtml(e)).join('<br>'):'')+
+      (analysis.price_strategy&&analysis.price_strategy.length?'<br><strong>💰 价格策略：</strong><br>'+analysis.price_strategy.map(e=>'· '+escapeHtml(e)).join('<br>'):'')+
+      (analysis.social_proof&&analysis.social_proof.length?'<br><strong>🤝 信任构建：</strong><br>'+analysis.social_proof.map(e=>'· '+escapeHtml(e)).join('<br>'):'');
   }catch(e){
     const isNet=/网络|network|timeout|超时|中断/i.test(e.message||'');
     $('#analysisResultText').innerHTML='<span class="muted" style="color:#e74c3c">⚠️ 本次 AI 分析未成功：'+escapeHtml(e.message)+
@@ -1487,12 +1494,15 @@ function renderProductGrid(){
     let analysisHtml;
     if(an){
       let detail='';
-      if(an.main_image){
-        detail='<details><summary>主图 / 标题 / SKU / 详情 偷师点</summary><div class="pc-det">'+
-          '<b>🖼 主图</b>'+an.main_image.map(e=>'· '+escapeHtml(e)).join('<br>')+
-          '<b>🏷 标题</b>'+an.title.map(e=>'· '+escapeHtml(e)).join('<br>')+
-          '<b>🧩 SKU</b>'+an.sku.map(e=>'· '+escapeHtml(e)).join('<br>')+
-          '<b>📄 详情页</b>'+an.detail.map(e=>'· '+escapeHtml(e)).join('<br>')+
+      if(an.main_image||an.title||an.sku||an.detail||an.marketing||an.price_strategy||an.social_proof){
+        detail='<details open><summary>主图 / 标题 / SKU / 详情 / 营销 偷师点</summary><div class="pc-det">'+
+          (an.main_image?'<b>🖼 主图</b>'+an.main_image.map(e=>'· '+escapeHtml(e)).join('<br>'):'')+
+          (an.title?'<b>🏷 标题</b>'+an.title.map(e=>'· '+escapeHtml(e)).join('<br>'):'')+
+          (an.sku?'<b>🧩 SKU</b>'+an.sku.map(e=>'· '+escapeHtml(e)).join('<br>'):'')+
+          (an.detail?'<b>📄 详情页</b>'+an.detail.map(e=>'· '+escapeHtml(e)).join('<br>'):'')+
+          (an.marketing?'<b>🎯 营销推广</b>'+an.marketing.map(e=>'· '+escapeHtml(e)).join('<br>'):'')+
+          (an.price_strategy?'<b>💰 价格策略</b>'+an.price_strategy.map(e=>'· '+escapeHtml(e)).join('<br>'):'')+
+          (an.social_proof?'<b>🤝 信任构建</b>'+an.social_proof.map(e=>'· '+escapeHtml(e)).join('<br>'):'')+
           '</div></details>';
       }
       analysisHtml='<div class="pc-analysis"><b>📌 高销量原因：</b>'+escapeHtml(an.summary)+detail+'</div>';
@@ -1574,6 +1584,9 @@ function getCompetitorContext(){
     if(x.analysis.title)s+='标题策略：'+x.analysis.title.join('；')+'\n';
     if(x.analysis.sku)s+='SKU 设计：'+x.analysis.sku.join('；')+'\n';
     if(x.analysis.detail)s+='详情页逻辑：'+x.analysis.detail.join('；')+'\n';
+    if(x.analysis.marketing)s+='营销推广：'+x.analysis.marketing.join('；')+'\n';
+    if(x.analysis.price_strategy)s+='价格策略：'+x.analysis.price_strategy.join('；')+'\n';
+    if(x.analysis.social_proof)s+='信任构建：'+x.analysis.social_proof.join('；')+'\n';
   });
   s+='\n请在不照搬文案的前提下，借鉴上述构图 / 配色 / 卖点呈现 / 叙事顺序，让本次生图更贴近高转化电商风格。';
   return s;
