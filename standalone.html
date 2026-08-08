@@ -83,8 +83,8 @@
   nav.tabs.dragging .tab-indicator{transition:none!important;background:rgba(124,58,237,.42);border-color:rgba(167,139,250,.85)}
   /* ===== Tab 导航：毛玻璃球收缩（仅动画 transform/opacity，GPU 合成，零重排，无卡顿） ===== */
   nav.tabs{transition:transform .32s cubic-bezier(.25,1,.5,1),opacity .22s ease-in;will-change:transform,opacity}
-  /* 收缩态：原位缩小+淡出（不改动 width/padding/margin/border-radius，避免每帧重排卡顿） */
-  nav.tabs.tabs-collapsed{transform-origin:top right;transform:scale(.9);opacity:0;pointer-events:none}
+  /* 收缩态：缩小+上移出视口（仅 transform/opacity，GPU 合成零重排，彻底不可见） */
+  nav.tabs.tabs-collapsed{transform:scale(.6) translateY(-120px);opacity:0;pointer-events:none}
   nav.tabs.tabs-collapsed::after{display:none}
   nav.tabs.tabs-collapsed .tab-indicator{display:none}
   /* 独立毛玻璃球：默认隐藏，收缩时缩放淡入（只动 transform/opacity） */
