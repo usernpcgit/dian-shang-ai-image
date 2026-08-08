@@ -1771,11 +1771,12 @@ async function renderGallery(){if(!dbp||!$('#galleryGrid'))return;let list=await
 let curImg=null;
 function openModal(x){curImg=x;$('#modalImg').src=x.data;$('#modalTags').value=(x.tags||[]).join(',');$('#modalNote').value=x.note||'';
   $('#modalDl').href=x.data;$('#modalDl').download=x.name||'image.png';$('#modal').classList.add('show');}
-$('#modalClose').onclick=()=>$('#modal').classList.remove('show');
-$('#modalSave').onclick=async()=>{if(!curImg)return;curImg.tags=$('#modalTags').value.split(',').map(s=>s.trim()).filter(Boolean);curImg.note=$('#modalNote').value;await dbPut(curImg);renderGallery();toast('已保存');$('#modal').classList.remove('show');};
-$('#modalDel').onclick=async()=>{if(!curImg)return;await dbDel(curImg.id);renderGallery();toast('已删除');$('#modal').classList.remove('show');};
-$('#gUpload').onchange=e=>uploadGallery(e.target.files);
-$('#gFilterTag').oninput=renderGallery;$('#gFilterNote').oninput=renderGallery;
+const _mc=$('#modalClose'); if(_mc) _mc.onclick=()=>$('#modal').classList.remove('show');
+const _ms=$('#modalSave'); if(_ms) _ms.onclick=async()=>{if(!curImg)return;curImg.tags=$('#modalTags').value.split(',').map(s=>s.trim()).filter(Boolean);curImg.note=$('#modalNote').value;await dbPut(curImg);renderGallery();toast('已保存');$('#modal').classList.remove('show');};
+const _md=$('#modalDel'); if(_md) _md.onclick=async()=>{if(!curImg)return;await dbDel(curImg.id);renderGallery();toast('已删除');$('#modal').classList.remove('show');};
+const _gu=$('#gUpload'); if(_gu) _gu.onchange=e=>uploadGallery(e.target.files);
+const _gt=$('#gFilterTag'); if(_gt) _gt.oninput=renderGallery;
+const _gn=$('#gFilterNote'); if(_gn) _gn.oninput=renderGallery;
 openDB().then(async()=>{renderGallery();renderRefs();PROD_LIB=await prodAll().catch(()=>[]);renderProductGrid();updateRefStatus();rebuildPreviewStack();}).catch(()=>{toast('画廊存储不可用（浏览器限制），可重试');rebuildPreviewStack();});
 
 /* ===== 动态访问码门禁（测试阶段分享保护） =====
