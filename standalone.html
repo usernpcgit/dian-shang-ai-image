@@ -76,17 +76,21 @@
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.45)}70%{box-shadow:0 0 0 7px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
   /* 导航：保留液态玻璃滑动浮岛交互（iOS 风格），改为横向图标+文字的导航条（融合千问/小蜘蛛式简洁导航，去掉副标题噪声）+ q弹入场动画 */
   @keyframes navTabsSpring{0%{transform:translateY(-12px) scale(.96);opacity:.5}100%{transform:translateY(0) scale(1);opacity:1}}
-  nav.tabs{position:sticky;top:90px;margin:14px auto 10px;animation:navTabsSpring .7s cubic-bezier(0.34,1.56,0.64,1);display:flex;gap:2px;width:calc(100% - 32px);max-width:560px;padding:5px;flex-wrap:nowrap;background:linear-gradient(135deg,rgba(124,58,237,.18),rgba(124,58,237,.08));border:1px solid rgba(124,58,237,.35);border-radius:999px;box-shadow:0 8px 28px rgba(0,0,0,.5), 0 0 0 1px rgba(124,58,237,.12), inset 0 1px 0 rgba(167,139,250,.18), inset 0 -1px 0 rgba(124,58,237,.08);z-index:49;-webkit-tap-highlight-color:transparent}
+  /* iOS 26 风格阻尼弹簧：先过冲、轻微回摆、再稳落，制造夸张 q 弹（仅 transform/opacity，GPU 合成零重排） */
+  @keyframes navCollapseSpring{0%{transform:scale(1);opacity:1}40%{transform:scale(.5);opacity:.7}65%{transform:scale(.04);opacity:0}100%{transform:scale(.12);opacity:0}}
+  @keyframes ballSpringIn{0%{transform:scale(.3);opacity:0}55%{transform:scale(1.18);opacity:1}72%{transform:scale(.92);opacity:.95}86%{transform:scale(1.05);opacity:.95}100%{transform:scale(1);opacity:.95}}
+  nav.tabs{position:sticky;top:90px;margin:14px auto 10px;display:flex;gap:2px;width:calc(100% - 32px);max-width:560px;padding:5px;flex-wrap:nowrap;background:linear-gradient(135deg,rgba(124,58,237,.18),rgba(124,58,237,.08));border:1px solid rgba(124,58,237,.35);border-radius:999px;box-shadow:0 8px 28px rgba(0,0,0,.5), 0 0 0 1px rgba(124,58,237,.12), inset 0 1px 0 rgba(167,139,250,.18), inset 0 -1px 0 rgba(124,58,237,.08);z-index:49;-webkit-tap-highlight-color:transparent}
   nav.tabs::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:2;background:radial-gradient(140% 100% at 18% -20%,rgba(167,139,250,.22),rgba(167,139,250,0) 48%),linear-gradient(90deg,rgba(167,139,250,.08),rgba(167,139,250,0) 38%,rgba(167,139,250,0) 62%,rgba(167,139,250,.05))}
   /* 拖动时用 left/width 改位置（rAF 节流防止掉帧，比 transform 稳定不出 bug） */
   nav.tabs .tab-indicator{position:absolute;top:5px;bottom:5px;left:0;width:0;background:rgba(124,58,237,.28);border:1px solid rgba(167,139,250,.55);border-radius:999px;box-shadow:0 2px 14px rgba(124,58,237,.30), inset 0 1px 2px rgba(167,139,250,.35);transition:left .65s cubic-bezier(0.34,1.56,0.64,1), width .65s cubic-bezier(0.34,1.56,0.64,1), background .32s, border-color .32s, box-shadow .32s;z-index:0;pointer-events:none;will-change:left,width;contain:layout paint}
   nav.tabs.dragging .tab-indicator{transition:none!important;background:rgba(124,58,237,.42);border-color:rgba(167,139,250,.85)}
-  /* ===== Tab 导航：毛玻璃球收缩（仅动画 transform/opacity，GPU 合成，零重排，无卡顿） ===== */
-  /* 入场弹簧动画结束后释放 transform/opacity 控制权（已去掉 fill，不再锁死），使收缩态的缩放淡出可正常生效 */
-  nav.tabs{transition:transform .52s cubic-bezier(0.34,1.56,0.64,1),opacity .34s ease-out;will-change:transform,opacity;transform-origin:top right}
-  /* 收缩态：可见地缩放淡出为右上角毛玻璃球（仅 transform/opacity，GPU 合成零重排）。
-     配合球体 .show 的交叉淡入，形成"导航缩成球"的视觉，最终仅球体可见 */
-  nav.tabs.tabs-collapsed{transform:scale(.12);opacity:0;pointer-events:none;animation:none}
+  /* ===== Tab 导航：毛玻璃球收缩（iOS 26 阻尼弹簧，多段回弹，仅 transform/opacity，GPU 合成零重排） ===== */
+  /* 入场弹簧：加载时由 JS 加 .nav-enter 触发一次，结束即移除（不锁死 transform，避免影响收缩态） */
+  nav.tabs.nav-enter{animation:navTabsSpring .7s cubic-bezier(0.34,1.56,0.64,1) both}
+  nav.tabs{transition:transform .55s cubic-bezier(0.34,1.56,0.64,1),opacity .34s ease-out;will-change:transform,opacity;transform-origin:top right}
+  /* 收缩态：用阻尼弹簧 keyframes 多段回弹缩没（forwards 锁住终态 scale.12/opacity0），
+     配合球体 .show 的交叉弹簧淡入，形成"导航夸张缩成球"的 iOS 26 视觉，最终仅球体可见 */
+  nav.tabs.tabs-collapsed{animation:navCollapseSpring .64s cubic-bezier(0.22,1,0.36,1) forwards;transform:scale(.12);opacity:0;pointer-events:none}
   nav.tabs.tabs-collapsed::after{display:none}
   nav.tabs.tabs-collapsed .tab-indicator{display:none}
   /* 独立毛玻璃球：默认隐藏，收缩时缩放淡入（只动 transform/opacity） */
@@ -99,7 +103,7 @@
     opacity:0;transform:scale(.3);pointer-events:none;
     transition:transform .54s cubic-bezier(0.34,1.56,0.64,1),opacity .38s ease-out;will-change:transform,opacity;
   }
-  .tabs-ball.show{opacity:.95;transform:scale(1);pointer-events:auto}
+  .tabs-ball.show{opacity:.95;transform:scale(1);pointer-events:auto;animation:ballSpringIn .62s cubic-bezier(0.22,1,0.36,1) forwards}
   .tabs-ball .ic{font-size:21px;line-height:1;filter:grayscale(0)}
   .tabs-ball .t{display:none}
   /* 展开浮层（点击球体后临时展开的迷你面板） */
@@ -123,9 +127,9 @@
   @keyframes tabsPopIn{0%{transform:translateY(-8px) scale(.95);opacity:0}100%{transform:translateY(0) scale(1);opacity:1}}
   /* 尊重「减弱动效」偏好：关闭所有相关过渡 */
   @media (prefers-reduced-motion: reduce){
-    nav.tabs{transition:none}
-    .tabs-ball{transition:none}
-    .tabs-ball.show{opacity:.95;transform:scale(1)}
+    nav.tabs, nav.tabs.nav-enter, nav.tabs.tabs-collapsed, .tabs-ball, .tabs-ball.show{animation:none;transition:none}
+    nav.tabs.tabs-collapsed{transform:scale(.12);opacity:0}
+    .tabs-ball.show{opacity:.95;transform:scale(1);pointer-events:auto}
   }
   /* 拖动时用 left/width 改位置（rAF 节流防止掉帧，比 transform 稳定不出 bug） */
   nav.tabs .tab-indicator{position:absolute;top:5px;bottom:5px;left:0;width:0;background:rgba(124,58,237,.28);border:1px solid rgba(167,139,250,.55);border-radius:999px;box-shadow:0 2px 14px rgba(124,58,237,.30), inset 0 1px 2px rgba(167,139,250,.35);transition:left .65s cubic-bezier(0.34,1.56,0.64,1), width .65s cubic-bezier(0.34,1.56,0.64,1), background .32s, border-color .32s, box-shadow .32s;z-index:0;pointer-events:none;will-change:left,width;contain:layout paint}
@@ -787,6 +791,8 @@ const navCta=$('#navCta'); if(navCta) navCta.onclick=()=>switchTab('detail');
   });
 
   // 初始化状态
+  nav.classList.add('nav-enter');
+  setTimeout(function(){nav.classList.remove('nav-enter');},760);
   updateBallIcon();
   updateNavState();
 })();
