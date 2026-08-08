@@ -88,14 +88,17 @@
   /* 入场弹簧：加载时由 JS 加 .nav-enter 触发一次，结束即移除（不锁死 transform，避免影响收缩态） */
   nav.tabs.nav-enter{animation:navTabsSpring .7s cubic-bezier(0.34,1.56,0.64,1) both}
   /* 注意：base nav.tabs 不设 transition！收缩态纯用 animation keyframes，
-     避免 transition 与 animation 对同一 transform/opacity 竞争导致动画失效（残影根因） */
-  nav.tabs{will-change:transform,opacity;transform-origin:top right}
+     避免 transition 与 animation 对同一 transform/opacity 竞争导致动画失效（残影根因）。
+     也不设 will-change——避免常驻 GPU 合成层在 scale(0) 终点留下残影 */
+  nav.tabs{transform-origin:top right}
   /* 展开恢复：移除 .tabs-collapsed 时用独立过渡平滑弹回 */
   nav.tabs:not(.tabs-collapsed){transition:transform .48s cubic-bezier(0.34,1.56,0.64,1),opacity .3s ease-out}
   /* 收缩态：用阻尼弹簧 keyframes 多段回弹彻底缩没（forwards 锁终态 scale(0)/opacity0），
      配合球体 .show 的交叉弹簧淡入，形成"导航夸张缩成球"的 iOS 26 视觉，最终仅球体可见 */
   nav.tabs.tabs-collapsed{animation:navCollapseSpring .68s cubic-bezier(0.22,1,0.36,1) forwards;pointer-events:none}
   nav.tabs.tabs-collapsed::after,nav.tabs.tabs-collapsed .tab-indicator{display:none!important}
+  /* 收缩动画结束后由 JS 加 .nav-gone 硬隐藏，彻底消除合成层 / backdrop-filter 残影 */
+  nav.tabs.nav-gone{visibility:hidden!important}
   /* 独立毛玻璃球：默认隐藏，收缩时缩放淡入（只动 transform/opacity） */
   .tabs-ball{
     position:fixed;top:14px;right:18px;width:46px;height:46px;z-index:9999;
@@ -763,11 +766,19 @@ const navCta=$('#navCta'); if(navCta) navCta.onclick=()=>switchTab('detail');
     if(shouldCollapse!==isCollapsed){
       isCollapsed=shouldCollapse;
       nav.classList.toggle('tabs-collapsed',shouldCollapse);
+      if(!shouldCollapse) nav.classList.remove('nav-gone'); // 展开前撤销硬隐藏，恢复过渡
       if(ball) ball.classList.toggle('show',shouldCollapse);
       if(shouldCollapse) hidePopover();
       updateBallIcon();
     }
   }
+
+  // 收缩动画结束后硬隐藏导航，彻底消除残影（合成层 / backdrop-filter 残留）
+  nav.addEventListener('animationend',function(e){
+    if(e.animationName==='navCollapseSpring' && nav.classList.contains('tabs-collapsed')){
+      nav.classList.add('nav-gone');
+    }
+  });
 
   // 滚动监听（rAF 节流）
   window.addEventListener('scroll',function(){
