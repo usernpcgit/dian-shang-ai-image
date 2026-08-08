@@ -81,6 +81,48 @@
   /* 拖动时用 left/width 改位置（rAF 节流防止掉帧，比 transform 稳定不出 bug） */
   nav.tabs .tab-indicator{position:absolute;top:5px;bottom:5px;left:0;width:0;background:rgba(124,58,237,.28);border:1px solid rgba(167,139,250,.55);border-radius:999px;box-shadow:0 2px 14px rgba(124,58,237,.30), inset 0 1px 2px rgba(167,139,250,.35);transition:left .65s cubic-bezier(0.34,1.56,0.64,1), width .65s cubic-bezier(0.34,1.56,0.64,1), background .32s, border-color .32s, box-shadow .32s;z-index:0;pointer-events:none;will-change:left,width;contain:layout paint}
   nav.tabs.dragging .tab-indicator{transition:none!important;background:rgba(124,58,237,.42);border-color:rgba(167,139,250,.85)}
+  /* ===== Tab 导航：毛玻璃球收缩态（滚动/非顶部时自动触发） ===== */
+  nav.tabs{transition:width .38s cubic-bezier(.4,0,.2,1),max-width .38s cubic-bezier(.4,0,.2,1),padding .38s cubic-bezier(.4,0,.2,1),margin .38s cubic-bezier(.4,0,.2,1),border-radius .38s cubic-bezier(.4,0,.2,1),background .38s cubic-bezier(.4,0,.2,1),box-shadow .38s cubic-bezier(.4,0,.2,1),opacity .38s cubic-bezier(.4,0,.2,1),transform .38s cubic-bezier(.4,0,.2,1)}
+  nav.tabs.tabs-collapsed{
+    position:fixed;top:16px;right:20px;width:46px;height:46px;max-width:46px;padding:0;margin:0;
+    border-radius:50%;background:rgba(22,22,32,.72);backdrop-filter:blur(18px) saturate(160%);
+    -webkit-backdrop-filter:blur(18px) saturate(160%);
+    border:1.5px solid rgba(167,139,250,.45);box-shadow:0 6px 24px rgba(0,0,0,.55),0 0 12px rgba(124,58,237,.18),inset 0 1px 3px rgba(255,255,255,.08);
+    z-index:9999;cursor:pointer;flex-direction:column;align-items:center;justify-content:center;gap:0;
+    opacity:.95;transform:scale(1);
+  }
+  nav.tabs.tabs-collapsed::after{display:none} /* 收缩时隐藏渐变叠加层 */
+  nav.tabs.tabs-collapsed .tab-indicator{display:none} /* 隐藏滑块指示器 */
+  /* 非激活按钮全部隐藏，只留当前激活项的图标 */
+  nav.tabs.tabs-collapsed button:not(.active){display:none!important}
+  nav.tabs.tabs-collapsed button.active{
+    padding:0;background:transparent;border:none;border-radius:50%;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;width:100%;height:100%;
+  }
+  nav.tabs.tabs-collapsed button.active .ic{font-size:21px;filter:grayscale(0)!important;transform:none!important}
+  nav.tabs.tabs-collapsed button.active .t{display:none!important} /* 球体只显示图标 */
+  /* 展开浮层（点击球体后临时展开的迷你面板） */
+  .tabs-popover{
+    position:fixed;top:68px;right:18px;z-index:9998;display:none;flex-direction:column;gap:4px;
+    padding:8px;border-radius:16px;background:rgba(22,22,32,.88);backdrop-filter:blur(22px) saturate(160%);
+    -webkit-backdrop-filter:blur(22px) saturate(160%);
+    border:1.5px solid rgba(167,139,250,.35);box-shadow:0 12px 40px rgba(0,0,0,.6),0 0 20px rgba(124,58,237,.15);
+    min-width:170px;animation:tabsPopIn .25s cubic-bezier(.34,1.56,.64,1) both;
+  }
+  .tabs-popover.show{display:flex}
+  .tabs-popover button{
+    display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:11px;
+    background:transparent;border:none;color:var(--ink);font-size:14px;font-weight:700;
+    cursor:pointer;text-align:left;transition:background .15s;
+  }
+  .tabs-popover button:hover,.tabs-popover button:focus{background:rgba(124,58,237,.15)}
+  .tabs-popover button .ic{font-size:18px;filter:grayscale(0)!important}
+  .tabs-popover button.active{color:var(--brand);background:rgba(124,58,237,.12)}
+  .tabs-popover button.active .t{color:var(--brand)}
+  @keyframes tabsPopIn{0%{transform:translateY(-8px) scale(.95);opacity:0}100%{transform:translateY(0) scale(1);opacity:1}}
+  /* 拖动时用 left/width 改位置（rAF 节流防止掉帧，比 transform 稳定不出 bug） */
+  nav.tabs .tab-indicator{position:absolute;top:5px;bottom:5px;left:0;width:0;background:rgba(124,58,237,.28);border:1px solid rgba(167,139,250,.55);border-radius:999px;box-shadow:0 2px 14px rgba(124,58,237,.30), inset 0 1px 2px rgba(167,139,250,.35);transition:left .65s cubic-bezier(0.34,1.56,0.64,1), width .65s cubic-bezier(0.34,1.56,0.64,1), background .32s, border-color .32s, box-shadow .32s;z-index:0;pointer-events:none;will-change:left,width;contain:layout paint}
+  nav.tabs.dragging .tab-indicator{transition:none!important;background:rgba(124,58,237,.42);border-color:rgba(167,139,250,.85)}
   nav.tabs{touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}
   nav.tabs.dragging{cursor:grabbing}
   /* 拖动中禁 transition（关掉所有动画，每帧立即响应手指） */
@@ -317,6 +359,8 @@
   <button data-tab="gallery" data-short="素材" aria-label="素材库"><span class="ic">🖼️</span><span class="t">素材库</span></button>
   <button data-tab="help" data-short="帮助" aria-label="使用说明"><span class="ic">❓</span><span class="t">使用说明</span></button>
 </nav>
+<!-- Tab 导航收缩态浮层（毛玻璃球点击后展开的迷你面板） -->
+<div class="tabs-popover" id="tabsPopover"></div>
 
 <!-- ============ 做详情页 ============ -->
 <section class="view active" id="view-detail">
@@ -664,6 +708,69 @@ function switchTab(n){
 }
 $$('nav.tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
 const navCta=$('#navCta'); if(navCta) navCta.onclick=()=>switchTab('detail');
+
+/* ===== Tab 导航：毛玻璃球收缩（滚动/非顶部自动收缩，顶部展开） ===== */
+(function(){
+  const nav=document.querySelector('nav.tabs'); if(!nav) return;
+  const popover=document.getElementById('tabsPopover');
+  const COLLAPSE_THRESHOLD=100; // 滚动超过此像素即触发收缩
+  let isCollapsed=false, popoverOpen=false, rafId=null;
+
+  // 构建浮层面板内容（从 nav.buttons 克隆）
+  function buildPopover(){
+    if(!popover) return;
+    popover.innerHTML='';
+    $$('nav.tabs button').forEach(btn=>{
+      const b=document.createElement('button');
+      b.dataset.tab=btn.dataset.tab;
+      b.innerHTML='<span class="ic">'+btn.querySelector('.ic').textContent+'</span><span class="t">'+btn.querySelector('.t').textContent+'</span>';
+      if(btn.classList.contains('active')) b.classList.add('active');
+      b.onclick=(e)=>{e.stopPropagation();hidePopover();switchTab(btn.dataset.tab);};
+      popover.appendChild(b);
+    });
+  }
+
+  function showPopover(){if(!popover)return;buildPopover();popover.classList.add('show');popoverOpen=true;}
+  function hidePopover(){if(!popover)return;popover.classList.remove('show');popoverOpen=false;}
+
+  // 核心：根据 scrollTop 切换收缩/展开
+  function updateNavState(){
+    const shouldCollapse=window.scrollY>COLLAPSE_THRESHOLD;
+    if(shouldCollapse!==isCollapsed){
+      isCollapsed=shouldCollapse;
+      nav.classList.toggle('tabs-collapsed',shouldCollapse);
+      if(shouldCollapse) hidePopover(); // 收缩时关闭浮层
+    }
+  }
+
+  // 滚动监听（rAF 节流）
+  window.addEventListener('scroll',function(){
+    if(rafId) cancelAnimationFrame(rafId);
+    rafId=requestAnimationFrame(updateNavState);
+  },{passive:true});
+
+  // 点击毛玻璃球 → 展开浮层（仅在收缩态生效）
+  nav.addEventListener('click',function(e){
+    if(!isCollapsed) return;
+    e.stopPropagation();
+    if(popoverOpen){hidePopover();}else{showPopover();}
+  });
+
+  // 点击页面其他区域 → 关闭浮层
+  document.addEventListener('click',function(e){
+    if(popoverOpen&&!nav.contains(e.target)&&!popover.contains(e.target)){
+      hidePopover();
+    }
+  });
+
+  // ESC 关闭浮层
+  document.addEventListener('keydown',function(e){
+    if(e.key==='Escape'&&popoverOpen) hidePopover();
+  });
+
+  // 初始化状态
+  updateNavState();
+})();
 /* ============ iOS26 风格：长按/按住 拖动切换 tab（指示器跟随指针，松手吸附最近项） ============ */
 function initDragTabs(navSel, indSel, onActivate){
   const nav=document.querySelector(navSel); if(!nav) return;
