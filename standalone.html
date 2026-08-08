@@ -91,14 +91,10 @@
      避免 transition 与 animation 对同一 transform/opacity 竞争导致动画失效（残影根因）。
      也不设 will-change——避免常驻 GPU 合成层在 scale(0) 终点留下残影 */
   nav.tabs{transform-origin:top right}
-  /* 展开恢复：移除 .tabs-collapsed 时用独立过渡平滑弹回 */
-  nav.tabs:not(.tabs-collapsed){transition:transform .48s cubic-bezier(0.34,1.56,0.64,1),opacity .3s ease-out}
-  /* 收缩态：用阻尼弹簧 keyframes 多段回弹彻底缩没（forwards 锁终态 scale(0)/opacity0），
-     配合球体 .show 的交叉弹簧淡入，形成"导航夸张缩成球"的 iOS 26 视觉，最终仅球体可见 */
-  nav.tabs.tabs-collapsed{animation:navCollapseSpring .68s cubic-bezier(0.22,1,0.36,1) forwards;pointer-events:none}
+  /* 收缩态：纯硬隐藏，不做任何 CSS 动画（避免层叠竞争导致残影）。
+     动画全部由 JS 用内联样式驱动（内联样式优先级最高，不可能被覆盖） */
+  nav.tabs.tabs-collapsed{visibility:hidden!important;opacity:0!important;pointer-events:none!important}
   nav.tabs.tabs-collapsed::after,nav.tabs.tabs-collapsed .tab-indicator{display:none!important}
-  /* 收缩动画结束后由 JS 加 .nav-gone 硬隐藏，彻底消除合成层 / backdrop-filter 残影 */
-  nav.tabs.nav-gone{visibility:hidden!important}
   /* 独立毛玻璃球：默认隐藏，收缩时缩放淡入（只动 transform/opacity） */
   .tabs-ball{
     position:fixed;top:14px;right:18px;width:46px;height:46px;z-index:9999;
@@ -133,8 +129,7 @@
   @keyframes tabsPopIn{0%{transform:translateY(-8px) scale(.95);opacity:0}100%{transform:translateY(0) scale(1);opacity:1}}
   /* 尊重「减弱动效」偏好：关闭所有相关过渡 */
   @media (prefers-reduced-motion: reduce){
-    nav.tabs, nav.tabs.nav-enter, nav.tabs.tabs-collapsed, .tabs-ball, .tabs-ball.show{animation:none;transition:none}
-    nav.tabs.tabs-collapsed{transform:scale(0);opacity:0}
+    nav.tabs.nav-enter,.tabs-ball,.tabs-ball.show{animation:none;transition:none}
     .tabs-ball.show{opacity:.95;transform:scale(1);pointer-events:auto}
   }
   /* 拖动时用 left/width 改位置（rAF 节流防止掉帧，比 transform 稳定不出 bug） */
@@ -760,25 +755,94 @@ const navCta=$('#navCta'); if(navCta) navCta.onclick=()=>switchTab('detail');
   function showPopover(){if(!popover)return;buildPopover();popover.classList.add('show');popoverOpen=true;}
   function hidePopover(){if(!popover)return;popover.classList.remove('show');popoverOpen=false;}
 
-  // 核心：根据 scrollTop 切换收缩/展开（仅切换 class，动画交给 CSS transform/opacity，零重排）
-  function updateNavState(){
-    const shouldCollapse=window.scrollY>COLLAPSE_THRESHOLD;
-    if(shouldCollapse!==isCollapsed){
-      isCollapsed=shouldCollapse;
-      nav.classList.toggle('tabs-collapsed',shouldCollapse);
-      if(!shouldCollapse) nav.classList.remove('nav-gone'); // 展开前撤销硬隐藏，恢复过渡
-      if(ball) ball.classList.toggle('show',shouldCollapse);
-      if(shouldCollapse) hidePopover();
-      updateBallIcon();
+  // 核心：根据 scrollTop 切换收缩/展开（JS 内联样式驱动弹簧动画，绕开所有 CSS 层叠问题）
+  let collapseAnimId=null, expandAnimId=null;
+
+  function animateCollapse(){
+    // 阻尼弹簧参数（iOS 26 风格多段回弹）
+    const D=680; // 总时长 ms
+    const start=performance.now();
+    // 内联样式驱动动画（优先级最高，不可能被 CSS 覆盖）
+    nav.style.transition='none';
+    nav.style.willChange='transform,opacity';
+    function step(now){
+      var t=Math.min((now-start)/D,1);
+      // 多段阻尼弹簧：过冲→回摆→二弹→稳落
+      var s,o;
+      if(t<0.35){var p=t/0.35; s=1-p*0.5; o=1-p*0.25}           // 1→0.5, opacity 1→0.75
+      else if(t<0.58){var p=(t-0.35)/0.23; s=0.5*(1-p); o=0.75*(1-p)} // 0.5→0, op 0.75→0
+      else if(t<0.78){var p=(t-0.58)/0.2; s=0; o=0}                    // 保持消失
+      else{var p=(t-0.78)/0.22; s=0; o=0}                               // 稳落
+      nav.style.transform='scale('+s+')';
+      nav.style.opacity=o;
+      if(t<1) collapseAnimId=requestAnimationFrame(step);
+      else{
+        // 动画结束：硬隐藏 + 清理内联样式
+        nav.style.transform='';
+        nav.style.opacity='';
+        nav.style.willChange='';
+        nav.style.transition='';
+        nav.classList.add('tabs-collapsed');
+        collapseAnimId=null;
+      }
     }
+    collapseAnimId=requestAnimationFrame(step);
+    // 球体同步弹出（CSS keyframes 不受影响）
+    if(ball) ball.classList.add('show');
   }
 
-  // 收缩动画结束后硬隐藏导航，彻底消除残影（合成层 / backdrop-filter 残留）
-  nav.addEventListener('animationend',function(e){
-    if(e.animationName==='navCollapseSpring' && nav.classList.contains('tabs-collapsed')){
-      nav.classList.add('nav-gone');
+  function cancelCollapse(){
+    if(collapseAnimId){cancelAnimationFrame(collapseAnimId);collapseAnimId=null}
+  }
+
+  function animateExpand(){
+    const D=480;
+    const start=performance.now();
+    nav.classList.remove('tabs-collapsed'); // 先恢复可见
+    nav.style.transition='none';
+    nav.style.willChange='transform,opacity';
+    nav.style.transform='scale(0)';
+    nav.style.opacity='0';
+    function step(now){
+      var t=Math.min((now-start)/D,1);
+      // 弹性恢复（cubic-bezier 近似）
+      var s=1-Math.pow(1-t,3)*1.1+Math.pow(1-t,4)*0.1; // 轻微过冲再落定
+      s=Math.max(0,s);
+      var o=t<0.3?t/0.3*0.8:0.8+(t-0.3)/0.7*0.2;
+      nav.style.transform='scale('+s+')';
+      nav.style.opacity=o;
+      if(t<1) expandAnimId=requestAnimationFrame(step);
+      else{
+        nav.style.transform='';
+        nav.style.opacity='';
+        nav.style.willChange='';
+        nav.style.transition='';
+        expandAnimId=null;
+      }
     }
-  });
+    expandAnimId=requestAnimationFrame(step);
+    if(ball) ball.classList.remove('show');
+  }
+
+  function cancelExpand(){
+    if(expandAnimId){cancelAnimationFrame(expandAnimId);expandAnimId=null}
+  }
+
+  function updateNavState(){
+    var shouldCollapse=window.scrollY>COLLAPSE_THRESHOLD;
+    if(shouldCollapse!==isCollapsed){
+      isCollapsed=shouldCollapse;
+      if(shouldCollapse){
+        cancelExpand();
+        hidePopover();
+        updateBallIcon();
+        animateCollapse();
+      }else{
+        cancelCollapse();
+        animateExpand();
+      }
+    }
+  }
 
   // 滚动监听（rAF 节流）
   window.addEventListener('scroll',function(){
