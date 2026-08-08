@@ -866,6 +866,7 @@ def analyze_competitor(data):
     platform = (data.get("platform") or "").strip()
     price = (data.get("price") or "").strip()
     url = (data.get("url") or "").strip()
+    page_text = (data.get("page_text") or "").strip()
     main_b64 = data.get("main_image") or data.get("main_image_b64") or None
     if main_b64 and "," in main_b64:
         main_b64 = main_b64.split(",", 1)[1]
@@ -876,6 +877,7 @@ def analyze_competitor(data):
     if platform: meta.append("平台：" + platform)
     if price: meta.append("价格区间：" + price)
     if url: meta.append("商品链接：" + url)
+    if page_text: meta.append("【页面文本片段（用于推断真实标题/卖点；若上方未给标题，请据此提取）】\n" + page_text)
     meta_txt = "\n".join(meta) if meta else "（未提供文字信息，仅凭主图分析）"
 
     schema = ('请只输出一个严格 JSON 对象，不要任何多余文字/解释。字段与要求：\n'
@@ -886,15 +888,19 @@ def analyze_competitor(data):
               '  "detail": 详情页逻辑数组(3-5条)，每条是一句中文短句，聚焦首屏信任/叙事顺序/对比图/促单。\n'
               '【硬性格式要求】四个数组里的每一个元素都必须是「纯字符串短句」，'
               '严禁使用对象/字典/嵌套 JSON（例如不要写 {"composition":"..."} 这种，直接写成一句中文）。\n'
-              '每条务必具体、可操作，指向「可复用到自家生图/文案的套路」，严禁空话套话。')
+              '每条务必具体、可操作，指向「可复用到自家生图/文案的套路」，严禁空话套话。\n'
+              '【重要】若未直接提供「商品标题」，请先从上文【页面文本片段】推断真实商品标题，再据此给出标题策略；'
+              '标题策略必须具体到该商品的实际关键词/卖点，不要泛泛而谈。')
 
-    if main_b64:
+    has_text = bool(title) or bool(page_text)
+    if main_b64 and not has_text:
+        # 纯图片、无任何文字信息时才走慢的视觉模型（真「看」图），通常 40–70 秒
         try:
             img_fmt = detect_fmt(base64.b64decode(main_b64))[1]
         except Exception:
             img_fmt = "image/jpeg"
         data_url = "data:" + img_fmt + ";base64," + main_b64
-        text = ("你是资深电商运营分析师。下面是一件高销量商品的【主图 + 文字信息】，"
+        text = ("你是资深电商运营分析师。下面是一件高销量商品的【主图】，"
                 "请分析它高销量的原因，重点拆：主图构图/配色/拍摄角度、标题关键词策略、SKU 矩阵设计、详情页叙事逻辑。\n"
                 "商品信息：\n" + meta_txt + "\n\n" + schema)
         messages = [{"role": "user", "content": [
@@ -903,6 +909,7 @@ def analyze_competitor(data):
         ]}]
         content, err = _call_zhipu(key, "glm-4v-flash", messages)
     else:
+        # 有标题/页面文本 → 用更快的文本模型（约 10–25 秒），避免视觉模型 40–70 秒的慢速
         text = ("你是资深电商运营分析师。下面是一件高销量商品的文字信息，"
                 "请分析它高销量的原因，重点拆：主图套路、标题关键词策略、SKU 矩阵设计、详情页叙事逻辑。\n"
                 "商品信息：\n" + meta_txt + "\n\n" + schema)
@@ -927,6 +934,23 @@ def analyze_competitor(data):
 
 # ─────────── 商品链接自动抓取（服务端代抓，绕过浏览器 CORS/反爬） ───────────
 # 只贴链接 -> 自动识别平台、抓标题/主图/价格，能抓多少抓多少；抓不到也不阻塞，前端可手动补。
+def _decode_html(r):
+    """稳健解码商品页 HTML：优先用响应声明的 charset，否则依次尝试 utf-8 / apparent / GBK/GB18030。
+    避免 requests 默认按 Latin-1 误解码中文页面，导致标题/描述全变乱码、AI 也读不懂。"""
+    ct = r.headers.get("Content-Type", "")
+    m = re.search(r"charset=([\w-]+)", ct, re.I)
+    encs = []
+    if m:
+        encs.append(m.group(1).strip().lower())
+    encs += ["utf-8", (r.apparent_encoding or "gbk").lower(), "gbk", "gb18030"]
+    for e in encs:
+        try:
+            return r.content.decode(e)
+        except Exception:
+            continue
+    return r.content.decode("utf-8", errors="replace")
+
+
 def _detect_platform_from_url(url):
     u = (url or "").lower()
     if "taobao.com" in u or "tmall.com" in u:
@@ -959,7 +983,7 @@ def fetch_product(url):
         return None, "抓取商品页失败：" + str(e)
     if r.status_code != 200:
         return None, "抓取商品页返回 %d" % r.status_code
-    html = r.text
+    html = _decode_html(r)
 
     def _meta(prop):
         m = re.search(r'<meta[^>]+property=["\']%s["\'][^>]+content=["\']([^"\']+)' % re.escape(prop), html, re.I)
@@ -967,11 +991,56 @@ def fetch_product(url):
             m = re.search(r'<meta[^>]+name=["\']%s["\'][^>]+content=["\']([^"\']+)' % re.escape(prop), html, re.I)
         return m.group(1).strip() if m else ""
 
-    title = _meta("og:title") or _meta("title")
+    def _ld_name():
+        """从 JSON-LD 结构化数据里抽 name/headline（很多电商页的商品名藏在这里）。"""
+        names = []
+        for m in re.finditer(r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', html, re.I | re.S):
+            raw = m.group(1).strip()
+            if not raw:
+                continue
+            try:
+                obj = json.loads(raw)
+            except Exception:
+                # 个别站点 JSON 不标准，粗取 "name":"..." / "headline":"..."
+                for nm in re.findall(r'"(?:name|headline|title)"\s*:\s*"([^"]{2,120})"', raw):
+                    names.append(nm)
+                continue
+            def walk(o):
+                if isinstance(o, dict):
+                    for k in ("name", "headline", "title"):
+                        v = o.get(k)
+                        if isinstance(v, str) and v.strip():
+                            names.append(v.strip())
+                    ile = o.get("itemListElement")
+                    if isinstance(ile, list):
+                        for it in ile:
+                            if isinstance(it, dict) and isinstance(it.get("name"), str):
+                                names.append(it["name"].strip())
+                    for v in o.values():
+                        walk(v)
+                elif isinstance(o, list):
+                    for v in o:
+                        walk(v)
+            walk(obj)
+        # 去重保序
+        seen = set(); out = []
+        for n in names:
+            if n not in seen:
+                seen.add(n); out.append(n)
+        return out
+
+    title = (_meta("og:title") or _meta("twitter:title") or "").strip()
+    if not title:
+        ld = _ld_name()
+        if ld:
+            title = ld[0]
     if not title:
         m = re.search(r"<title[^>]*>([^<]+)</title>", html, re.I)
         if m:
             title = m.group(1).strip()
+    # 清理：去掉常见的站点后缀，避免把「- 淘宝网」当成商品名
+    if title:
+        title = re.split(r"\s*[-|–·]\s*(?:淘宝网|淘宝|天猫|京东|JD|京东商城|拼多多|抖音|Amazon|亚马逊|1688|唯品会|苏宁易购|苏宁)\s*$", title)[0].strip()
     img_url = ""
     for prop in ("og:image:secure_url", "og:image", "twitter:image", "image"):
         v = _meta(prop)
@@ -991,12 +1060,31 @@ def fetch_product(url):
             price = mp.group(1).strip()
     platform = _detect_platform_from_url(url)
 
+    # 拼一段「页面文本片段」给 AI 推断真实标题/卖点（反爬页静态 HTML 里常仍能挖到线索）
+    desc = (_meta("og:description") or _meta("description") or _meta("twitter:description") or "").strip()
+    h1m = re.search(r"<h1[^>]*>([^<]+)</h1>", html, re.I)
+    h1 = h1m.group(1).strip() if h1m else ""
+    ld = _ld_name()
+    bits = []
+    if title:
+        bits.append("页面标题: " + title)
+    if desc:
+        bits.append("描述: " + desc)
+    if h1:
+        bits.append("H1: " + h1)
+    if ld:
+        bits.append("结构化名: " + " | ".join(ld[:6]))
+    if url:
+        bits.append("链接: " + url)
+    page_text = "\n".join(bits)[:1500]
+
     image_data_url = None
     if img_url:
         try:
             if img_url.startswith("//"):
                 img_url = "https:" + img_url
-            ir = S.get(img_url, headers=headers, timeout=15)
+            # 图片下载仅作可选补充，超时压到 8s，避免拖慢整体抓取
+            ir = S.get(img_url, headers=headers, timeout=8)
             if ir.status_code == 200 and ir.content:
                 fmt = detect_fmt(ir.content)[1]
                 image_data_url = "data:%s;base64,%s" % (fmt, base64.b64encode(ir.content).decode("ascii"))
@@ -1008,6 +1096,7 @@ def fetch_product(url):
         "image_data_url": image_data_url,
         "price": price,
         "platform": platform,
+        "page_text": page_text,
         "note": "已尽力自动抓取；部分平台（淘宝/拼多多等）反爬较强，可能只拿到部分信息，可手动补。",
     }, None
 

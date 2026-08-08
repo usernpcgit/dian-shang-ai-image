@@ -1240,6 +1240,7 @@ async function readProductForm(mainImgOverride){
     category:($('#pCategory2').value||'').trim(),
     price:($('#pPrice').value||'').trim(),
     tags:($('#pTags2').value||'').split(',').map(s=>s.trim()).filter(Boolean),
+    page_text:_lastPageText,
     main_image:null
   };
   if(!f.url){toast('请先粘贴商品链接');$('#pUrl').focus();return null;}
@@ -1251,21 +1252,35 @@ async function readProductForm(mainImgOverride){
 }
 function resetProductForm(){$('#pUrl').value='';$('#pTitle2').value='';$('#pCategory2').value='';$('#pPrice').value='';$('#pTags2').value='';$('#pMainImg').value='';$('#pPlatform').value='';}
 
-/* —— 进度动画 —— */
-async function runAnalysisProgress(){
-  const prog=$('#analysisProgress'),bar=$('#analysisBar'),status=$('#analysisStatusText'),resEl=$('#analysisResultText');
-  prog.style.display='block';bar.style.width='0%';resEl.textContent='';resEl.innerHTML='';
-  const steps=[{t:'识别平台与主图…',w:18},{t:'拆解标题与关键词…',w:42},{t:'分析 SKU 与配色…',w:66},{t:'总结高销量原因…',w:86},{t:'生成生图偷师建议…',w:100}];
-  for(const s of steps){status.textContent=s.t;bar.style.width=s.w+'%';await new Promise(r=>setTimeout(r,420));}
-  // 快速步骤走完，真实分析仍在后端进行：给出明确提示，避免误以为卡死
-  status.textContent='🤖 AI 正在深度分析竞品（约 10–40 秒，请稍候）…';bar.style.width='100%';
+/* —— 进度动画（真实计时，消除「卡住」观感） —— */
+let _analysisTimer=null,_analysisStage='',_analysisStart=0;
+function startAnalysisProgress(){
+  const prog=$('#analysisProgress'),bar=$('#analysisBar'),resEl=$('#analysisResultText');
+  prog.style.display='block';resEl.textContent='';resEl.innerHTML='';
+  bar.style.transition='width .6s ease';bar.style.width='6%';
+  _analysisStage='fetching';_analysisStart=Date.now();
+  if(_analysisTimer)clearInterval(_analysisTimer);
+  _analysisTimer=setInterval(()=>{
+    const s=Math.floor((Date.now()-_analysisStart)/1000);
+    // 进度条缓慢爬升但不超过 92%，真实完成才到 100%，避免「满格却没好」的卡死观感
+    bar.style.width=Math.min(92,6+s*2.2)+'%';
+    $('#analysisStatusText').textContent = _analysisStage==='fetching'
+      ? '① 正在抓取链接信息…（'+s+' 秒）'
+      : '🔍 AI 深度分析中… 已等待 '+s+' 秒（通常 10–40 秒，复杂链接可能更久）';
+  },1000);
+}
+function setAnalysisStage(s){_analysisStage=s;}
+function stopAnalysisProgress(){
+  if(_analysisTimer){clearInterval(_analysisTimer);_analysisTimer=null;}
+  const bar=$('#analysisBar');if(bar)bar.style.width='100%';
 }
 
 /* —— 添加 + 分析 —— */
 async function realAnalyze(f){
   const payload={
     title:f.title, category:f.category, platform:f.platform,
-    price:f.price, url:f.url, main_image:f.main_image||null
+    price:f.price, url:f.url, main_image:f.main_image||null,
+    page_text:f.page_text||''
   };
   const r=await fetch(ANALYZE_URL,{method:'POST',headers:authHeaders(),body:JSON.stringify(payload)});
   const j=await r.json().catch(()=>null);
@@ -1281,7 +1296,8 @@ async function realAnalyze(f){
     detail:Array.isArray(j.detail)?j.detail:[]
   };
 }
-// 自动抓取链接信息（服务端代抓，绕过 CORS/反爬）。返回 {title,image_data_url,price,platform,note}
+// 自动抓取链接信息（服务端代抓，绕过 CORS/反爬）。返回 {title,image_data_url,price,platform,page_text,note}
+let _lastPageText='';   // 暂存最近一次抓取到的页面文本片段，供分析接口推断真实标题
 async function fetchProduct(url){
   const r=await fetch(FETCH_URL,{method:'POST',headers:authHeaders(),body:JSON.stringify({url})});
   const j=await r.json().catch(()=>null);
@@ -1296,11 +1312,12 @@ async function fillFromFetch(url){
   let meta;
   try{ meta=await fetchProduct(url); }
   catch(e){ toast('自动抓取失败：'+e.message+'（可手动补标题/主图）'); return null; }
+  _lastPageText=(meta.page_text||'').slice(0,1500);
   if(meta.title && !$('#pTitle2').value.trim())$('#pTitle2').value=meta.title;
   if(meta.platform && !$('#pPlatform').value)$('#pPlatform').value=meta.platform;
   if(meta.price && !$('#pPrice').value.trim())$('#pPrice').value=meta.price;
-  if(meta.note)$('#analysisStatusText').textContent='已自动抓取，正在深度分析…';
-  return meta.image_data_url||null;   // 抓到的主图（data URL），供分析用
+  // 抓到的主图（data URL）供分析用；即便没主图，只要有标题/页面文本，分析也会走更快的文本模型
+  return meta.image_data_url||null;
 }
 $('#btnPasteGrab').onclick=async()=>{
   const url=$('#pUrl').value.trim();
@@ -1312,12 +1329,13 @@ $('#btnPasteGrab').onclick=async()=>{
 $('#btnAnalyzeProduct').onclick=async()=>{
   const url=$('#pUrl').value.trim();
   if(!url){toast('请先粘贴商品链接');$('#pUrl').focus();return;}
-  await runAnalysisProgress();
+  startAnalysisProgress();
   // 一步到位：自动抓取 -> 自动填 -> 真分析 -> 存
   let autoImg=null;
   try{ autoImg=await fillFromFetch(url); }
   catch(e){ /* 抓取失败不阻塞，继续用已填字段 */ }
-  const f=await readProductForm(autoImg);if(!f)return;
+  setAnalysisStage('analyzing');
+  const f=await readProductForm(autoImg);if(!f){stopAnalysisProgress();return;}
   let analysis=null;
   try{
     analysis=await realAnalyze(f);
@@ -1328,6 +1346,7 @@ $('#btnAnalyzeProduct').onclick=async()=>{
     $('#analysisResultText').innerHTML='<span class="muted">本次 AI 分析未成功：'+escapeHtml(e.message)+'。已存入情报库，可在卡片上点「分析」重试。</span>';
     toast('AI 分析失败，已存为未分析（可稍后补分析）');
   }
+  stopAnalysisProgress();
   const rec={id:'p'+Date.now()+Math.random().toString(36).slice(2,5),...f,analysis,isRef:false,created_at:Date.now()};
   await prodPut(rec);PROD_LIB=await prodAll().catch(()=>[]);renderProductGrid();updateRefStatus();resetProductForm();
   if(analysis) toast('竞品已学习并存入情报库');
@@ -1398,13 +1417,15 @@ function renderProductGrid(){
 
 /* —— 重新分析已存竞品 —— */
 async function reAnalyze(x){
-  await runAnalysisProgress();
+  startAnalysisProgress();
   try{
     x.analysis=await realAnalyze(x);
   }catch(e){
+    stopAnalysisProgress();
     toast('分析失败：'+e.message);
     return;
   }
+  stopAnalysisProgress();
   await prodPut(x);PROD_LIB=await prodAll().catch(()=>[]);
   $('#analysisResultText').innerHTML='<strong>📌 高销量原因：</strong>'+escapeHtml(x.analysis.summary);
   renderProductGrid();updateRefStatus();toast('已重新分析');
