@@ -82,9 +82,11 @@
   nav.tabs .tab-indicator{position:absolute;top:5px;bottom:5px;left:0;width:0;background:rgba(124,58,237,.28);border:1px solid rgba(167,139,250,.55);border-radius:999px;box-shadow:0 2px 14px rgba(124,58,237,.30), inset 0 1px 2px rgba(167,139,250,.35);transition:left .65s cubic-bezier(0.34,1.56,0.64,1), width .65s cubic-bezier(0.34,1.56,0.64,1), background .32s, border-color .32s, box-shadow .32s;z-index:0;pointer-events:none;will-change:left,width;contain:layout paint}
   nav.tabs.dragging .tab-indicator{transition:none!important;background:rgba(124,58,237,.42);border-color:rgba(167,139,250,.85)}
   /* ===== Tab 导航：毛玻璃球收缩（仅动画 transform/opacity，GPU 合成，零重排，无卡顿） ===== */
-  nav.tabs{transition:transform .32s cubic-bezier(.25,1,.5,1),opacity .22s ease-in;will-change:transform,opacity}
-  /* 收缩态：缩小+上移出视口（仅 transform/opacity，GPU 合成零重排，彻底不可见） */
-  nav.tabs.tabs-collapsed{transform:scale(.6) translateY(-120px);opacity:0;pointer-events:none}
+  nav.tabs{transition:opacity .2s ease-in,visibility 0s linear .2s;will-change:opacity}
+  /* 收缩态：强制脱离 sticky(position:absolute) + 彻底不可见(visibility:hidden+opacity:0)
+     注意：position:sticky 元素的 transform/translateY 行为异常（不按预期生效），
+     所以不能用 transform 移出视口来隐藏，必须改 position + visibility 双重切断 */
+  nav.tabs.tabs-collapsed{position:absolute!important;visibility:hidden;opacity:0;pointer-events:none;top:-999px}
   nav.tabs.tabs-collapsed::after{display:none}
   nav.tabs.tabs-collapsed .tab-indicator{display:none}
   /* 独立毛玻璃球：默认隐藏，收缩时缩放淡入（只动 transform/opacity） */
@@ -123,6 +125,7 @@
   @media (prefers-reduced-motion: reduce){
     nav.tabs{transition:none}
     .tabs-ball{transition:none}
+    .tabs-ball.show{opacity:.95;transform:scale(1)}
   }
   /* 拖动时用 left/width 改位置（rAF 节流防止掉帧，比 transform 稳定不出 bug） */
   nav.tabs .tab-indicator{position:absolute;top:5px;bottom:5px;left:0;width:0;background:rgba(124,58,237,.28);border:1px solid rgba(167,139,250,.55);border-radius:999px;box-shadow:0 2px 14px rgba(124,58,237,.30), inset 0 1px 2px rgba(167,139,250,.35);transition:left .65s cubic-bezier(0.34,1.56,0.64,1), width .65s cubic-bezier(0.34,1.56,0.64,1), background .32s, border-color .32s, box-shadow .32s;z-index:0;pointer-events:none;will-change:left,width;contain:layout paint}
