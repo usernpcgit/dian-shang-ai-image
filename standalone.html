@@ -755,12 +755,26 @@ const navCta=$('#navCta'); if(navCta) navCta.onclick=()=>switchTab('detail');
   function showPopover(){if(!popover)return;buildPopover();popover.classList.add('show');popoverOpen=true;}
   function hidePopover(){if(!popover)return;popover.classList.remove('show');popoverOpen=false;}
 
-  // 核心：根据 scrollTop 切换收缩/展开（JS 内联样式驱动弹簧动画，绕开所有 CSS 层叠问题）
-  let collapseAnimId=null, expandAnimId=null;
+  // 核心：根据 scrollTop 切换收缩/展开。
+  // 用「连续欠阻尼弹簧」单 rAF 循环驱动：进度 p 平滑跟随目标 0/1。
+  // 快速滚动时只是目标翻转、弹簧从当前状态平滑重定向，绝不从 t=0 跳变 → 不变形；
+  // 欠阻尼叠加过冲仍保留 q 弹；全程只动 transform、opacity 恒 1（残影免疫）。
+  let navP=0, navV=0, navTarget=0, navRAF=null, navLast=0, ballShown=false, navBaseRect=null;
 
-  // 工具：测量导航终点应落到的球位置，算出 transform 参数
+  // 取导航「未变换」基准框（缓存，避免被自身 transform 污染；resize 时失效重测）
+  function getNavBaseRect(){
+    if(navBaseRect) return navBaseRect;
+    var prev=nav.style.transform;
+    nav.style.transform='none';
+    navBaseRect=nav.getBoundingClientRect();
+    nav.style.transform=prev;
+    return navBaseRect;
+  }
+  window.addEventListener('resize',function(){navBaseRect=null;});
+
+  // 测量导航终点应落到的球位置（球用布局宽 offsetWidth，导航用未变换基准框）
   function measureTargets(){
-    var navRect=nav.getBoundingClientRect();
+    var navRect=getNavBaseRect();
     var ballRect=ball.getBoundingClientRect();
     var navCx=navRect.left+navRect.width/2, navCy=navRect.top+navRect.height/2;
     var ballCx=ballRect.left+ballRect.width/2, ballCy=ballRect.top+ballRect.height/2;
@@ -769,75 +783,71 @@ const navCta=$('#navCta'); if(navCta) navCta.onclick=()=>switchTab('detail');
     var ballSize=ball.offsetWidth||46;
     return {dx:ballCx-navCx, dy:ballCy-navCy, scale:ballSize/navRect.width};
   }
-  // 回弹缓动（back-out：先过冲再落定，制造 q 弹）
-  function backOut(t){var c1=1.70158,c3=c1+1;return 1+c3*Math.pow(t-1,3)+c1*Math.pow(t-1,2);}
 
-  // 收缩：导航往右上角缩放「长」成球（只动 transform，绝不淡出 → 无残影）
-  function animateCollapse(){
+  // 把进度 p(0~1，弹簧过冲可略微越界做 q 弹) 映射到导航 transform（只动 transform，opacity 恒 1）
+  function applyNavProgress(p){
+    var pc=Math.max(-0.18,Math.min(1.18,p));
     var tgt=measureTargets();
-    var D=620, start=performance.now();
-    nav.style.transition='none';
-    nav.style.transformOrigin='center';
-    nav.style.willChange='transform';
-    nav.style.opacity='1'; // 关键：保持不透明，只缩放+位移，消除残影
-    function step(now){
-      var t=Math.min((now-start)/D,1);
-      var e=backOut(t);
-      var s=1+(tgt.scale-1)*e;
-      var dx=tgt.dx*e, dy=tgt.dy*e;
-      nav.style.transform='translate('+dx+'px,'+dy+'px) scale('+s+')';
-      if(t<1) collapseAnimId=requestAnimationFrame(step);
-      else{
-        nav.style.transform='';nav.style.opacity='';nav.style.transformOrigin='';nav.style.willChange='';nav.style.transition='';
-        nav.classList.add('tabs-collapsed'); // 动画结束硬隐藏
-        collapseAnimId=null;
-      }
-    }
-    collapseAnimId=requestAnimationFrame(step);
-    if(ball) ball.classList.add('show');
-  }
-  function cancelCollapse(){if(collapseAnimId){cancelAnimationFrame(collapseAnimId);collapseAnimId=null}}
-
-  // 展开：球「长」回导航（逆向 transform 动画，带过冲 q 弹）
-  function animateExpand(){
-    var tgt=measureTargets();
-    var D=460, start=performance.now();
-    nav.style.transition='none';
-    nav.style.transformOrigin='center';
-    nav.style.willChange='transform';
+    var s=1+(tgt.scale-1)*pc;
+    var dx=tgt.dx*pc, dy=tgt.dy*pc;
+    nav.style.transform='translate('+dx+'px,'+dy+'px) scale('+s+')';
     nav.style.opacity='1';
-    nav.style.transform='translate('+tgt.dx+'px,'+tgt.dy+'px) scale('+tgt.scale+')';
-    nav.classList.remove('tabs-collapsed'); // 先恢复可见（已处于小球态，无闪烁）
-    function step(now){
-      var t=Math.min((now-start)/D,1);
-      var e=backOut(t);
-      var s=tgt.scale+(1-tgt.scale)*e;
-      var dx=tgt.dx*(1-e), dy=tgt.dy*(1-e);
-      nav.style.transform='translate('+dx+'px,'+dy+'px) scale('+s+')';
-      if(t<1) expandAnimId=requestAnimationFrame(step);
-      else{
-        nav.style.transform='';nav.style.opacity='';nav.style.transformOrigin='';nav.style.willChange='';nav.style.transition='';
-        expandAnimId=null;
-      }
-    }
-    expandAnimId=requestAnimationFrame(step);
-    if(ball) ball.classList.remove('show');
   }
-  function cancelExpand(){if(expandAnimId){cancelAnimationFrame(expandAnimId);expandAnimId=null}}
+
+  // 弹簧积分：stiffness 管快慢，damping<临界值=过冲 q 弹；dt 限幅防掉帧/卡顿跳变
+  function navSpringStep(now){
+    if(!navLast) navLast=now;
+    var dt=Math.min((now-navLast)/1000,0.032);
+    navLast=now;
+    var stiffness=180, damping=17;
+    var a=stiffness*(navTarget-navP)-damping*navV;
+    navV+=a*dt; navP+=navV*dt;
+    if(Math.abs(navTarget-navP)<0.001 && Math.abs(navV)<0.01){
+      navP=navTarget; navV=0; navLast=0;
+      applyNavProgress(navP);
+      navRAF=null;
+      settleNav();
+      return;
+    }
+    applyNavProgress(navP);
+    navRAF=requestAnimationFrame(navSpringStep);
+  }
+  function startNavSpring(){
+    navLast=0;
+    if(!navRAF) navRAF=requestAnimationFrame(navSpringStep);
+  }
+  // 落定：收满→硬隐藏；展开满→清内联样式交还 CSS（均不影响 opacity 之外的渲染）
+  function settleNav(){
+    nav.style.transform='';nav.style.opacity='';nav.style.transformOrigin='';nav.style.willChange='';
+    if(navTarget>=1) nav.classList.add('tabs-collapsed');
+    else nav.classList.remove('tabs-collapsed');
+  }
 
   function updateNavState(){
     var shouldCollapse=window.scrollY>COLLAPSE_THRESHOLD;
     if(shouldCollapse!==isCollapsed){
       isCollapsed=shouldCollapse;
+      navTarget=shouldCollapse?1:0;
+      nav.style.transformOrigin='center';
+      nav.style.willChange='transform';
+      nav.style.opacity='1';
       if(shouldCollapse){
-        cancelExpand();
         hidePopover();
         updateBallIcon();
-        animateCollapse();
+        nav.classList.remove('tabs-collapsed'); // 先恢复可见再缩
+        navBaseRect=null;                        // 滚动后布局可能变，下一帧重测基准框
       }else{
-        cancelCollapse();
-        animateExpand();
+        // 展开：先按当前进度把导航摆到球大小（此时仍 hidden，无闪烁），再显示，弹簧弹回
+        applyNavProgress(navP);
+        nav.classList.remove('tabs-collapsed');
+        navBaseRect=null;
       }
+      // 球显隐跟随目标（独立元素，自身带弹簧弹出）
+      if(shouldCollapse!==ballShown){
+        ballShown=shouldCollapse;
+        if(ball) ball.classList.toggle('show',shouldCollapse);
+      }
+      startNavSpring();
     }
   }
 
