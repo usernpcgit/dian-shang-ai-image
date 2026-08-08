@@ -551,17 +551,6 @@
     <div id="productGrid" style="margin-top:10px"></div>
   </div>
 
-  <!-- 素材图库：上传/筛选/预览个人素材图（脚本 uploadGallery/renderGallery 依赖下面 4 个元素） -->
-  <div class="card" style="margin-top:14px">
-    <h3 style="margin-top:0;display:flex;justify-content:space-between;align-items:center"><span>🖼️ 素材图库</span>
-      <label class="btn sm" style="cursor:pointer;margin:0">＋ 上传图片<input type="file" id="gUpload" accept="image/*" multiple style="display:none"></label>
-    </h3>
-    <div class="row" style="margin-bottom:10px">
-      <div><label>按标签筛选</label><input type="text" id="gFilterTag" placeholder="标签关键词，如 爆款"></div>
-      <div><label>按备注筛选</label><input type="text" id="gFilterNote" placeholder="备注关键词"></div>
-    </div>
-    <div id="galleryGrid" class="gallery-grid"></div>
-  </div>
 </section>
 
 <!-- ============ 使用说明 ============ -->
@@ -1770,7 +1759,7 @@ function dbDel(id){return new Promise((res,rej)=>{const tx=dbp.transaction('imgs
 async function uploadGallery(files){for(const f of files){const u=await new Promise(r=>{const rd=new FileReader();rd.onload=()=>r(rd.result);rd.readAsDataURL(f);});
   await dbPut({id:'g'+Date.now()+Math.random().toString(36).slice(2,6),name:f.name,data:u,tags:[],note:'',time:Date.now()});}
   renderGallery();toast('已加入 '+files.length+' 张');}
-async function renderGallery(){if(!dbp)return;let list=await dbAll();
+async function renderGallery(){if(!dbp||!$('#galleryGrid'))return;let list=await dbAll();
   const ft=$('#gFilterTag').value.trim().toLowerCase(),fn=$('#gFilterNote').value.trim().toLowerCase();
   if(ft)list=list.filter(x=>(x.tags||[]).join(',').toLowerCase().includes(ft));
   if(fn)list=list.filter(x=>(x.note||'').toLowerCase().includes(fn));list.sort((a,b)=>b.time-a.time);
