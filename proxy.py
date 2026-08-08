@@ -1625,6 +1625,9 @@ class H(BaseHTTPRequestHandler):
         if self.path == "/api/analyze-competitor-stream":
             self._handle_analyze_stream()
             return
+        if self.path == "/api/prompt-gen":
+            self._handle_prompt_gen()
+            return
         if self.path != "/api/gen":
             self.send_response(404)
             self._cors()
@@ -1829,6 +1832,87 @@ class H(BaseHTTPRequestHandler):
             _run_stream_analyze(data, emit)
         except Exception as e:
             emit({"stage": "error", "msg": "分析失败：" + str(e)})
+
+    def _handle_prompt_gen(self):
+        """AI 反推生图提示词：上传产品白底图 + 卖点 → GLM-4V 分析产品 → GLM-4 生成多条提示词"""
+        try:
+            ln = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(ln)
+            data = json.loads(body or b"{}")
+        except Exception:
+            self._send_json(400, {"error": "请求解析失败"})
+            return
+        token = (self.headers.get("Authorization") or "").replace("Bearer ", "", 1).strip()
+        if not token:
+            token = (self.headers.get("X-Access-Token") or "").strip()
+        ok, info, kind = resolve_credential(token)
+        if not ok:
+            self._send_json(401, {"error": "访问码无效或已过期，请先输入正确的动态访问码。（" + info.get("error", "") + "）"})
+            return
+
+        image_b64 = data.get("image_b64") or ""
+        selling_points = (data.get("selling_points") or "").strip()
+        styles = data.get("styles") or ["详情页主图", "海报", "种草文", "场景图"]
+
+        if not image_b64:
+            self._send_json(400, {"error": "请上传产品白底图"})
+            return
+        if not selling_points:
+            self._send_json(400, {"error": "请填写产品卖点/特点"})
+            return
+
+        # Step 1: GLM-4V-Flash 分析产品视觉特征
+        vision_messages = [
+            {"role": "user", "content": [
+                {"type": "image_url", "image_url": {"url": image_b64}},
+                {"type": "text", "text": (
+                    "这是一张电商产品白底图。请用中文简洁分析以下方面（每项1-2句话）：\n"
+                    "1. 产品类型和核心外观特征\n"
+                    "2. 颜色、材质、质感\n"
+                    "3. 适合的目标人群和使用场景\n"
+                    "4. 拍摄角度和构图特点\n"
+                    "5. 适合的视觉风格方向（如：极简、清新、奢华、科技感等）\n"
+                    "请直接输出分析结果，不要加标题前缀。"
+                )}
+            ]}
+        ]
+        analysis, err = _call_zhipu(ZHIPU_API_KEY, "glm-4v-flash", vision_messages, timeout=60)
+        if err:
+            self._send_json(200, {"error": "产品图分析失败：" + err})
+            return
+
+        # Step 2: GLM-4-Flash 基于分析+卖点生成多条提示词
+        style_list = "、".join(styles)
+        gen_messages = [
+            {"role": "system", "content": (
+                "你是电商AI生图提示词专家。根据产品分析结果和用户提供的卖点，"
+                "为指定风格/场景分别生成专业的AI绘画提示词（英文prompt为主，中文说明为辅）。"
+                "每条提示词要具体到：场景描述、光线、色调、构图、氛围、产品摆放方式。"
+                "输出必须为严格JSON数组格式，每个元素包含 style(风格名)、prompt(英文生图提示词)、description(中文说明)。"
+            )},
+            {"role": "user", "content": (
+                f"【产品视觉分析】\n{analysis}\n\n"
+                f"【用户提供的卖点】\n{selling_points}\n\n"
+                f"【需要生成的提示词风格】\n{style_list}\n\n"
+                "请为以上每种风格各生成1条高质量AI生图提示词。直接输出JSON数组，不要加其他文字。"
+            )}
+        ]
+        # glm-4-flash max_tokens=1024，够用
+        result_text, err2 = _call_zhipu(ZHIPU_API_KEY, "glm-4-flash", gen_messages, timeout=70)
+        if err2:
+            self._send_json(200, {"error": "提示词生成失败：" + err2})
+            return
+
+        prompts_data = _extract_json(result_text)
+        if not isinstance(prompts_data, list) or not prompts_data:
+            # 如果模型没返回严格JSON，尝试从文本中提取
+            prompts_data = [{"style": s, "prompt": result_text, "description": result_text[:80]} for s in styles[:1]]
+
+        self._send_json(200, {
+            "prompts": prompts_data,
+            "product_analysis": analysis,
+            "count": len(prompts_data)
+        })
 
     def _handle_fetch_product(self):
         # 商品链接自动抓取：服务端代抓，绕过浏览器 CORS/反爬；同样需访问码门禁。

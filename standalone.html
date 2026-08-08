@@ -254,6 +254,40 @@
   .pitem .pc{color:var(--brand);font-size:13px;margin-bottom:8px;font-weight:800}
   .pitem .pcon{color:var(--ink);font-size:14px;font-weight:500;line-height:1.6;white-space:pre-wrap;max-height:140px;overflow:auto}
   .ptag{display:inline-block;background:rgba(124,58,237,.15);border:1px solid rgba(124,58,237,.35);border-radius:12px;padding:3px 10px;font-size:12px;font-weight:600;color:#C4B5FD;margin:8px 5px 0 0}
+  /* ===== AI 反推提示词（新提示词库）===== */
+  .pg-input-card{border-color:rgba(124,58,237,.3)}
+  .pg-upload-zone{position:relative;border:2px dashed rgba(124,58,237,.4);border-radius:16px;padding:28px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:rgba(124,58,237,.03)}
+  .pg-upload-zone:hover{border-color:var(--brand);background:rgba(124,58,237,.08)}
+  .pg-upload-zone.has-image{border-style:solid;border-color:rgba(34,197,94,.5);padding:12px}
+  .pg-upload-zone.dragover{border-color:var(--ok);background:rgba(34,197,94,.08)}
+  .pg-upload-inner{pointer-events:none}
+  .pg-upload-icon{font-size:36px;margin-bottom:6px}
+  .pg-upload-text{font-size:14px;color:var(--ink)}
+  .pg-upload-text strong{color:var(--brand)}
+  .pg-upload-hint{font-size:12px;color:var(--muted);margin-top:4px}
+  .pg-preview{max-width:200px;max-height:160px;border-radius:10px;object-fit:contain;display:block;margin:0 auto}
+  .pg-remove-btn{position:absolute;top:6px;right:6px;width:26px;height:26px;border-radius:50%;border:none;background:rgba(248,113,113,.85);color:#fff;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;transition:transform .15s}
+  .pg-remove-btn:hover{transform:scale(1.15)}
+  .pg-style-chips{display:flex;flex-wrap:wrap;gap:8px}
+  .pg-chip{padding:6px 14px;border-radius:999px;border:1.5px solid var(--line);background:transparent;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;transition:all .18s}
+  .pg-chip:hover{border-color:var(--brand);color:var(--brand)}
+  .pg-chip.active{background:rgba(124,58,237,.15);border-color:var(--brand);color:var(--brand2)}
+  .pg-gen-btn{position:relative;min-height:46px;font-size:16px;font-weight:800;letter-spacing:.5px}
+  .pg-btn-loading{display:flex;align-items:center;justify-content:center;gap:8px}
+  .pg-spinner{width:20px;height:20px;border:2.5px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:pgSpin .65s linear infinite;display:inline-block}
+  @keyframes pgSpin{to{transform:rotate(360deg)}}
+  .pg-results-card{border-color:rgba(34,197,94,.3)}
+  .pg-count{font-size:13px;font-weight:400;color:var(--ok);margin-left:6px}
+  .pg-analysis-box{background:rgba(124,58,237,.06);border:1px solid rgba(124,58,237,.2);border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:13px;line-height:1.65;color:var(--muted)}
+  .pg-analysis-box strong{color:var(--ink)}
+  .pg-prompts-list{display:flex;flex-direction:column;gap:12px}
+  .pg-prompt-card{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:16px;position:relative;transition:border-color .2s}
+  .pg-prompt-card:hover{border-color:rgba(124,58,237,.45)}
+  .pg-prompt-card .pg-pstyle{display:inline-flex;align-items:center;gap:5px;background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;font-size:11.5px;font-weight:800;padding:3px 10px;border-radius:999px;margin-bottom:8px}
+  .pg-prompt-card .pg-pdesc{font-size:13px;color:var(--muted);margin-bottom:8px;line-height:1.55}
+  .pg-prompt-card .pg-pprompt{font-size:13.5px;color:var(--ink);line-height:1.7;white-space:pre-wrap;word-break:break-word;font-family:'SF Mono',SFMono-Menlo,'Consolas','Liberation Mono',Menlo,monospace;background:rgba(0,0,0,.22);padding:10px 12px;border-radius:10px;max-height:140px;overflow:auto}
+  .pg-prompt-card .pg-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .pg-prompt-card .pg-actions button{font-size:12px;padding:5px 12px;border-radius:8px}
   /* 画廊 */
   .gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;margin-top:4px}
   .gitem{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;cursor:pointer;box-shadow:var(--shadow)}
@@ -521,31 +555,62 @@
   </div>
 </section>
 
-<!-- ============ 提示词库 ============ -->
+<!-- ============ 提示词库（AI 反推生图提示词） ============ -->
 <section class="view" id="view-prompts">
   <div class="guide">
-    <h4>📝 提示词库是干嘛的？</h4>
-    <p class="muted" style="margin:0">把平时打磨好的"生图文案 / 种草话术"存进来，下次直接复制用，不用每次重写。支持分类、标签、搜一搜。</p>
+    <h4>🎯 AI 反推生图提示词</h4>
+    <p class="muted" style="margin:0">上传产品白底图 → 填写卖点 → AI 自动分析产品特征并反推出多条专业生图提示词（详情页主图 / 海报 / 种草文 / 场景图等），支持一键复制、保存到库、直接拿去生图。</p>
   </div>
-  <div class="card">
-    <h3>新增 / 修改一条</h3>
-    <div class="row">
-      <div><label for="pTitle">标题</label><input type="text" id="pTitle" placeholder="例如：甜系详情页主图"></div>
-      <div><label>分类</label><input type="text" id="pCat" placeholder="详情页 / 海报 / 种草文"></div>
+
+  <!-- 输入区：上传产品图 + 卖点 -->
+  <div class="card pg-input-card">
+    <h3>📦 产品信息</h3>
+    <div class="pg-upload-zone" id="pgUploadZone">
+      <div class="pg-upload-inner" id="pgUploadInner">
+        <div class="pg-upload-icon">📷</div>
+        <div class="pg-upload-text">点击或拖拽上传<strong>产品白底图</strong></div>
+        <div class="pg-upload-hint">支持 JPG / PNG / WebP，建议 800px 以上</div>
+      </div>
+      <img id="pgPreview" class="pg-preview" style="display:none" alt="产品预览">
+      <button class="pg-remove-btn" id="pgRemoveBtn" style="display:none" title="移除图片">✕</button>
+      <input type="file" id="pgFileInput" accept="image/jpeg,image/png,image/webp" style="display:none">
     </div>
-    <label>标签（逗号分隔）</label>
-    <input type="text" id="pTags" placeholder="甜粉, 电商, 主图">
-    <label>正文（就是提示词内容）</label>
-    <textarea id="pContent" style="min-height:100px"></textarea>
-    <div class="row" style="margin-top:14px">
-      <button class="btn" id="btnSavePrompt">保存</button>
-      <button class="ghost" id="btnClearPrompt">清空</button>
+
+    <label for="pgSellingPoints" style="margin-top:16px;display:block;font-weight:700;font-size:14px">产品卖点 / 特点</label>
+    <textarea id="pgSellingPoints" placeholder="例如：这款保温杯采用316不锈钢内胆，真空双层隔热，12小时保冷，杯身是磨砂质感莫兰迪色系，目标用户是25-35岁都市白领女性，适合办公桌/咖啡厅场景…" style="min-height:90px;margin-top:6px"></textarea>
+
+    <div style="margin-top:14px">
+      <label style="font-weight:700;font-size:14px;display:block;margin-bottom:8px">生成风格（可多选）</label>
+      <div class="pg-style-chips" id="pgStyleChips">
+        <button class="pg-chip active" data-style="详情页主图">📄 详情页主图</button>
+        <button class="pg-chip active" data-style="海报">🎨 海报</button>
+        <button class="pg-chip active" data-style="种草文">🌱 种草文</button>
+        <button class="pg-chip" data-style="场景图">🏞 场景图</button>
+        <button class="pg-chip" data-style="短视频封面">📹 短视频封面</button>
+        <button class="pg-chip" data-style="小红书风">📕 小红书风</button>
+      </div>
     </div>
+
+    <button class="btn pg-gen-btn" id="btnGenPrompts" style="margin-top:18px;width:100%">
+      <span class="pg-btn-text">🤖 AI 反推提示词</span>
+      <span class="pg-btn-loading" style="display:none"><span class="pg-spinner"></span> AI 分析中，约 10-20 秒…</span>
+    </button>
   </div>
+
+  <!-- 结果展示区 -->
+  <div class="card pg-results-card" id="pgResultsCard" style="display:none">
+    <h3>✨ AI 生成的提示词 <span class="pg-count" id="pgCount"></span></h3>
+    <div class="pg-analysis-box" id="pgAnalysisBox" style="display:none">
+      <strong>🔍 产品分析：</strong><span id="pgAnalysisText"></span>
+    </div>
+    <div class="pg-prompts-list" id="pgPromptsList"></div>
+  </div>
+
+  <!-- 已存提示词库（保留原有搜索/管理能力） -->
   <div class="card">
-    <h3>搜一搜 / 看看库里有什么</h3>
-    <input type="text" id="pSearch" placeholder="搜标题 / 正文 / 标签 / 分类">
-    <div class="grid" id="promptGrid" style="margin-top:14px"></div>
+    <h3>💾 已保存的提示词 <span class="muted" style="font-size:12px;font-weight:400" id="pgSavedCount"></span></h3>
+    <input type="text" id="pSearch" placeholder="搜标题 / 正文 / 标签 / 分类" style="margin-bottom:10px">
+    <div class="grid" id="promptGrid" style="margin-top:10px"></div>
   </div>
 </section>
 
@@ -1977,31 +2042,184 @@ loadProviders();
 rebuildPreviewStack();refreshDetail();showProductPreview();
 setPreviewMode(GEN_MODE);   // 初始化预览模式（默认单张）
 
-/* ============ 提示词库 ============ */
+/* ============ 提示词库（AI 反推生图提示词） ============ */
 const PKEY='wb_prompts_v1';
+const PROMPT_GEN_URL = location.origin.startsWith('http') ? '/api/prompt-gen' : 'http://localhost:8765/api/prompt-gen';
 function getPrompts(){try{return JSON.parse(localStorage.getItem(PKEY)||'[]');}catch(e){return [];}}
 function setPrompts(a){localStorage.setItem(PKEY,JSON.stringify(a));}
-let editingId=null;
+let editingId=null, pgImageB64='';
 function esc(s){return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
-function renderPrompts(){const q=$('#pSearch').value.trim().toLowerCase();
+
+/* ---- 图片上传 ---- */
+const pgUploadZone=$('#pgUploadZone'), pgFileInput=$('#pgFileInput'), pgPreview=$('#pgPreview'), pgRemoveBtn=$('#pgRemoveBtn'), pgUploadInner=$('#pgUploadInner');
+pgUploadZone.onclick=e=>{if(e.target!==pgRemoveBtn)pgFileInput.click();};
+pgUploadZone.ondragover=e=>{e.preventDefault();pgUploadZone.classList.add('dragover');};
+pgUploadZone.ondragleave=e=>{e.preventDefault();pgUploadZone.classList.remove('dragover');};
+pgUploadZone.ondrop=e=>{e.preventDefault();pgUploadZone.classList.remove('dragover');if(e.dataTransfer.files.length)handlePgFile(e.dataTransfer.files[0]);};
+pgFileInput.onchange=e=>{if(e.target.files.length)handlePgFile(e.target.files[0]);};
+pgRemoveBtn.onclick=e=>{e.stopPropagation();clearPgImage();};
+
+function handlePgFile(file){
+  if(!file.type.match(/^image\/(jpeg|png|webp)$/)){toast('请上传 JPG/PNG/WebP 图片');return;}
+  const rd=new FileReader();
+  rd.onload=()=>{
+    pgImageB64=rd.result;
+    pgPreview.src=pgImageB64;
+    pgPreview.style.display='block';
+    pgUploadInner.style.display='none';
+    pgRemoveBtn.style.display='flex';
+    pgUploadZone.classList.add('has-image');
+  };
+  rd.readAsDataURL(file);
+}
+function clearPgImage(){
+  pgImageB64='';pgPreview.src='';pgPreview.style.display='none';
+  pgUploadInner.style.display='';pgRemoveBtn.style.display='flex';pgRemoveBtn.style.display='none';
+  pgUploadZone.classList.remove('has-image');pgFileInput.value='';
+}
+
+/* ---- 风格选择芯片 ---- */
+$$('.pg-chip').forEach(chip=>chip.onclick=()=>chip.classList.toggle('active'));
+function getSelectedStyles(){
+  return $$('.pg-chip.active').map(c=>c.dataset.style).filter(Boolean);
+}
+
+/* ---- AI 生成提示词 ---- */
+$('#btnGenPrompts').onclick=async function(){
+  if(!pgImageB64){toast('请先上传产品白底图');return;}
+  const sp=$('#pgSellingPoints').value.trim();
+  if(!sp){toast('请填写产品卖点/特点');return;}
+  const styles=getSelectedStyles();
+  if(!styles.length){toast('请至少选择一种生成风格');return;}
+
+  // UI 进入 loading 态
+  const btn=this, txt=$('.pg-btn-text',btn), load=$('.pg-btn-loading',btn);
+  btn.disabled=true;txt.style.display='none';load.style.display='flex';
+
+  try{
+    const tk=(window.__accessToken&&window.__accessToken())||'';
+    const gh={'Content-Type':'application/json'};
+    if(tk){gh['Authorization']='Bearer '+tk;gh['X-Access-Token']=tk;}
+    const res=await fetch(PROMPT_GEN_URL,{method:'POST',headers:gh,body:JSON.stringify({image_b64:pgImageB64,selling_points:sp,styles})});
+    const j=await res.json().catch(()=>null);
+
+    if(!j||j.error){toast(j?.error||'AI 生成失败，请重试');return;}
+
+    // 渲染结果
+    renderPromptGenResults(j);
+  }catch(err){
+    toast('网络错误：'+err.message);
+  }finally{
+    btn.disabled=false;txt.style.display='';load.style.display='none';
+  }
+};
+
+function renderPromptGenResults(data){
+  const card=$('#pgResultsCard'), list=$('#pgPromptsList'), analysisBox=$('#pgAnalysisBox'), analysisText=$('#pgAnalysisText'), countEl=$('#pgCount');
+  card.style.display='';
+  countEl.textContent=`(${data.count} 条)`;
+
+  // 产品分析
+  if(data.product_analysis){
+    analysisBox.style.display='';analysisText.textContent=data.product_analysis;
+  }
+
+  // 提示词卡片
+  list.innerHTML='';
+  (data.prompts||[]).forEach((p,i)=>{
+    const d=document.createElement('div');d.className='pg-prompt-card';
+    d.innerHTML=`<div class="pg-pstyle">${esc(p.style||'未命名')}</div>
+      <div class="pg-pdesc">${esc(p.description||'')}</div>
+      <div class="pg-pprompt">${esc(p.prompt||'')}</div>
+      <div class="pg-actions">
+        <button class="btn sm" onclick="copyPromptText(this)">📋 复制</button>
+        <button class="btn sm" onclick="savePromptToLib(this)">💾 存入库</button>
+        <button class="ghost sm" onclick="useForGenerate(this)">🎨 拿去生图</button>
+      </div>`;
+    d.dataset.prompt=p.prompt||'';
+    d.dataset.style=p.style||'';
+    d.dataset.desc=p.description||'';
+    list.appendChild(d);
+  });
+
+  toast('✨ 已生成 '+data.count+' 条提示词！');
+}
+
+// 复制提示词到剪贴板
+window.copyPromptText=function(btn){
+  const card=btn.closest('.pg-prompt-card');
+  const text=card.dataset.prompt;
+  navigator.clipboard.writeText(text).then(()=>toast('已复制到剪贴板')).catch(()=>{
+    // fallback：创建 textarea 复制
+    const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);toast('已复制');
+  });
+};
+
+// 保存单条提示词到本地库
+window.savePromptToLib=function(btn){
+  const card=btn.closest('.pg-prompt-card');
+  const all=getPrompts();
+  all.unshift({
+    id:'p'+Date.now(),
+    title:'【AI反推】'+(card.dataset.style||'提示词'),
+    category:'AI反推',
+    tags:['AI生成',card.dataset.style],
+    content:card.dataset.prompt,
+    time:Date.now()
+  });
+  setPrompts(all);renderPrompts();toast('💾 已保存到提示词库');
+};
+
+// 用这条提示词直接去生图（跳转到做详情页 tab 并填入 prompt）
+window.useForGenerate=function(btn){
+  const card=btn.closest('.pg-prompt-card');
+  const promptArea=$('#apiPrompt')||$('#promptInput')||document.querySelector('[id*="prompt"],[id*="Prompt"]');
+  if(promptArea){
+    promptArea.value=card.dataset.prompt;
+    promptArea.dispatchEvent(new Event('input',{bubbles:true}));
+    switchTab('detail');toast('🎨 提示词已填入生图区，可直接生成');
+  }else{
+    copyPromptText(btn);toast('已复制，请粘贴到生图 prompt 输入框');
+  }
+};
+
+/* ---- 已存提示词库（保留原有 CRUD + 搜索） ---- */
+function renderPrompts(){
+  const q=$('#pSearch').value.trim().toLowerCase();
   const list=getPrompts().filter(p=>!q||(p.title+p.content+(p.category||'')+(p.tags||[]).join(',')).toLowerCase().includes(q));
   const grid=$('#promptGrid');grid.innerHTML='';
-  if(!list.length){grid.innerHTML='<p class="muted">还没有提示词，先在上面加一条吧。</p>';return;}
-  list.forEach(p=>{const d=document.createElement('div');d.className='pitem';
+  $('#pgSavedCount').textContent=list.length?'('+list.length+' 条)':'(空)';
+  if(!list.length){grid.innerHTML='<p class="muted">还没有保存的提示词。用上方 AI 反推生成后点「存入库」即可。</p>';return;}
+  list.forEach(p=>{
+    const d=document.createElement('div');d.className='pitem';
     d.innerHTML=`<div class="pt">${esc(p.title)}</div><div class="pc">${esc(p.category||'未分类')}</div>
       <div class="pcon">${esc(p.content)}</div>${(p.tags||[]).map(t=>`<span class="ptag">${esc(t)}</span>`).join('')}
-      <div style="margin-top:10px;display:flex;gap:8px"><button class="ghost sm" data-edit="${p.id}">编辑</button><button class="danger sm" data-del="${p.id}">删除</button></div>`;
-    grid.appendChild(d);});
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="ghost sm" data-edit="${p.id}">编辑</button>
+        <button class="danger sm" data-del="${p.id}">删除</button>
+        <button class="btn sm" data-copy="${p.id}">📋 复制</button>
+      </div>`;
+    grid.appendChild(d);
+  });
   $$('#promptGrid [data-edit]').forEach(b=>b.onclick=()=>editPrompt(b.dataset.edit));
-  $$('#promptGrid [data-del]').forEach(b=>b.onclick=()=>{setPrompts(getPrompts().filter(x=>x.id!==b.dataset.del));renderPrompts();toast('已删除');});}
-function editPrompt(id){const p=getPrompts().find(x=>x.id===id);if(!p)return;editingId=id;
-  $('#pTitle').value=p.title;$('#pCat').value=p.category||'';$('#pTags').value=(p.tags||[]).join(',');$('#pContent').value=p.content;switchTab('prompts');toast('已载入，改完点保存');}
-$('#btnSavePrompt').onclick=()=>{const title=$('#pTitle').value.trim();if(!title){toast('标题不能为空');return;}
-  const tags=$('#pTags').value.split(',').map(s=>s.trim()).filter(Boolean);
-  const data={title,category:$('#pCat').value.trim(),tags,content:$('#pContent').value};const all=getPrompts();
-  if(editingId){const i=all.findIndex(x=>x.id===editingId);if(i>=0)all[i]={...all[i],...data};editingId=null;}else{data.id='p'+Date.now();all.unshift(data);}
-  setPrompts(all);renderPrompts();$('#pTitle').value='';$('#pCat').value='';$('#pTags').value='';$('#pContent').value='';toast('已保存');};
-$('#btnClearPrompt').onclick=()=>{editingId=null;$('#pTitle').value='';$('#pCat').value='';$('#pTags').value='';$('#pContent').value='';};
+  $$('#promptGrid [data-del]').forEach(b=>b.onclick=()=>{setPrompts(getPrompts().filter(x=>x.id!==b.dataset.del));renderPrompts();toast('已删除');});
+  $$('#promptGrid [data-copy]').forEach(b=>{
+    b.onclick=()=>{
+      const p=getPrompts().find(x=>x.id===b.dataset.copy);
+      if(p&&p.content)navigator.clipboard.writeText(p.content).then(()=>toast('已复制'));
+    };
+  });
+}
+function editPrompt(id){
+  const p=getPrompts().find(x=>x.id===id);if(!p)return;
+  editingId=id;
+  // 回填到 AI 反推区的卖点框（复用现有 UI），并标记为编辑态
+  $('#pTitle')&&($('#pTitle').value=p.title);
+  $('#pCat')&&($('#pCat').value=p.category||'');
+  $('#pTags')&&($('#pTags').value=(p.tags||[]).join(','));
+  $('#pContent')&&($('#pContent').value=p.content);
+  switchTab('prompts');toast('已载入，可查看/编辑');
+}
 $('#pSearch').oninput=renderPrompts;renderPrompts();
 
 /* ============ 素材库 ============ */
