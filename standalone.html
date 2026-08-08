@@ -1291,28 +1291,35 @@ async function realAnalyze(f){
   }
   const bar=$('#analysisBar'),st=$('#analysisStatusText');
   let result=null,lastErr=null;
-  const reader=r.body.getReader();
-  const dec=new TextDecoder();
-  let buf='';
-  while(true){
-    const {done,value}=await reader.read();
-    if(done)break;
-    buf+=dec.decode(value,{stream:true});
-    let idx;
-    while((idx=buf.indexOf("\n\n"))>=0){
-      const chunk=buf.slice(0,idx); buf=buf.slice(idx+2);
-      let dataLine=null;
-      for(const ln of chunk.split("\n")){ if(ln.startsWith("data:")){ dataLine=ln.slice(5).trim(); break; } }
-      if(!dataLine)continue;
-      let ev; try{ev=JSON.parse(dataLine);}catch(e){continue;}
-      // 收到首个实时事件即交棒：停止兜底计时器，进度条改吃真实事件
-      _analysisHasLive=true;
-      if(_analysisTimer){clearInterval(_analysisTimer);_analysisTimer=null;}
-      if(ev.pct!=null&&bar)bar.style.width=ev.pct+'%';
-      if(ev.msg&&st)st.textContent=ev.msg;
-      if(ev.stage==='done')result=ev.result;
-      if(ev.stage==='error')lastErr=ev.msg||'分析失败';
+  try{
+    const reader=r.body.getReader();
+    const dec=new TextDecoder();
+    let buf='';
+    while(true){
+      const {done,value}=await reader.read();
+      if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      let idx;
+      while((idx=buf.indexOf("\n\n"))>=0){
+        const chunk=buf.slice(0,idx); buf=buf.slice(idx+2);
+        let dataLine=null;
+        for(const ln of chunk.split("\n")){ if(ln.startsWith("data:")){ dataLine=ln.slice(5).trim(); break; } }
+        if(!dataLine)continue;
+        let ev; try{ev=JSON.parse(dataLine);}catch(e){continue;}
+        _analysisHasLive=true;
+        if(_analysisTimer){clearInterval(_analysisTimer);_analysisTimer=null;}
+        if(ev.pct!=null&&bar)bar.style.width=ev.pct+'%';
+        if(ev.msg&&st)st.textContent=ev.msg;
+        if(ev.stage==='done')result=ev.result;
+        if(ev.stage==='error')lastErr=ev.msg||'分析失败';
+      }
     }
+  }catch(readErr){
+    const msg=(readErr&&readErr.message)||'';
+    if(/network|fetch|failed|abort|timeout|reset/i.test(msg)){
+      throw new Error('网络连接中断（云端分析耗时较长，可能被服务器超时断开）。建议：稍后在卡片上点「分析」重试，或检查网络后重试。');
+    }
+    throw readErr;
   }
   if(lastErr)throw new Error(lastErr);
   if(!result)throw new Error('分析无结果（可能因网络中断）');
@@ -1374,8 +1381,11 @@ $('#btnAnalyzeProduct').onclick=async()=>{
       '<br><strong>🏷 标题策略：</strong><br>'+analysis.title.map(e=>'· '+escapeHtml(e)).join('<br>')+
       '<br><strong>📄 详情页逻辑：</strong><br>'+analysis.detail.map(e=>'· '+escapeHtml(e)).join('<br>');
   }catch(e){
-    $('#analysisResultText').innerHTML='<span class="muted">本次 AI 分析未成功：'+escapeHtml(e.message)+'。已存入情报库，可在卡片上点「分析」重试。</span>';
-    toast('AI 分析失败，已存为未分析（可稍后补分析）');
+    const isNet=/网络|network|timeout|超时|中断/i.test(e.message||'');
+    $('#analysisResultText').innerHTML='<span class="muted" style="color:#e74c3c">⚠️ 本次 AI 分析未成功：'+escapeHtml(e.message)+
+      (isNet?'<br><br>💡 <b>解决方法：</b>数据已存入情报库，可直接在下方卡片上点「<b>分析</b>」按钮重试（重试会重新发起分析请求）。如果频繁超时，可能是商品链接的图片较多导致分析耗时过长。':'')+
+      '</span>';
+    toast(isNet?'⚠️ 分析超时，已存为未分析（点卡片「分析」可重试）':'AI 分析失败，已存为未分析（可稍后补分析）');
   }
   stopAnalysisProgress();
   const rec={id:'p'+Date.now()+Math.random().toString(36).slice(2,5),...f,analysis,isRef:false,created_at:Date.now()};
@@ -1453,7 +1463,8 @@ async function reAnalyze(x){
     x.analysis=await realAnalyze(x);
   }catch(e){
     stopAnalysisProgress();
-    toast('分析失败：'+e.message);
+    const isNet=/网络|network|timeout|超时|中断/i.test(e.message||'');
+    toast(isNet?'⚠️ 分析超时断连，可稍后再点「分析」重试':'分析失败：'+e.message);
     return;
   }
   stopAnalysisProgress();

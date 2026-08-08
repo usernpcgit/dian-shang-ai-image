@@ -981,7 +981,7 @@ def _run_stream_analyze(data, emit):
     detail_urls = data.get("detail_image_urls") or []
     if not isinstance(detail_urls, list):
         detail_urls = []
-    detail_urls = [u for u in detail_urls if isinstance(u, str) and u.startswith(("http://", "https://", "//"))][:6]
+    detail_urls = [u for u in detail_urls if isinstance(u, str) and u.startswith(("http://", "https://", "//"))][:3]
 
     emit({"stage": "prepare", "pct": 5, "msg": "已接收商品信息，准备同步分析 标题 + 主图 + 详情页…"})
 
@@ -995,8 +995,18 @@ def _run_stream_analyze(data, emit):
     if total:
         emit({"stage": "download", "pct": 15, "msg": "正在下载主图 + %d 张详情页图…" % total})
         done = [0]
+        # 下载阶段也启动心跳（每 3s），防止 Render/代理在多图并行下载时因无数据而杀连接
+        dl_stop = threading.Event()
+        def _dl_beat():
+            c = 0
+            while not dl_stop.wait(3):
+                c += 3
+                emit({"stage": "download", "pct": min(35, 15 + int(20 * done[0] / max(1, total))),
+                      "msg": "下载中… 已等待 %d 秒 (%d/%d)" % (c, done[0], total)})
+        dl_t = threading.Thread(target=_dl_beat, daemon=True)
+        dl_t.start()
         with ThreadPoolExecutor(max_workers=4) as ex:
-            futs = {ex.submit(_download_image_data_url, u, _IMG_HEADERS, 8): u for u in detail_urls}
+            futs = {ex.submit(_download_image_data_url, u, _IMG_HEADERS, 5): u for u in detail_urls}
             for fu in as_completed(futs):
                 du = fu.result()
                 if du:
@@ -1006,6 +1016,8 @@ def _run_stream_analyze(data, emit):
                 done[0] += 1
                 emit({"stage": "download", "pct": 15 + int(20 * done[0] / max(1, total)),
                       "msg": "已下载主图 + 详情图 %d/%d" % (done[0], total)})
+        dl_stop.set()
+        dl_t.join()
 
     has_img = len(images) > 0
 
@@ -1041,7 +1053,7 @@ def _run_stream_analyze(data, emit):
                   "elapsed": elapsed[0], "msg": "🔍 AI 深度分析中… 已等待 %d 秒" % elapsed[0]})
     beat = threading.Thread(target=_beat, daemon=True)
     beat.start()
-    content, err = _call_zhipu(key, model, messages, timeout=120)
+    content, err = _call_zhipu(key, model, messages, timeout=60)
     stop.set()
     beat.join()
 
