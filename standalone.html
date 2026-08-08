@@ -507,7 +507,13 @@
           <option value="other">其他</option>
         </select>
       </div>
-      <div><label>主图（可选：自动抓不到时，拖一张主图截图，AI 会真看图画）</label><input type="file" id="pMainImg" accept="image/*"></div>
+      <div><label>主图（可选：自动抓不到时，可上传图片 / 粘贴图片URL / Ctrl+V 粘贴截图）</label>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="file" id="pMainImg" accept="image/*" style="flex:1;min-width:0">
+          <button id="btnPasteImgUrl" type="button" style="white-space:nowrap;font-size:12px;padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer">📋 粘贴图片URL</button>
+        </div>
+        <input type="text" id="pMainImgUrl" placeholder="或直接粘贴图片链接（https://...jpg）" style="display:none;margin-top:4px;width:100%;box-sizing:border-box">
+      </div>
     </div>
     <div class="row" style="margin-bottom:10px">
       <div><label>商品标题（可选，留空自动抓）</label><input type="text" id="pTitle2" placeholder="自动抓取；也可手动补"></div>
@@ -1251,9 +1257,51 @@ async function readProductForm(mainImgOverride){
   const fi=$('#pMainImg');
   if(fi.files&&fi.files[0]){try{f.main_image=await compressImage(fi.files[0],1024);}catch(e){console.warn('主图压缩失败',e);}}
   else if(mainImgOverride){f.main_image=mainImgOverride;}
+  else if(_pastedImage){f.main_image=_pastedImage;}
+  // 支持用户手动粘贴的图片 URL（服务端代下载转 data URL）
+  else{
+    const urlInput=$('#pMainImgUrl');
+    if(urlInput&&urlInput.value.trim()){
+      try{
+        const imgResp=await fetch(FETCH_URL,{method:'POST',headers:authHeaders(),body:JSON.stringify({action:'download_image',image_url:urlInput.value.trim()})});
+        const imgJ=await imgResp.json().catch(()=>null);
+        if(imgJ&&imgJ.image_data_url) f.main_image=imgJ.image_data_url;
+        else toast('图片 URL 下载失败，请改用文件上传');
+      }catch(e){toast('图片 URL 下载失败：'+e.message);}
+    }
+  }
   return f;
 }
-function resetProductForm(){$('#pUrl').value='';$('#pTitle2').value='';$('#pCategory2').value='';$('#pPrice').value='';$('#pTags2').value='';$('#pMainImg').value='';$('#pPlatform').value='';}
+// 图片 URL 粘贴按钮
+$('#btnPasteImgUrl').onclick=function(){
+  const urlField=$('#pMainImgUrl');
+  if(!urlField)return;
+  urlField.style.display=urlField.style.display==='none'?'block':'none';
+  if(urlField.style.display!=='none')urlField.focus();
+};
+// 全局 Ctrl+V 粘贴图片支持（当焦点在页面内时）
+let _pastedImage=null;
+document.addEventListener('paste',async function(e){
+  const items=e.clipboardData&&e.clipboardData.items;
+  if(!items)return;
+  for(let i=0;i<items.length;i++){
+    if(items[i].type.indexOf('image')!==-1){
+      e.preventDefault();
+      const file=items[i].getAsFile();
+      if(file){
+        _pastedImage=await compressImage(file,1024);
+        // 填入文件输入框的视觉反馈
+        const fi=$('#pMainImg');
+        if(fi){
+          const dt=new DataTransfer();dt.items.add(file);fi.files=dt.files;
+        }
+        toast('✅ 已粘贴图片（可继续点「上传并让 AI 学习」）');
+      }
+      return;
+    }
+  }
+});
+function resetProductForm(){$('#pUrl').value='';$('#pTitle2').value='';$('#pCategory2').value='';$('#pPrice').value='';$('#pTags2').value='';$('#pMainImg').value='';$('#pMainImgUrl').value='';$('#pPlatform').value='';_pastedImage=null;}
 
 /* —— 进度动画（轮询友好：计时器兜底 + 轮询事件驱动） —— */
 let _analysisTimer=null,_analysisStart=0;

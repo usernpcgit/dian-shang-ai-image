@@ -1389,6 +1389,58 @@ def fetch_product(url):
         if img_candidates:
             img_candidates.sort(key=lambda x: -x[0])
             img_url = img_candidates[0][1]
+
+    # 备选 4：oEmbed 接口（抖音/淘宝/京东等平台支持，返回缩略图 URL）
+    if not img_url:
+        # 常见平台的 oEmbed 端点
+        oembed_endpoints = []
+        if "douyin.com" in url or "iesdouyin.com" in url:
+            oembed_endpoints.append("https://www.douyin.com/oembed?url=" + url)
+            oembed_endpoints.append("https://www.iesdouyin.com/share/oembed?url=" + url)
+        elif "haohuo.jinritemai.com" in url:
+            oembed_endpoints.append("https://haohuo.jinritemai.com/oembed?url=" + url)
+        elif "taobao.com" in url or "tmall.com" in url:
+            oembed_endpoints.append("https://www.taobao.com/oembed?url=" + url)
+            oembed_endpoints.append("https://libs.wres.cn/wapi/oembed?url=" + url)
+        for oe_url in oembed_endpoints[:2]:  # 最多试 2 个端点，控制耗时
+            try:
+                oe_r = S.get(oe_url, headers=headers, timeout=5)
+                if oe_r.status_code == 200:
+                    oe_data = oe_r.json()
+                    thumb = (oe_data.get("thumbnail_url") or oe_data.get("thumbnailUrl")
+                             or oe_data.get("image") or "").strip()
+                    if thumb and thumb.startswith(("http://", "https://", "//")):
+                        img_url = thumb
+                        break
+            except Exception:
+                continue
+
+    # 备选 5：公共 meta 抓取服务（用第三方 API 获取页面的 OG 图片）
+    if not img_url:
+        # 使用免费的公共 meta 抓取 API（作为最后兜底，超时严格限制）
+        meta_apis = [
+            "https://api.microlink.io/?url=" + url,
+            "https://jsonlink.io/api/extract?url=" + url,
+        ]
+        for api_url in meta_apis[:1]:  # 只试 1 个，控制总耗时
+            try:
+                mr = S.get(api_url, headers=headers, timeout=6)
+                if mr.status_code == 200:
+                    md = mr.json()
+                    # microlink 格式: { image: { url: "..."} }
+                    # jsonlink 格式: { images: ["..."] }
+                    thumb = ""
+                    if isinstance(md.get("image"), dict):
+                        thumb = md["image"].get("url", "")
+                    elif isinstance(md.get("images"), list) and md["images"]:
+                        thumb = md["images"][0]
+                    elif isinstance(md.get("image"), str):
+                        thumb = md["image"]
+                    if thumb and thumb.startswith(("http://", "https://", "//")):
+                        img_url = thumb
+                        break
+            except Exception:
+                continue
     price = _meta("og:price:amount") or _meta("product:price:amount")
     if not price:
         mp = re.search(r'itemprop=["\']price["\'][^>]+content=["\']([^"\']+)', html, re.I)
@@ -1754,6 +1806,7 @@ class H(BaseHTTPRequestHandler):
 
     def _handle_fetch_product(self):
         # 商品链接自动抓取：服务端代抓，绕过浏览器 CORS/反爬；同样需访问码门禁。
+        # 也支持 action=download_image：用户手动粘贴图片 URL 时，服务端代下载转 data URL
         try:
             ln = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(ln)
@@ -1768,6 +1821,36 @@ class H(BaseHTTPRequestHandler):
         if not ok:
             self._send_json(401, {"error": "访问码无效或已过期，请先在页面输入正确的动态访问码。（" + info.get("error", "") + "）"})
             return
+        # 图片 URL 下载（用户手动粘贴的图片链接）
+        if data.get("action") == "download_image":
+            img_url = (data.get("image_url") or "").strip()
+            if not img_url or not img_url.startswith(("http://", "https://")):
+                self._send_json(400, {"error": "图片 URL 格式不正确"})
+                return
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+            }
+            # 按 Referer 策略下载
+            if "douyin" in img_url or "jinritemai" in img_url:
+                headers["Referer"] = "https://haohuo.jinritemai.com/"
+            elif "taobao" in img_url or "alicdn" in img_url:
+                headers["Referer"] = "https://www.taobao.com/"
+            elif "jd" in img_url or "360buy" in img_url:
+                headers["Referer"] = "https://item.jd.com/"
+            else:
+                headers["Referer"] = img_url
+            try:
+                ir = S.get(img_url, headers=headers, timeout=10)
+                if ir.status_code == 200 and ir.content and len(ir.content) > 2048:
+                    fmt = detect_fmt(ir.content)[1]
+                    data_url = "data:%s;base64,%s" % (fmt, base64.b64encode(ir.content).decode("ascii"))
+                    self._send_json(200, {"image_data_url": data_url})
+                else:
+                    self._send_json(200, {"error": "图片下载失败（返回空内容或非图片）"})
+            except Exception as e:
+                self._send_json(200, {"error": "图片下载失败：" + str(e)})
+            return
+        # 正常商品页抓取
         try:
             result, err = fetch_product(data.get("url", ""))
         except Exception as e:
