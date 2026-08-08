@@ -24,8 +24,10 @@
                          无码/无效/过期 -> 401 {"error":"访问码无效或已过期..."}
                          成功 -> {"images":["data:image/png;base64,..."]} 或 {"error":"原因"}
 """
-import os, sys, json, base64, time, io, hashlib, re
+import os, sys, json, base64, time, io, hashlib, re, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urljoin
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 
 # 动态访问码（测试阶段分享保护）：签发/校验逻辑放在 access.py，与 gentoken.py 共用同一密钥。
@@ -893,8 +895,8 @@ def analyze_competitor(data):
               '标题策略必须具体到该商品的实际关键词/卖点，不要泛泛而谈。')
 
     has_text = bool(title) or bool(page_text)
-    if main_b64 and not has_text:
-        # 纯图片、无任何文字信息时才走慢的视觉模型（真「看」图），通常 40–70 秒
+    if main_b64:
+        # 有主图 -> 视觉模型「真看」主图（标题文字一并喂进去），同步分析主图+标题；通常 40–70 秒
         try:
             img_fmt = detect_fmt(base64.b64decode(main_b64))[1]
         except Exception:
@@ -932,6 +934,132 @@ def analyze_competitor(data):
     return result, None
 
 
+# ─────────── 竞品智能分析（实时进度流 SSE 版） ───────────
+# 用户粘贴商品落地页链接 -> 后端并行下载主图+详情图 -> 视觉模型同步分析 标题+主图+详情页，
+# 每个阶段通过 SSE 推一条进度事件，前端进度条吃真实事件，不再「假爬条」。
+def _run_stream_analyze(data, emit):
+    """emit(dict) 推进度事件：{stage, pct, msg, elapsed?, result?}。"""
+    key = (data.get("zhitu_key") or os.environ.get("ZHIPU_API_KEY") or "").strip()
+    if not key:
+        emit({"stage": "error", "msg": "未配置 ZHIPU_API_KEY（请在运行 proxy.py 的环境里设置智谱 API Key，与 model-eyes 同源）"})
+        return
+
+    title = (data.get("title") or "").strip()
+    category = (data.get("category") or "").strip()
+    platform = (data.get("platform") or "").strip()
+    price = (data.get("price") or "").strip()
+    url = (data.get("url") or "").strip()
+    page_text = (data.get("page_text") or "").strip()
+
+    meta = []
+    if title: meta.append("商品标题：" + title)
+    if category: meta.append("类目：" + category)
+    if platform: meta.append("平台：" + platform)
+    if price: meta.append("价格区间：" + price)
+    if url: meta.append("商品链接：" + url)
+    if page_text: meta.append("【页面文本片段（用于推断真实标题/卖点；若上方未给标题，请据此提取）】\n" + page_text)
+    meta_txt = "\n".join(meta) if meta else "（未提供文字信息，仅凭主图+详情图分析）"
+
+    schema = ('请只输出一个严格 JSON 对象，不要任何多余文字/解释。字段与要求：\n'
+              '  "summary": 一句话总结该商品高销量的核心原因；\n'
+              '  "main_image": 主图套路数组(3-5条)，每条是一句中文短句，聚焦构图/配色/拍摄角度/留白/光影；\n'
+              '  "title": 标题策略数组(3-5条)，每条是一句中文短句，聚焦关键词布局/搜索命中/卖点排序；\n'
+              '  "sku": SKU设计数组(2-4条)，每条是一句中文短句，聚焦规格矩阵/组合套餐/缩略图节奏；\n'
+              '  "detail": 详情页逻辑数组(3-5条)，每条是一句中文短句，聚焦首屏信任/叙事顺序/对比图/促单/卖点图设计。\n'
+              '【硬性格式要求】四个数组里的每一个元素都必须是「纯字符串短句」，严禁使用对象/字典/嵌套 JSON。\n'
+              '每条务必具体、可操作，指向「可复用到自家生图/文案的套路」，严禁空话套话。\n'
+              '【重要】若未直接提供「商品标题」，请先从上文【页面文本片段】推断真实商品标题，再据此给出标题策略；'
+              '标题策略必须具体到该商品的实际关键词/卖点，不要泛泛而谈。')
+
+    # 收集视觉素材：主图(data URL) + 详情页图(URL 列表，分析阶段并行下载)
+    main_b64 = data.get("main_image") or data.get("main_image_b64") or None
+    detail_urls = data.get("detail_image_urls") or []
+    if not isinstance(detail_urls, list):
+        detail_urls = []
+    detail_urls = [u for u in detail_urls if isinstance(u, str) and u.startswith(("http://", "https://", "//"))][:6]
+
+    emit({"stage": "prepare", "pct": 5, "msg": "已接收商品信息，准备同步分析 标题 + 主图 + 详情页…"})
+
+    images = []  # 元素为 (fmt, pure_b64)
+    if main_b64:
+        fmt, b64 = _to_b64_and_fmt(main_b64)
+        if fmt and b64:
+            images.append((fmt, b64))
+
+    total = len(detail_urls)
+    if total:
+        emit({"stage": "download", "pct": 15, "msg": "正在下载主图 + %d 张详情页图…" % total})
+        done = [0]
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            futs = {ex.submit(_download_image_data_url, u, _IMG_HEADERS, 8): u for u in detail_urls}
+            for fu in as_completed(futs):
+                du = fu.result()
+                if du:
+                    fmt, b64 = _to_b64_and_fmt(du)
+                    if fmt and b64:
+                        images.append((fmt, b64))
+                done[0] += 1
+                emit({"stage": "download", "pct": 15 + int(20 * done[0] / max(1, total)),
+                      "msg": "已下载主图 + 详情图 %d/%d" % (done[0], total)})
+
+    has_img = len(images) > 0
+
+    if has_img:
+        # 有图：视觉模型「真看」主图+详情图，标题文字一并喂进去 -> 同步分析三者
+        vision_text = ("你是资深电商运营分析师。下面是一件高销量商品落地页的【标题文字 + 主图 + 详情页图】，请综合分析它高销量的原因。\n"
+                       "请重点拆解三块，并分别落到对应输出字段：\n"
+                       "1) 标题关键词布局/搜索命中/卖点排序 -> title 字段；\n"
+                       "2) 主图构图/配色/拍摄角度/留白/光影 -> main_image 字段；\n"
+                       "3) 详情页首屏信任/叙事顺序/对比图/促单逻辑/卖点图设计 -> detail 字段。\n"
+                       "商品信息：\n" + meta_txt + "\n\n" + schema)
+        content = [{"type": "text", "text": vision_text}]
+        for fmt, b64 in images:
+            content.append({"type": "image_url", "image_url": {"url": "data:%s;base64,%s" % (fmt, b64)}})
+        messages = [{"role": "user", "content": content}]
+        model = "glm-4v-flash"
+    else:
+        # 完全没图才退回文本模型
+        text = ("你是资深电商运营分析师。下面是一件高销量商品的文字信息（未抓到主图/详情图），"
+                "请分析它高销量的原因，重点拆：主图套路、标题关键词策略、SKU 矩阵设计、详情页叙事逻辑。\n"
+                "商品信息：\n" + meta_txt + "\n\n" + schema)
+        messages = [{"role": "user", "content": text}]
+        model = "glm-4-flash"
+
+    emit({"stage": "analyze", "pct": 40, "msg": "🔍 AI 正在同步分析 标题 + 主图 + 详情页…"})
+    # 心跳：分析期间每 3 秒推一次已等待秒数，让进度条真实流动，不再像卡死
+    stop = threading.Event()
+    elapsed = [0]
+    def _beat():
+        while not stop.wait(3):
+            elapsed[0] += 3
+            emit({"stage": "analyze", "pct": min(92, 45 + elapsed[0] * 1.2),
+                  "elapsed": elapsed[0], "msg": "🔍 AI 深度分析中… 已等待 %d 秒" % elapsed[0]})
+    beat = threading.Thread(target=_beat, daemon=True)
+    beat.start()
+    content, err = _call_zhipu(key, model, messages, timeout=120)
+    stop.set()
+    beat.join()
+
+    if err:
+        emit({"stage": "error", "msg": err})
+        return
+    obj = _extract_json(content)
+    if not obj or not isinstance(obj, dict):
+        emit({"stage": "error", "msg": "模型未返回有效 JSON：" + str(content)[:200]})
+        return
+    result = {
+        "summary": str(obj.get("summary") or "").strip(),
+        "main_image": _as_list(obj.get("main_image")),
+        "title": _as_list(obj.get("title")),
+        "sku": _as_list(obj.get("sku")),
+        "detail": _as_list(obj.get("detail")),
+    }
+    if not result["summary"] and not (result["main_image"] or result["title"] or result["sku"] or result["detail"]):
+        emit({"stage": "error", "msg": "模型返回内容为空"})
+        return
+    emit({"stage": "done", "pct": 100, "result": result})
+
+
 # ─────────── 商品链接自动抓取（服务端代抓，绕过浏览器 CORS/反爬） ───────────
 # 只贴链接 -> 自动识别平台、抓标题/主图/价格，能抓多少抓多少；抓不到也不阻塞，前端可手动补。
 def _decode_html(r):
@@ -966,6 +1094,95 @@ def _detect_platform_from_url(url):
     if "amazon" in u:
         return "amazon"
     return "other"
+
+
+def _download_image_data_url(url, headers, timeout=8):
+    """把图片 URL 下载成 data URL；失败返回 None。用于分析时并行抓取主图/详情图。"""
+    try:
+        if url.startswith("//"):
+            url = "https:" + url
+        ir = S.get(url, headers=headers, timeout=timeout)
+        if ir.status_code == 200 and ir.content:
+            fmt = detect_fmt(ir.content)[1]
+            return "data:%s;base64,%s" % (fmt, base64.b64encode(ir.content).decode("ascii"))
+    except Exception:
+        return None
+    return None
+
+
+_IMG_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+    "Accept": "image/avif,image/webp,image/png,image/*,*/*;q=0.8",
+    "Accept-Language": "zh-CN,zh;q=0.9",
+    "Referer": "https://www.google.com/",
+}
+
+
+def _to_b64_and_fmt(v):
+    """把 data URL 或裸 base64 转成 (mime, pure_b64)。"""
+    if not v:
+        return None, None
+    if "," in v:
+        hdr, b = v.split(",", 1)
+        fmt = "image/png"
+        mm = re.match(r"data:([\w/+]+)", hdr)
+        if mm:
+            fmt = mm.group(1)
+        return fmt, b
+    try:
+        raw = base64.b64decode(v)
+    except Exception:
+        return None, None
+    return detect_fmt(raw)[1], v
+
+
+def _extract_detail_images(html, base_url):
+    """从落地页 HTML 里尽量挖出「详情页/描述图」URL（落地页链接点进去就是商品详情页，详情图是 AI 分析重点）。
+    优先取懒加载属性(data-src/data-original/data-lazy-src/data-actualsrc)，过滤图标/logo/1x1/动图，最多 6 张。"""
+    cands = []
+    for m in re.finditer(r"<img\b[^>]*>", html, re.I):
+        tag = m.group(0)
+        src = None
+        for attr in ("data-src", "data-original", "data-lazy-src", "data-actualsrc", "src"):
+            am = re.search(r"%s\s*=\s*[\"']([^\"']+)" % attr, tag, re.I)
+            if am and am.group(1).strip():
+                src = am.group(1).strip()
+                break
+        if not src:
+            continue
+        s = src.lower()
+        if s.startswith("data:"):
+            continue
+        if any(k in s for k in ("icon", "logo", "avatar", "sprite", "tracker",
+                                 "pixel", "blank", "btn", "arrow", "emoji", ".svg", ".gif", "1x1")):
+            continue
+        if src.startswith("//"):
+            src = "https:" + src
+        elif src.startswith("/"):
+            try:
+                src = urljoin(base_url, src)
+            except Exception:
+                continue
+        elif src.startswith("http"):
+            pass
+        else:
+            continue
+        score = 0
+        if any(k in s for k in ("detail", "desc", "product", "item", "goods",
+                                 "content", "banner", "descimg", "album")):
+            score += 3
+        if re.search(r"[_\-](\d{3,4})[_\-x]", s):  # 大图文件名常带尺寸
+            score += 1
+        cands.append((score, src))
+    seen = set()
+    out = []
+    for sc, u in sorted(cands, key=lambda x: -x[0]):
+        if u in seen:
+            continue
+        seen.add(u)
+        out.append(u)
+    return out[:6]
 
 
 def fetch_product(url):
@@ -1078,6 +1295,9 @@ def fetch_product(url):
         bits.append("链接: " + url)
     page_text = "\n".join(bits)[:1500]
 
+    # 详情页图：落地页链接点进去就是商品详情页，详情图是 AI 同步分析的重点，尽量挖出来（仅返回 URL，下载放在分析阶段并行做并实时反馈进度）
+    detail_urls = _extract_detail_images(html, url)
+
     image_data_url = None
     if img_url:
         try:
@@ -1094,6 +1314,7 @@ def fetch_product(url):
     return {
         "title": title,
         "image_data_url": image_data_url,
+        "detail_image_urls": detail_urls,
         "price": price,
         "platform": platform,
         "page_text": page_text,
@@ -1180,6 +1401,9 @@ class H(BaseHTTPRequestHandler):
             return
         if self.path == "/api/fetch-product":
             self._handle_fetch_product()
+            return
+        if self.path == "/api/analyze-competitor-stream":
+            self._handle_analyze_stream()
             return
         if self.path != "/api/gen":
             self.send_response(404)
@@ -1313,6 +1537,44 @@ class H(BaseHTTPRequestHandler):
             self._send_json(200, {"error": err})
         else:
             self._send_json(200, result)
+
+    def _handle_analyze_stream(self):
+        # 竞品分析实时进度流（SSE）：服务端并行下载主图+详情图，并推进度事件，前端进度条吃真实事件。
+        try:
+            ln = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(ln)
+            data = json.loads(body or b"{}")
+        except Exception:
+            self._send_json(400, {"error": "请求解析失败"})
+            return
+        token = (self.headers.get("Authorization") or "").replace("Bearer ", "", 1).strip()
+        if not token:
+            token = (self.headers.get("X-Access-Token") or "").strip()
+        ok, info, kind = resolve_credential(token)
+        if not ok:
+            self._send_json(401, {"error": "访问码无效或已过期，请先在页面输入正确的动态访问码。（" + info.get("error", "") + "）"})
+            return
+        # SSE 头：禁用代理缓冲（Render/nginx 会缓冲导致前端收不到实时进度），保持长连接流式推送
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache, no-transform")
+        self.send_header("Connection", "keep-alive")
+        self.send_header("X-Accel-Buffering", "no")
+        self._cors()
+        self.end_headers()
+        wfile = self.wfile
+
+        def emit(obj):
+            try:
+                wfile.write(("data: " + json.dumps(obj, ensure_ascii=False) + "\n\n").encode("utf-8"))
+                wfile.flush()
+            except Exception:
+                pass
+
+        try:
+            _run_stream_analyze(data, emit)
+        except Exception as e:
+            emit({"stage": "error", "msg": "分析失败：" + str(e)})
 
     def _handle_fetch_product(self):
         # 商品链接自动抓取：服务端代抓，绕过浏览器 CORS/反爬；同样需访问码门禁。

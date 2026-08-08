@@ -921,7 +921,7 @@ const btnExportAll=$('#btnExportAll'); if(btnExportAll){ btnExportAll.onclick=as
   n++;await new Promise(r=>setTimeout(r,300));}
   toast(n?('已导出 '+n+' 张'):'没有可导出的屏（请先上传图片）');}; }
 const PROXY_URL = location.origin.startsWith('http') ? '/api/gen' : 'http://localhost:8765/api/gen';
-const ANALYZE_URL = location.origin.startsWith('http') ? '/api/analyze-competitor' : 'http://localhost:8765/api/analyze-competitor';
+const ANALYZE_URL = location.origin.startsWith('http') ? '/api/analyze-competitor-stream' : 'http://localhost:8765/api/analyze-competitor-stream';
 const FETCH_URL = location.origin.startsWith('http') ? '/api/fetch-product' : 'http://localhost:8765/api/fetch-product';
 // 带访问码门禁的鉴权头（云端公网防刷额度，与生图一致）
 function authHeaders(){
@@ -1241,10 +1241,12 @@ async function readProductForm(mainImgOverride){
     price:($('#pPrice').value||'').trim(),
     tags:($('#pTags2').value||'').split(',').map(s=>s.trim()).filter(Boolean),
     page_text:_lastPageText,
+    detail_image_urls:_lastDetailUrls,
     main_image:null
   };
   if(!f.url){toast('请先粘贴商品链接');$('#pUrl').focus();return null;}
-  if(!f.title && !mainImgOverride){toast('没抓到标题，也没传主图：补一个标题或主图，分析才准');$('#pTitle2').focus();return null;}
+  const hasAny = f.title || mainImgOverride || (f.detail_image_urls&&f.detail_image_urls.length) || f.page_text;
+  if(!hasAny){toast('没抓到标题/主图/详情图：补一个标题或主图，分析才准');$('#pTitle2').focus();return null;}
   const fi=$('#pMainImg');
   if(fi.files&&fi.files[0]){try{f.main_image=await compressImage(fi.files[0],1024);}catch(e){console.warn('主图压缩失败',e);}}
   else if(mainImgOverride){f.main_image=mainImgOverride;}
@@ -1252,48 +1254,74 @@ async function readProductForm(mainImgOverride){
 }
 function resetProductForm(){$('#pUrl').value='';$('#pTitle2').value='';$('#pCategory2').value='';$('#pPrice').value='';$('#pTags2').value='';$('#pMainImg').value='';$('#pPlatform').value='';}
 
-/* —— 进度动画（真实计时，消除「卡住」观感） —— */
-let _analysisTimer=null,_analysisStage='',_analysisStart=0;
+/* —— 进度动画（真实事件驱动；首事件到达前用计时器兜底，避免「卡住」观感） —— */
+let _analysisTimer=null,_analysisStage='',_analysisStart=0,_analysisHasLive=false;
 function startAnalysisProgress(){
   const prog=$('#analysisProgress'),bar=$('#analysisBar'),resEl=$('#analysisResultText');
   prog.style.display='block';resEl.textContent='';resEl.innerHTML='';
-  bar.style.transition='width .6s ease';bar.style.width='6%';
-  _analysisStage='fetching';_analysisStart=Date.now();
+  bar.style.transition='width .4s ease';bar.style.width='4%';
+  $('#analysisStatusText').textContent='准备分析…';
+  _analysisStage='fetching';_analysisStart=Date.now();_analysisHasLive=false;
   if(_analysisTimer)clearInterval(_analysisTimer);
   _analysisTimer=setInterval(()=>{
+    if(_analysisHasLive)return;   // SSE 实时事件接管后，计时器不再爬条
     const s=Math.floor((Date.now()-_analysisStart)/1000);
-    // 进度条缓慢爬升但不超过 92%，真实完成才到 100%，避免「满格却没好」的卡死观感
-    bar.style.width=Math.min(92,6+s*2.2)+'%';
-    $('#analysisStatusText').textContent = _analysisStage==='fetching'
-      ? '① 正在抓取链接信息…（'+s+' 秒）'
-      : '🔍 AI 深度分析中… 已等待 '+s+' 秒（通常 10–40 秒，复杂链接可能更久）';
+    bar.style.width=Math.min(35,4+s*2)+'%';
+    $('#analysisStatusText').textContent='准备分析中…（'+s+' 秒）';
   },1000);
 }
-function setAnalysisStage(s){_analysisStage=s;}
 function stopAnalysisProgress(){
   if(_analysisTimer){clearInterval(_analysisTimer);_analysisTimer=null;}
   const bar=$('#analysisBar');if(bar)bar.style.width='100%';
 }
 
-/* —— 添加 + 分析 —— */
+/* —— 添加 + 分析（实时进度流 SSE） —— */
 async function realAnalyze(f){
   const payload={
     title:f.title, category:f.category, platform:f.platform,
     price:f.price, url:f.url, main_image:f.main_image||null,
-    page_text:f.page_text||''
+    detail_image_urls:f.detail_image_urls||[], page_text:f.page_text||''
   };
   const r=await fetch(ANALYZE_URL,{method:'POST',headers:authHeaders(),body:JSON.stringify(payload)});
-  const j=await r.json().catch(()=>null);
-  if(!j||j.error){
-    if(j&&/访问码|未授权|401/.test(j.error)&&window.__showGate){window.__showGate(j.error);}
-    throw new Error((j&&j.error)||'分析接口无返回');
+  // 非 SSE（如访问码无效）会直接返回 JSON 错误
+  if(r.status!==200){
+    let j=null; try{j=await r.json();}catch(e){}
+    if(j&&j.error){ if(/访问码|未授权|401/.test(j.error)&&window.__showGate)window.__showGate(j.error); throw new Error(j.error); }
+    throw new Error('分析接口返回 '+r.status);
   }
+  const bar=$('#analysisBar'),st=$('#analysisStatusText');
+  let result=null,lastErr=null;
+  const reader=r.body.getReader();
+  const dec=new TextDecoder();
+  let buf='';
+  while(true){
+    const {done,value}=await reader.read();
+    if(done)break;
+    buf+=dec.decode(value,{stream:true});
+    let idx;
+    while((idx=buf.indexOf("\n\n"))>=0){
+      const chunk=buf.slice(0,idx); buf=buf.slice(idx+2);
+      let dataLine=null;
+      for(const ln of chunk.split("\n")){ if(ln.startsWith("data:")){ dataLine=ln.slice(5).trim(); break; } }
+      if(!dataLine)continue;
+      let ev; try{ev=JSON.parse(dataLine);}catch(e){continue;}
+      // 收到首个实时事件即交棒：停止兜底计时器，进度条改吃真实事件
+      _analysisHasLive=true;
+      if(_analysisTimer){clearInterval(_analysisTimer);_analysisTimer=null;}
+      if(ev.pct!=null&&bar)bar.style.width=ev.pct+'%';
+      if(ev.msg&&st)st.textContent=ev.msg;
+      if(ev.stage==='done')result=ev.result;
+      if(ev.stage==='error')lastErr=ev.msg||'分析失败';
+    }
+  }
+  if(lastErr)throw new Error(lastErr);
+  if(!result)throw new Error('分析无结果（可能因网络中断）');
   return {
-    summary:j.summary||'',
-    main_image:Array.isArray(j.main_image)?j.main_image:[],
-    title:Array.isArray(j.title)?j.title:[],
-    sku:Array.isArray(j.sku)?j.sku:[],
-    detail:Array.isArray(j.detail)?j.detail:[]
+    summary:result.summary||'',
+    main_image:Array.isArray(result.main_image)?result.main_image:[],
+    title:Array.isArray(result.title)?result.title:[],
+    sku:Array.isArray(result.sku)?result.sku:[],
+    detail:Array.isArray(result.detail)?result.detail:[]
   };
 }
 // 自动抓取链接信息（服务端代抓，绕过 CORS/反爬）。返回 {title,image_data_url,price,platform,page_text,note}
@@ -1308,15 +1336,18 @@ async function fetchProduct(url){
   return j;
 }
 // 把抓取结果填到表单（仅填空字段，不覆盖用户已填的）
+let _lastDetailUrls=[];   // 暂存最近一次抓取到的详情页图 URL，供分析接口并行下载并同步分析
 async function fillFromFetch(url){
   let meta;
   try{ meta=await fetchProduct(url); }
   catch(e){ toast('自动抓取失败：'+e.message+'（可手动补标题/主图）'); return null; }
   _lastPageText=(meta.page_text||'').slice(0,1500);
+  _lastDetailUrls=Array.isArray(meta.detail_image_urls)?meta.detail_image_urls:[];
   if(meta.title && !$('#pTitle2').value.trim())$('#pTitle2').value=meta.title;
   if(meta.platform && !$('#pPlatform').value)$('#pPlatform').value=meta.platform;
   if(meta.price && !$('#pPrice').value.trim())$('#pPrice').value=meta.price;
-  // 抓到的主图（data URL）供分析用；即便没主图，只要有标题/页面文本，分析也会走更快的文本模型
+  if(_lastDetailUrls.length)toast('已抓到主图 + '+_lastDetailUrls.length+' 张详情页图，即将同步分析');
+  // 抓到的主图（data URL）供分析用
   return meta.image_data_url||null;
 }
 $('#btnPasteGrab').onclick=async()=>{
@@ -1330,18 +1361,18 @@ $('#btnAnalyzeProduct').onclick=async()=>{
   const url=$('#pUrl').value.trim();
   if(!url){toast('请先粘贴商品链接');$('#pUrl').focus();return;}
   startAnalysisProgress();
-  // 一步到位：自动抓取 -> 自动填 -> 真分析 -> 存
+  // 一步到位：自动抓取 -> 自动填 -> 实时进度流分析 -> 存
   let autoImg=null;
   try{ autoImg=await fillFromFetch(url); }
   catch(e){ /* 抓取失败不阻塞，继续用已填字段 */ }
-  setAnalysisStage('analyzing');
   const f=await readProductForm(autoImg);if(!f){stopAnalysisProgress();return;}
   let analysis=null;
   try{
     analysis=await realAnalyze(f);
     $('#analysisResultText').innerHTML='<strong>📌 高销量原因：</strong>'+escapeHtml(analysis.summary)+
-      '<br><br><strong>🖼 主图：</strong><br>'+analysis.main_image.map(e=>'· '+escapeHtml(e)).join('<br>')+
-      '<br><strong>🏷 标题：</strong><br>'+analysis.title.map(e=>'· '+escapeHtml(e)).join('<br>');
+      '<br><br><strong>🖼 主图套路：</strong><br>'+analysis.main_image.map(e=>'· '+escapeHtml(e)).join('<br>')+
+      '<br><strong>🏷 标题策略：</strong><br>'+analysis.title.map(e=>'· '+escapeHtml(e)).join('<br>')+
+      '<br><strong>📄 详情页逻辑：</strong><br>'+analysis.detail.map(e=>'· '+escapeHtml(e)).join('<br>');
   }catch(e){
     $('#analysisResultText').innerHTML='<span class="muted">本次 AI 分析未成功：'+escapeHtml(e.message)+'。已存入情报库，可在卡片上点「分析」重试。</span>';
     toast('AI 分析失败，已存为未分析（可稍后补分析）');
