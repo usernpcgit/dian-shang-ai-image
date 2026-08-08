@@ -30,6 +30,21 @@ from urllib.parse import urljoin
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 
+# 允许本地用 .env 文件提供环境变量（如 ACCESS_SECRET），避免每次手动 export、重启即失效。
+# 仅当环境变量尚未设置时才从 .env 读取；Render 等平台通过真实环境变量注入时不受影响。
+try:
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"), "r", encoding="utf-8") as _envf:
+        for _envline in _envf:
+            _envline = _envline.strip()
+            if not _envline or _envline.startswith("#") or "=" not in _envline:
+                continue
+            _envk, _envv = _envline.split("=", 1)
+            _envk, _envv = _envk.strip(), _envv.strip().strip('"').strip("'")
+            if _envk and _envk not in os.environ:
+                os.environ[_envk] = _envv
+except FileNotFoundError:
+    pass
+
 # 动态访问码（测试阶段分享保护）：签发/校验逻辑放在 access.py，与 gentoken.py 共用同一密钥。
 try:
     from access import verify_access_token, resolve_credential

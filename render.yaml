@@ -20,4 +20,8 @@ services:
       # 竞品分析（智谱 GLM）用的 Key，云端必须在这里配置，否则分析会报「未配置 ZHIPU_API_KEY」
       - key: ZHIPU_API_KEY
         sync: false
+      # 总钥匙（master key）即 ACCESS_SECRET 的值；设为 HZh660513 后，页面输入 HZh660513 即永久解锁。
+      # 此值会随仓库提交；若想保持私密，可改为 sync:false 并在 Render 控制台手动设置。
+      - key: ACCESS_SECRET
+        value: "Hzh660513"
 
