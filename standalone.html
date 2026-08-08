@@ -296,7 +296,6 @@
   <div class="tab-indicator" id="tabIndicator"></div>
   <button data-tab="detail" data-short="做图" class="active" aria-label="做详情页"><span class="ic">🎨</span><span class="t">做详情页</span></button>
   <button data-tab="prompts" data-short="词库" aria-label="提示词库"><span class="ic">📝</span><span class="t">提示词库</span></button>
-  <button data-tab="gallery" data-short="素材" aria-label="素材库"><span class="ic">🖼️</span><span class="t">素材库</span></button>
   <button data-tab="help" data-short="帮助" aria-label="使用说明"><span class="ic">❓</span><span class="t">使用说明</span></button>
 </nav>
 
@@ -551,17 +550,6 @@
     <div id="productGrid" style="margin-top:10px"></div>
   </div>
 
-  <!-- 素材图库：上传/筛选/预览个人素材图（脚本 uploadGallery/renderGallery 依赖下面 4 个元素） -->
-  <div class="card" style="margin-top:14px">
-    <h3 style="margin-top:0;display:flex;justify-content:space-between;align-items:center"><span>🖼️ 素材图库</span>
-      <label class="btn sm" style="cursor:pointer;margin:0">＋ 上传图片<input type="file" id="gUpload" accept="image/*" multiple style="display:none"></label>
-    </h3>
-    <div class="row" style="margin-bottom:10px">
-      <div><label>按标签筛选</label><input type="text" id="gFilterTag" placeholder="标签关键词，如 爆款"></div>
-      <div><label>按备注筛选</label><input type="text" id="gFilterNote" placeholder="备注关键词"></div>
-    </div>
-    <div id="galleryGrid" class="gallery-grid"></div>
-  </div>
 </section>
 
 <!-- ============ 使用说明 ============ -->
@@ -617,19 +605,6 @@
   </div>
 </section>
 
-<div class="modal" id="modal">
-  <div class="box">
-    <img id="modalImg" alt="素材预览图">
-    <label>标签（逗号分隔）</label><input type="text" id="modalTags">
-    <label>备注</label><textarea id="modalNote"></textarea>
-    <div class="row" style="margin-top:14px">
-      <button class="btn" id="modalSave">保存标签/备注</button>
-      <a class="ghost btn" id="modalDl" download>下载</a>
-      <button class="danger" id="modalDel">删除</button>
-      <button class="ghost" id="modalClose">关闭</button>
-    </div>
-  </div>
-</div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1759,35 +1734,12 @@ $('#btnSavePrompt').onclick=()=>{const title=$('#pTitle').value.trim();if(!title
 $('#btnClearPrompt').onclick=()=>{editingId=null;$('#pTitle').value='';$('#pCat').value='';$('#pTags').value='';$('#pContent').value='';};
 $('#pSearch').oninput=renderPrompts;renderPrompts();
 
-/* ============ 素材库 ============ */
-const DB='wb_gallery';let dbp=null;
-function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open(DB,3);
-  r.onupgradeneeded=()=>{const db=r.result;if(!db.objectStoreNames.contains('imgs'))db.createObjectStore('imgs',{keyPath:'id'});if(!db.objectStoreNames.contains('refs'))db.createObjectStore('refs',{keyPath:'id'});if(!db.objectStoreNames.contains('products'))db.createObjectStore('products',{keyPath:'id'});};
+/* ============ 数据库初始化（参考图 + 产品库共用） ============ */
+let dbp=null;
+function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open('wb_gallery',3);
+  r.onupgradeneeded=()=>{const db=r.result;if(!db.objectStoreNames.contains('refs'))db.createObjectStore('refs',{keyPath:'id'});if(!db.objectStoreNames.contains('products'))db.createObjectStore('products',{keyPath:'id'});};
   r.onsuccess=()=>{dbp=r.result;res(dbp);};r.onerror=()=>rej(r.error);});}
-function dbAll(){return new Promise((res,rej)=>{const tx=dbp.transaction('imgs','readonly').objectStore('imgs').getAll();tx.onsuccess=()=>res(tx.result);tx.onerror=()=>rej(tx.error);});}
-function dbPut(o){return new Promise((res,rej)=>{const tx=dbp.transaction('imgs','readwrite').objectStore('imgs').put(o);tx.onsuccess=()=>res();tx.onerror=()=>rej(tx.error);});}
-function dbDel(id){return new Promise((res,rej)=>{const tx=dbp.transaction('imgs','readwrite').objectStore('imgs').delete(id);tx.onsuccess=()=>res();tx.onerror=()=>rej(tx.error);});}
-async function uploadGallery(files){for(const f of files){const u=await new Promise(r=>{const rd=new FileReader();rd.onload=()=>r(rd.result);rd.readAsDataURL(f);});
-  await dbPut({id:'g'+Date.now()+Math.random().toString(36).slice(2,6),name:f.name,data:u,tags:[],note:'',time:Date.now()});}
-  renderGallery();toast('已加入 '+files.length+' 张');}
-async function renderGallery(){if(!dbp)return;let list=await dbAll();
-  const ft=$('#gFilterTag').value.trim().toLowerCase(),fn=$('#gFilterNote').value.trim().toLowerCase();
-  if(ft)list=list.filter(x=>(x.tags||[]).join(',').toLowerCase().includes(ft));
-  if(fn)list=list.filter(x=>(x.note||'').toLowerCase().includes(fn));list.sort((a,b)=>b.time-a.time);
-  const grid=$('#galleryGrid');grid.innerHTML='';
-  if(!list.length){grid.innerHTML='<p class="muted">还没有素材，点上面上传几张吧。</p>';return;}
-  list.forEach(x=>{const d=document.createElement('div');d.className='gitem';
-    d.innerHTML=`<img src="${x.data}"><div class="meta"><div>${esc(x.name)}</div><div class="gtags">${(x.tags||[]).map(t=>'#'+esc(t)).join(' ')}</div>${x.note?('<div>'+esc(x.note)+'</div>'):''}</div>`;
-    d.onclick=()=>openModal(x);grid.appendChild(d);});}
-let curImg=null;
-function openModal(x){curImg=x;$('#modalImg').src=x.data;$('#modalTags').value=(x.tags||[]).join(',');$('#modalNote').value=x.note||'';
-  $('#modalDl').href=x.data;$('#modalDl').download=x.name||'image.png';$('#modal').classList.add('show');}
-$('#modalClose').onclick=()=>$('#modal').classList.remove('show');
-$('#modalSave').onclick=async()=>{if(!curImg)return;curImg.tags=$('#modalTags').value.split(',').map(s=>s.trim()).filter(Boolean);curImg.note=$('#modalNote').value;await dbPut(curImg);renderGallery();toast('已保存');$('#modal').classList.remove('show');};
-$('#modalDel').onclick=async()=>{if(!curImg)return;await dbDel(curImg.id);renderGallery();toast('已删除');$('#modal').classList.remove('show');};
-$('#gUpload').onchange=e=>uploadGallery(e.target.files);
-$('#gFilterTag').oninput=renderGallery;$('#gFilterNote').oninput=renderGallery;
-openDB().then(async()=>{renderGallery();renderRefs();PROD_LIB=await prodAll().catch(()=>[]);renderProductGrid();updateRefStatus();rebuildPreviewStack();}).catch(()=>{toast('画廊存储不可用（浏览器限制），可重试');rebuildPreviewStack();});
+openDB().then(async()=>{renderRefs();PROD_LIB=await prodAll().catch(()=>[]);renderProductGrid();updateRefStatus();rebuildPreviewStack();}).catch(()=>{rebuildPreviewStack();});
 
 /* ===== 动态访问码门禁（测试阶段分享保护） =====
    双保险：前端全屏遮罩拦截交互 + 后端 /api/gen 硬性校验访问码。
