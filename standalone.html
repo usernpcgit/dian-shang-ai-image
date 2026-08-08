@@ -83,7 +83,7 @@
   nav.tabs.dragging .tab-indicator{transition:none!important;background:rgba(124,58,237,.42);border-color:rgba(167,139,250,.85)}
   /* ===== Tab 导航：毛玻璃球收缩（仅动画 transform/opacity，GPU 合成，零重排，无卡顿） ===== */
   /* 入场弹簧动画结束后释放 transform/opacity 控制权（已去掉 fill，不再锁死），使收缩态的缩放淡出可正常生效 */
-  nav.tabs{transition:transform .34s cubic-bezier(.25,1,.5,1),opacity .22s ease-out;will-change:transform,opacity;transform-origin:top right}
+  nav.tabs{transition:transform .52s cubic-bezier(0.34,1.56,0.64,1),opacity .34s ease-out;will-change:transform,opacity;transform-origin:top right}
   /* 收缩态：可见地缩放淡出为右上角毛玻璃球（仅 transform/opacity，GPU 合成零重排）。
      配合球体 .show 的交叉淡入，形成"导航缩成球"的视觉，最终仅球体可见 */
   nav.tabs.tabs-collapsed{transform:scale(.12);opacity:0;pointer-events:none;animation:none}
@@ -97,7 +97,7 @@
     -webkit-backdrop-filter:blur(18px) saturate(160%);
     border:1.5px solid rgba(167,139,250,.45);box-shadow:0 6px 24px rgba(0,0,0,.55),0 0 12px rgba(124,58,237,.18),inset 0 1px 3px rgba(255,255,255,.08);
     opacity:0;transform:scale(.3);pointer-events:none;
-    transition:transform .32s cubic-bezier(.25,1,.5,1),opacity .24s ease-out;will-change:transform,opacity;
+    transition:transform .54s cubic-bezier(0.34,1.56,0.64,1),opacity .38s ease-out;will-change:transform,opacity;
   }
   .tabs-ball.show{opacity:.95;transform:scale(1);pointer-events:auto}
   .tabs-ball .ic{font-size:21px;line-height:1;filter:grayscale(0)}
