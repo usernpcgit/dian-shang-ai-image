@@ -11,7 +11,23 @@
 （默认一致；生产环境请用环境变量 ACCESS_SECRET 覆盖），否则签发的码服务端校验不通过。
 """
 import argparse
+import os
 import time
+
+# 与 proxy.py 一致：本地允许用 .env 提供 ACCESS_SECRET，保证签发的码与服务端同一密钥。
+try:
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"), "r", encoding="utf-8") as _envf:
+        for _envline in _envf:
+            _envline = _envline.strip()
+            if not _envline or _envline.startswith("#") or "=" not in _envline:
+                continue
+            _envk, _envv = _envline.split("=", 1)
+            _envk, _envv = _envk.strip(), _envv.strip().strip('"').strip("'")
+            if _envk and _envk not in os.environ:
+                os.environ[_envk] = _envv
+except FileNotFoundError:
+    pass
+
 from access import make_access_token, ACCESS_SECRET
 
 _DEFAULT_SECRET = "test-access-secret-change-me-2026"
