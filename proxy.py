@@ -45,6 +45,11 @@ PORT = int(os.environ.get("PORT") or os.environ.get("WB_PORT", "8765"))
 HERE = os.path.dirname(os.path.abspath(__file__))
 ASSETS_DIR = os.path.join(HERE, "assets")
 
+# 智谱 GLM API Key（竞品分析 / 视觉模型用）。
+# 优先取环境变量 ZHIPU_API_KEY（云端 Render 控制台配置最安全）；未设置时回退到下方内置值。
+# 注意：内置 Key 会随代码提交进版本库，仅适合个人/可信部署；公开仓库请勿提交真实 Key。
+ZHIPU_API_KEY = (os.environ.get("ZHIPU_API_KEY") or "4cbff98c2b5745aa9905fdb135128e85.VzamDNEFfNMn6wzi").strip()
+
 # 访问码使用次数记录（实现「每串码限定使用人数」）。
 # 【默认不落盘】仅进程内计数，重启即清零——这是专为「本地版解锁问题」修的：
 #   本地磁盘是持久的，以前一串码解锁一次后 used_codes.json 永久记 1，导致本机/换设备再解就被拒；
@@ -860,7 +865,7 @@ def _as_list(v):
 
 
 def analyze_competitor(data):
-    key = (data.get("zhitu_key") or os.environ.get("ZHIPU_API_KEY") or "").strip()
+    key = (data.get("zhitu_key") or ZHIPU_API_KEY).strip()
     if not key:
         return None, "未配置 ZHIPU_API_KEY（请在运行 proxy.py 的环境里设置智谱 API Key，与 model-eyes 同源）"
     title = (data.get("title") or "").strip()
@@ -939,7 +944,7 @@ def analyze_competitor(data):
 # 每个阶段通过 SSE 推一条进度事件，前端进度条吃真实事件，不再「假爬条」。
 def _run_stream_analyze(data, emit):
     """emit(dict) 推进度事件：{stage, pct, msg, elapsed?, result?}。"""
-    key = (data.get("zhitu_key") or os.environ.get("ZHIPU_API_KEY") or "").strip()
+    key = (data.get("zhitu_key") or ZHIPU_API_KEY).strip()
     if not key:
         emit({"stage": "error", "msg": "未配置 ZHIPU_API_KEY（请在运行 proxy.py 的环境里设置智谱 API Key，与 model-eyes 同源）"})
         return
