@@ -1258,6 +1258,7 @@ function resetProductForm(){$('#pUrl').value='';$('#pTitle2').value='';$('#pCate
 /* —— 进度动画（轮询友好：计时器兜底 + 轮询事件驱动） —— */
 let _analysisTimer=null,_analysisStart=0;
 function startAnalysisProgress(){
+  clearTimeout(_analysisHideTimer);  // 取消上一次的自动隐藏
   const prog=$('#analysisProgress'),bar=$('#analysisBar'),resEl=$('#analysisResultText');
   prog.style.display='block';resEl.textContent='';resEl.innerHTML='';
   bar.style.transition='width .4s ease';bar.style.width='4%';
@@ -1272,7 +1273,14 @@ function startAnalysisProgress(){
 function stopAnalysisProgress(){
   if(_analysisTimer){clearInterval(_analysisTimer);_analysisTimer=null;}
   const bar=$('#analysisBar');if(bar)bar.style.width='100%';
+  const st=$('#analysisStatusText');if(st)st.textContent='✅ 分析完成';
+  // 3 秒后自动隐藏进度面板
+  clearTimeout(_analysisHideTimer);
+  _analysisHideTimer=setTimeout(()=>{
+    const prog=$('#analysisProgress');if(prog)prog.style.display='none';
+  },3000);
 }
+let _analysisHideTimer=null;
 
 /* —— 添加 + 分析（后台任务 + 轮询模式，彻底解决 Render 超时） —— */
 async function realAnalyze(f){
@@ -1360,7 +1368,9 @@ async function fillFromFetch(url){
   if(meta.price && !$('#pPrice').value.trim())$('#pPrice').value=meta.price;
   if(_lastDetailUrls.length)toast('已抓到主图 + '+_lastDetailUrls.length+' 张详情页图，即将同步分析');
   // 抓到的主图（data URL）供分析用
-  return meta.image_data_url||null;
+  const imgData=meta.image_data_url||null;
+  if(!imgData)toast('⚠️ 未抓到商品主图（该平台可能不支持自动提取），建议手动上传一张主图以获得更好的 AI 分析效果');
+  return imgData;
 }
 $('#btnPasteGrab').onclick=async()=>{
   const url=$('#pUrl').value.trim();

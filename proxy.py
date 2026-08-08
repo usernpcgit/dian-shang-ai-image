@@ -1314,12 +1314,81 @@ def fetch_product(url):
     # 清理：去掉常见的站点后缀，避免把「- 淘宝网」当成商品名
     if title:
         title = re.split(r"\s*[-|–·]\s*(?:淘宝网|淘宝|天猫|京东|JD|京东商城|拼多多|抖音|Amazon|亚马逊|1688|唯品会|苏宁易购|苏宁)\s*$", title)[0].strip()
+    # ── 主图提取（优先级：meta 标签 > JSON-LD > 内联脚本 > 首张大图） ──
     img_url = ""
     for prop in ("og:image:secure_url", "og:image", "twitter:image", "image"):
         v = _meta(prop)
         if v:
             img_url = v.strip()
             break
+
+    # 备选 1：从 JSON-LD 的 image 字段提取（抖音/淘宝等常把商品主图藏在这里）
+    if not img_url:
+        for m in re.finditer(r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', html, re.I | re.S):
+            raw = m.group(1).strip()
+            try:
+                obj = json.loads(raw)
+            except Exception:
+                continue
+            def _walk_img(o):
+                if isinstance(o, dict):
+                    # Product/image 字段
+                    for k in ("image", "thumbnailUrl", "photo", "logo"):
+                        v = o.get(k)
+                        if isinstance(v, str) and v.startswith(("http://", "https://", "//")):
+                            return v.strip()
+                        if isinstance(v, list) and v and isinstance(v[0], str) and v[0].startswith(("http://", "https://", "//")):
+                            return v[0].strip()
+                    for val in o.values():
+                        r = _walk_img(val)
+                        if r: return r
+                elif isinstance(o, list):
+                    for item in o:
+                        r = _walk_img(item)
+                        if r: return r
+                return None
+            found = _walk_img(obj)
+            if found:
+                img_url = found
+                break
+
+    # 备选 2：从 SPA 内联脚本数据中提取（抖音 __pace_f__ / RENDER_DATA / NEXT_DATA 等）
+    if not img_url:
+        # 抖音商品页常见：window.__RENDER_DATA__ 或 <script> 里的 productImage / cover 图片
+        patterns = [
+            r'"(?:productImage|cover|thumb|mainImage|imageUrl|image)"\s*:\s*"((?:https?:)?//[^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"',
+            r'"(?:img|pic|src)"\s*:\s*"((?:https?:)?//[^"]+\.(?:jpg|jpeg|png|webp)[^"]*)"',
+            r'(?:cover|productImage|mainImg)\s*[=:]\s*["\']((?:https?:)?//[^"\']+\.(?:jpg|jpeg|png|webp)[^"\']*)',
+        ]
+        for pat in patterns:
+            m = re.search(pat, html, re.I)
+            if m:
+                candidate = m.group(1).strip()
+                # 过滤掉明显不是主图的 URL（图标、logo、1x1 像素等）
+                if not any(x in candidate.lower() for x in ("icon", "logo", "avatar", "1x1", "placeholder")):
+                    img_url = candidate
+                    break
+
+    # 备选 3：页面中第一张面积较大的 <img>（排除 icon/logo/追踪像素）
+    if not img_url:
+        img_candidates = []
+        for m in re.finditer(r'<img[^>]+src=["\']([^"\']+)["\']', html, re.I):
+            src = m.group(1).strip()
+            if src.startswith(("http://", "https://", "//")):
+                # 简单启发：URL 含产品相关关键词或图片尺寸较大
+                w_match = re.search(r'width[=:]["\']?(\d{3,})', m.group(0), re.I)
+                h_match = re.search(r'height[=:]["\']?(\d{3,})', m.group(0), re.I)
+                score = 0
+                if w_match: score += int(w_match.group(1))
+                if h_match: score += int(h_match.group(1))
+                if any(k in src.lower() for k in ("product", "goods", "item", "cover", "main", "thumb")):
+                    score += 300
+                if not any(k in src.lower() for k in ("icon", "logo", "avatar", "pixel", "tracking", "beacon")):
+                    score += 100
+                img_candidates.append((score, src))
+        if img_candidates:
+            img_candidates.sort(key=lambda x: -x[0])
+            img_url = img_candidates[0][1]
     price = _meta("og:price:amount") or _meta("product:price:amount")
     if not price:
         mp = re.search(r'itemprop=["\']price["\'][^>]+content=["\']([^"\']+)', html, re.I)
@@ -1359,11 +1428,25 @@ def fetch_product(url):
         try:
             if img_url.startswith("//"):
                 img_url = "https:" + img_url
+            # 根据图片域名选择正确的 Referer，绕过防盗链
+            img_headers = dict(headers)
+            if "douyin" in img_url or "jinritemai" in img_url or "pstatp" in img_url:
+                img_headers["Referer"] = "https://haohuo.jinritemai.com/"
+            elif "taobao" in img_url or "tbcdn" in img_url or "alicdn" in img_url:
+                img_headers["Referer"] = "https://www.taobao.com/"
+            elif "jd" in img_url or "360buy" in img_url:
+                img_headers["Referer"] = "https://item.jd.com/"
+            elif "pinduoduo" in img_url or "yangkeduo" in img_url:
+                img_headers["Referer"] = "https://mobile.yangkeduo.com/"
+            else:
+                img_headers["Referer"] = url
             # 图片下载仅作可选补充，超时压到 8s，避免拖慢整体抓取
-            ir = S.get(img_url, headers=headers, timeout=8)
+            ir = S.get(img_url, headers=img_headers, timeout=8)
             if ir.status_code == 200 and ir.content:
-                fmt = detect_fmt(ir.content)[1]
-                image_data_url = "data:%s;base64,%s" % (fmt, base64.b64encode(ir.content).decode("ascii"))
+                # 过滤掉过小的图片（可能是 icon 或占位图，< 2KB）
+                if len(ir.content) > 2048:
+                    fmt = detect_fmt(ir.content)[1]
+                    image_data_url = "data:%s;base64,%s" % (fmt, base64.b64encode(ir.content).decode("ascii"))
         except Exception:
             image_data_url = None
 
