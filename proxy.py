@@ -1297,7 +1297,23 @@ def fetch_product(url):
                 seen.add(n); out.append(n)
         return out
 
-    title = (_meta("og:title") or _meta("twitter:title") or "").strip()
+    # 抖音/抖音电商短链（v.douyin.com 跳转到 haohuo.jinritemai.com）：SPA 静态 HTML 没有标题，
+    # 但实际标题藏在 URL 的 goods_detail 参数里（JSON 字符串，外层+内层都是 URL 编码）
+    _douyin_title = ""
+    if "douyin.com" in url or "jinritemai.com" in url:
+        try:
+            from urllib.parse import urlparse, parse_qs, unquote
+            _qs = parse_qs(urlparse(url).query)
+            _gd = _qs.get("goods_detail", [""])[0]
+            if _gd:
+                _decoded = unquote(unquote(_gd))
+                import json as _json
+                _dj = _json.loads(_decoded)
+                _douyin_title = (_dj.get("title") or "").strip()
+        except Exception:
+            pass
+
+    title = (_meta("og:title") or _meta("twitter:title") or _douyin_title or "").strip()
     if not title:
         ld = _ld_name()
         if ld:
