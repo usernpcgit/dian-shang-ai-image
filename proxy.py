@@ -939,9 +939,48 @@ def analyze_competitor(data):
     return result, None
 
 
-# ─────────── 竞品智能分析（实时进度流 SSE 版） ───────────
-# 用户粘贴商品落地页链接 -> 后端并行下载主图+详情图 -> 视觉模型同步分析 标题+主图+详情页，
-# 每个阶段通过 SSE 推一条进度事件，前端进度条吃真实事件，不再「假爬条」。
+# ─────────── 竞品分析后台任务（轮询模式，彻底解决 Render 超时杀连接） ───────────
+# 架构：POST /api/analyze-competitor → 立即返回 job_id + 启后台线程跑分析
+#       GET /api/analysis-status?job_id=xxx  → 每 2-3 秒短请求查状态（Render 杀不了短连接）
+# 比 SSE 长连接更可靠：Render 免费版对 >10s 的长连接会超时断开，但 <1s 的 GET 没问题。
+import uuid
+
+_analysis_jobs = {}   # job_id -> {"status": "running"|"done"|"error", "progress": {...}, "result"?}
+_jobs_lock = threading.Lock()
+
+_JOB_TTL = 600  # 任务结果保留 10 分钟，过期自动清理
+
+
+def _cleanup_jobs():
+    """清理超过 TTL 的旧任务，防止内存泄漏。"""
+    now = time.time()
+    with _jobs_lock:
+        expired = [jid for jid, j in _analysis_jobs.items()
+                   if now - j.get("created_at", 0) > _JOB_TTL]
+        for jid in expired:
+            del _analysis_jobs[jid]
+
+
+def _run_analysis_job(data, job_id):
+    """在后台线程中执行完整分析流程，通过写 _analysis_jobs[job_id] 推进度和结果。
+    复用 _run_stream_analyze 的 emit 逻辑，但 emit 写入 jobs 字典而非 SSE 流。"""
+    def emit(obj):
+        with _jobs_lock:
+            job = _analysis_jobs.get(job_id)
+            if not job:
+                return
+            job["progress"] = obj
+            if obj.get("stage") == "done":
+                job["status"] = "done"
+                job["result"] = obj.get("result")
+            elif obj.get("stage") == "error":
+                job["status"] = "error"
+                job["error_msg"] = obj.get("msg", "未知错误")
+
+    try:
+        _run_stream_analyze(data, emit)
+    except Exception as e:
+        emit({"stage": "error", "msg": "分析异常：" + str(e)})
 def _run_stream_analyze(data, emit):
     """emit(dict) 推进度事件：{stage, pct, msg, elapsed?, result?}。"""
     key = (data.get("zhitu_key") or ZHIPU_API_KEY).strip()
@@ -1399,6 +1438,9 @@ class H(BaseHTTPRequestHandler):
         if self.path == "/api/providers":
             self._send_json(200, {"providers": PROVIDERS})
             return
+        if self.path.startswith("/api/analysis-status"):
+            self._handle_analysis_status()
+            return
         if self.path.startswith("/assets/"):
             self._serve_static(self.path[len("/assets/"):])
             return
@@ -1530,7 +1572,8 @@ class H(BaseHTTPRequestHandler):
                               "note": info.get("note"), "mu": mu, "uses_left": left})
 
     def _handle_analyze(self):
-        # 竞品智能分析：用服务端已配置的智谱 Key；云端公网需访问码门禁，防别人刷爆额度。
+        # 竞品智能分析（轮询模式）：立即返回 job_id，后台线程跑分析。
+        # 前端每 2-3 秒 GET /api/analysis-status 查状态，彻底避免 Render 超时杀长连接。
         try:
             ln = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(ln)
@@ -1545,15 +1588,48 @@ class H(BaseHTTPRequestHandler):
         if not ok:
             self._send_json(401, {"error": "访问码无效或已过期，请先在页面输入正确的动态访问码。（" + info.get("error", "") + "）"})
             return
-        try:
-            result, err = analyze_competitor(data)
-        except Exception as e:
-            self._send_json(200, {"error": "分析失败：" + str(e)})
+
+        # 清理过期任务
+        _cleanup_jobs()
+
+        job_id = "aj_" + uuid.uuid4().hex[:12]
+        with _jobs_lock:
+            _analysis_jobs[job_id] = {
+                "status": "running",
+                "progress": {"stage": "prepare", "pct": 5, "msg": "任务已创建，正在启动分析…"},
+                "created_at": time.time(),
+            }
+
+        # 启动后台线程执行分析
+        t = threading.Thread(target=_run_analysis_job, args=(data, job_id), daemon=True)
+        t.start()
+
+        # 立即返回 job_id（不等待分析完成）
+        self._send_json(202, {"job_id": job_id, "msg": "分析任务已启动，请用 job_id 轮询 /api/analysis-status 查进度"})
+
+    def _handle_analysis_status(self):
+        """GET /api/analysis-status?job_id=xxx → 返回任务当前状态/进度/结果。短请求，不会被 Render 超时杀。"""
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        job_id = (params.get("job_id") or [""])[0].strip()
+        if not job_id:
+            self._send_json(400, {"error": "缺少 job_id 参数"})
             return
-        if err:
-            self._send_json(200, {"error": err})
-        else:
-            self._send_json(200, result)
+        with _jobs_lock:
+            job = _analysis_jobs.get(job_id)
+        if not job:
+            self._send_json(404, {"error": "任务不存在或已过期（结果保留 10 分钟）", "status": "expired"})
+            return
+        resp = {
+            "status": job["status"],
+            "progress": job.get("progress", {}),
+        }
+        if job["status"] == "done" and "result" in job:
+            resp["result"] = job["result"]
+        elif job["status"] == "error":
+            resp["error"] = job.get("error_msg", "未知错误")
+        self._send_json(200, resp)
 
     def _handle_analyze_stream(self):
         # 竞品分析实时进度流（SSE）：服务端并行下载主图+详情图，并推进度事件，前端进度条吃真实事件。

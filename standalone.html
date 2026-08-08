@@ -921,7 +921,8 @@ const btnExportAll=$('#btnExportAll'); if(btnExportAll){ btnExportAll.onclick=as
   n++;await new Promise(r=>setTimeout(r,300));}
   toast(n?('已导出 '+n+' 张'):'没有可导出的屏（请先上传图片）');}; }
 const PROXY_URL = location.origin.startsWith('http') ? '/api/gen' : 'http://localhost:8765/api/gen';
-const ANALYZE_URL = location.origin.startsWith('http') ? '/api/analyze-competitor-stream' : 'http://localhost:8765/api/analyze-competitor-stream';
+const ANALYZE_URL = location.origin.startsWith('http') ? '/api/analyze-competitor' : 'http://localhost:8765/api/analyze-competitor';
+const STATUS_URL = location.origin.startsWith('http') ? '/api/analysis-status' : 'http://localhost:8765/api/analysis-status';
 const FETCH_URL = location.origin.startsWith('http') ? '/api/fetch-product' : 'http://localhost:8765/api/fetch-product';
 // 带访问码门禁的鉴权头（云端公网防刷额度，与生图一致）
 function authHeaders(){
@@ -1254,20 +1255,18 @@ async function readProductForm(mainImgOverride){
 }
 function resetProductForm(){$('#pUrl').value='';$('#pTitle2').value='';$('#pCategory2').value='';$('#pPrice').value='';$('#pTags2').value='';$('#pMainImg').value='';$('#pPlatform').value='';}
 
-/* —— 进度动画（真实事件驱动；首事件到达前用计时器兜底，避免「卡住」观感） —— */
-let _analysisTimer=null,_analysisStage='',_analysisStart=0,_analysisHasLive=false;
+/* —— 进度动画（轮询友好：计时器兜底 + 轮询事件驱动） —— */
+let _analysisTimer=null,_analysisStart=0;
 function startAnalysisProgress(){
   const prog=$('#analysisProgress'),bar=$('#analysisBar'),resEl=$('#analysisResultText');
   prog.style.display='block';resEl.textContent='';resEl.innerHTML='';
   bar.style.transition='width .4s ease';bar.style.width='4%';
-  $('#analysisStatusText').textContent='准备分析…';
-  _analysisStage='fetching';_analysisStart=Date.now();_analysisHasLive=false;
+  $('#analysisStatusText').textContent='⏳ 正在提交分析任务…';
+  _analysisStart=Date.now();
   if(_analysisTimer)clearInterval(_analysisTimer);
   _analysisTimer=setInterval(()=>{
-    if(_analysisHasLive)return;   // SSE 实时事件接管后，计时器不再爬条
     const s=Math.floor((Date.now()-_analysisStart)/1000);
-    bar.style.width=Math.min(35,4+s*2)+'%';
-    $('#analysisStatusText').textContent='准备分析中…（'+s+' 秒）';
+    bar.style.width=Math.min(92,4+s*1.5)+'%';
   },1000);
 }
 function stopAnalysisProgress(){
@@ -1275,61 +1274,67 @@ function stopAnalysisProgress(){
   const bar=$('#analysisBar');if(bar)bar.style.width='100%';
 }
 
-/* —— 添加 + 分析（实时进度流 SSE） —— */
+/* —— 添加 + 分析（后台任务 + 轮询模式，彻底解决 Render 超时） —— */
 async function realAnalyze(f){
   const payload={
     title:f.title, category:f.category, platform:f.platform,
     price:f.price, url:f.url, main_image:f.main_image||null,
     detail_image_urls:f.detail_image_urls||[], page_text:f.page_text||''
   };
+  // Step 1: 提交分析任务，拿到 job_id
   const r=await fetch(ANALYZE_URL,{method:'POST',headers:authHeaders(),body:JSON.stringify(payload)});
-  // 非 SSE（如访问码无效）会直接返回 JSON 错误
-  if(r.status!==200){
+  if(r.status===401){
     let j=null; try{j=await r.json();}catch(e){}
-    if(j&&j.error){ if(/访问码|未授权|401/.test(j.error)&&window.__showGate)window.__showGate(j.error); throw new Error(j.error); }
-    throw new Error('分析接口返回 '+r.status);
+    if(j&&j.error&&/访问码|未授权/.test(j.error)&&window.__showGate)window.__showGate(j.error);
+    throw new Error(j?.error||'访问码无效');
   }
+  if(r.status!==202){
+    let j=null; try{j=await r.json();}catch(e){}
+    throw new Error(j?.error||'提交分析任务失败（HTTP '+r.status+'）');
+  }
+  let jid=null;
+  try{ const jr=await r.json(); jid=jr.job_id; }catch(e){ throw new Error('解析 job_id 失败'); }
+  if(!jid) throw new Error('未返回 job_id');
+
+  // Step 2: 轮询状态（每 2.5 秒一次短请求，Render 杀不了）
   const bar=$('#analysisBar'),st=$('#analysisStatusText');
-  let result=null,lastErr=null;
-  try{
-    const reader=r.body.getReader();
-    const dec=new TextDecoder();
-    let buf='';
-    while(true){
-      const {done,value}=await reader.read();
-      if(done)break;
-      buf+=dec.decode(value,{stream:true});
-      let idx;
-      while((idx=buf.indexOf("\n\n"))>=0){
-        const chunk=buf.slice(0,idx); buf=buf.slice(idx+2);
-        let dataLine=null;
-        for(const ln of chunk.split("\n")){ if(ln.startsWith("data:")){ dataLine=ln.slice(5).trim(); break; } }
-        if(!dataLine)continue;
-        let ev; try{ev=JSON.parse(dataLine);}catch(e){continue;}
-        _analysisHasLive=true;
-        if(_analysisTimer){clearInterval(_analysisTimer);_analysisTimer=null;}
-        if(ev.pct!=null&&bar)bar.style.width=ev.pct+'%';
-        if(ev.msg&&st)st.textContent=ev.msg;
-        if(ev.stage==='done')result=ev.result;
-        if(ev.stage==='error')lastErr=ev.msg||'分析失败';
-      }
+  const POLL_MS=2500, MAX_POLL=180;  // 最多等 ~7.5 分钟
+  for(let i=0;i<MAX_POLL;i++){
+    await new Promise(res=>setTimeout(res,POLL_MS));
+    let sr;
+    try{ sr=await fetch(STATUS_URL+'?job_id='+encodeURIComponent(jid),{headers:authHeaders()}); }
+    catch(netErr){
+      // 网络抖动：跳过这次轮询，不断开整体流程
+      continue;
     }
-  }catch(readErr){
-    const msg=(readErr&&readErr.message)||'';
-    if(/network|fetch|failed|abort|timeout|reset/i.test(msg)){
-      throw new Error('网络连接中断（云端分析耗时较长，可能被服务器超时断开）。建议：稍后在卡片上点「分析」重试，或检查网络后重试。');
+    if(sr.status===404) throw new Error('任务已过期或不存在');
+    let sv;
+    try{ sv=await sr.json(); }catch(e){ continue; }  // 解析失败也跳过
+
+    // 更新进度条和状态文字
+    const prog=sv.progress||{};
+    if(prog.pct!=null&&bar)bar.style.width=Math.min(92,prog.pct)+'%';
+    if(prog.msg&&st)st.textContent=prog.msg;
+
+    if(sv.status==='done'){
+      stopAnalysisProgress();
+      const result=sv.result||{};
+      return {
+        summary:result.summary||'',
+        main_image:Array.isArray(result.main_image)?result.main_image:[],
+        title:Array.isArray(result.title)?result.title:[],
+        sku:Array.isArray(result.sku)?result.sku:[],
+        detail:Array.isArray(result.detail)?result.detail:[]
+      };
     }
-    throw readErr;
+    if(sv.status==='error'){
+      stopAnalysisProgress();
+      throw new Error(sv.error||'分析失败');
+    }
+    // status === 'running': 继续轮询
   }
-  if(lastErr)throw new Error(lastErr);
-  if(!result)throw new Error('分析无结果（可能因网络中断）');
-  return {
-    summary:result.summary||'',
-    main_image:Array.isArray(result.main_image)?result.main_image:[],
-    title:Array.isArray(result.title)?result.title:[],
-    sku:Array.isArray(result.sku)?result.sku:[],
-    detail:Array.isArray(result.detail)?result.detail:[]
-  };
+  stopAnalysisProgress();
+  throw new Error('分析超时（已等待 '+Math.floor(MAX_POLL*POLL_MS/1000)+' 秒），请稍后重试');
 }
 // 自动抓取链接信息（服务端代抓，绕过 CORS/反爬）。返回 {title,image_data_url,price,platform,page_text,note}
 let _lastPageText='';   // 暂存最近一次抓取到的页面文本片段，供分析接口推断真实标题
