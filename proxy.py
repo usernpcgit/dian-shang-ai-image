@@ -802,7 +802,7 @@ ZHIPU_API = "https://open.bigmodel.cn/api/paas/v4/chat/completions"
 
 def _call_zhipu(key, model, messages, timeout=70):
     headers = {"Authorization": "Bearer " + key, "Content-Type": "application/json"}
-    payload = {"model": model, "messages": messages, "temperature": 0.6, "max_tokens": 4096}
+    payload = {"model": model, "messages": messages, "temperature": 0.6, "max_tokens": 1024}
     try:
         r = S.post(ZHIPU_API, headers=headers, json=payload, timeout=timeout)
     except Exception as e:
