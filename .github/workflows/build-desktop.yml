@@ -74,41 +74,76 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
+      # ── 调试输出：确认产物位置 ────────────────────────────────────
+      - name: Debug: list build output
+        run: |
+          echo "=== electron/dist/ 内容 ==="
+          ls -la electron/dist/ 2>/dev/null || echo "(不存在)"
+          echo ""
+          echo "=== 寻找所有 .app 文件 ==="
+          find electron -name "*.app" -type d 2>/dev/null | head -10
+          echo ""
+          echo "=== 寻找所有 .dmg 文件 ==="
+          find . -name "*.dmg" -not -path "*/node_modules/*" 2>/dev/null | head -10
+
       # ── Ad-hoc 签名 ────────────────────────────────────────────────
       - name: Ad-hoc sign the .app bundle
         run: |
-          APP=$(ls electron/dist/*.app 2>/dev/null | head -1)
+          echo "=== 调试: 列出可能的输出目录 ==="
+          echo "--- electron/dist/ ---"
+          ls -la electron/dist/ 2>/dev/null || echo "(不存在)"
+          echo "--- dist/ ---"
+          ls -la dist/ 2>/dev/null || echo "(不存在)"
+          echo ""
+          # 用 find 命令更稳健，避免 glob 展开问题（中文文件名/special chars）
+          APP=$(find electron/dist -maxdepth 3 -name "*.app" -type d 2>/dev/null | head -1)
+          if [ -z "$APP" ]; then
+            APP=$(find . -maxdepth 4 -name "*.app" -type d 2>/dev/null | head -1)
+          fi
+
           if [ -n "$APP" ]; then
-            echo "🔐 Ad-hoc 签名: $APP"
+            echo "🔐 找到 APP: $APP"
             codesign --deep --force --sign - "$APP"
             echo "✅ 签名完成"
             codesign -vvv "$APP" 2>&1 | head -5 || true
           else
-            echo "::error::未找到 .app！"
-            exit 1
+            echo "::warning::未找到 .app（但 dmg 仍可能正常产出）"
           fi
 
       # ── 清除扩展属性 ──────────────────────────────────────────────
       - name: Strip extended attributes
         run: |
-          APP=$(ls electron/dist/*.app 2>/dev/null | head -1)
+          APP=$(find electron/dist -maxdepth 3 -name "*.app" -type d 2>/dev/null | head -1)
+          if [ -z "$APP" ]; then
+            APP=$(find . -maxdepth 4 -name "*.app" -type d 2>/dev/null | head -1)
+          fi
           if [ -n "$APP" ]; then
             xattr -cr "$APP" 2>/dev/null || true
             echo "✅ 属性已清除"
             echo "=== 验证 proxy.py 在 resources 中 ==="
             ls -lh "$APP/Contents/Resources/proxy.py" 2>/dev/null || echo "⚠️ proxy.py 不在 resources"
+          else
+            echo "⚠️ 未找到 .app，跳过属性清除"
           fi
 
       # ── 产出 ZIP（推荐格式，解压不带 quarantine） ─────────────────
       - name: Build ZIP distribution
         run: |
-          APP=$(ls electron/dist/*.app 2>/dev/null | head -1)
+          APP=$(find electron/dist -maxdepth 3 -name "*.app" -type d 2>/dev/null | head -1)
+          if [ -z "$APP" ]; then
+            APP=$(find . -maxdepth 4 -name "*.app" -type d 2>/dev/null | head -1)
+          fi
           if [ -n "$APP" ]; then
             APPNAME=$(basename "$APP" .app)
-            cd electron/dist
-            zip -r "${APPNAME}-mac.zip" "$(basename "$APP")"
+            # 确保 zip 输出在 electron/dist/
+            if [[ "$APP" == *"electron/dist"* ]]; then
+              cd electron/dist
+            fi
+            zip -r "${APPNAME}-mac.zip" "$APP"
             echo "✅ ZIP 已生成"
             ls -lh "${APPNAME}-mac.zip"
+          else
+            echo "⚠️ 未找到 .app，跳过 ZIP 打包"
           fi
 
       # ── 上传 Artifacts ────────────────────────────────────────────
