@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>首次启动指引</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+         margin: 0; padding: 30px 32px; background: #0b0a14; color: #e7e3f5; line-height: 1.7; }
+  h2 { margin: 0 0 14px; font-size: 21px; color: #fff; }
+  p { margin: 0 0 12px; }
+  .tip { background: #1c1830; border: 1px solid #2c2550; border-radius: 12px; padding: 14px 16px; margin: 14px 0; }
+  .mac, .win { display: none; }
+  code { background: #15122a; padding: 3px 9px; border-radius: 7px; color: #c4b5fd; font-size: 13px; word-break: break-all; }
+  ol { padding-left: 22px; margin: 8px 0; }
+  li { margin: 6px 0; }
+  .sub { opacity: .65; font-size: 13px; }
+  button { margin-top: 20px; width: 100%; background: #7c3aed; color: #fff; border: 0;
+           padding: 12px; border-radius: 11px; font-size: 15px; cursor: pointer; font-weight: 600; }
+  button:hover { background: #8b4ff0; }
+</style>
+</head>
+<body>
+  <h2>欢迎使用 电商AI生图（桌面版）</h2>
+  <p>本版本为<strong>免费侧载</strong>（未购买代码签名），首次打开可能需要你手动放行一次。按下面步骤操作即可，之后直接打开无需重复。</p>
+
+  <div class="mac tip">
+    <p><strong>macOS 用户</strong></p>
+    <ol>
+      <li>若双击 App 提示「无法验证开发者」：<b>右键点击 App → 打开</b>，或在弹窗中点「打开」。</li>
+      <li>或前往 <b>系统设置 → 隐私与安全性</b>，找到本应用，点「仍要打开」。</li>
+      <li>若仍被拦（Ventura 及以上偶尔）：终端执行<br><code>xattr -d com.apple.quarantine /Applications/电商AI生图.app</code></li>
+    </ol>
+  </div>
+
+  <div class="win tip">
+    <p><strong>Windows 用户</strong></p>
+    <ol>
+      <li>安装/运行若弹出 SmartScreen「Windows 已保护你的电脑」：点「<b>更多信息</b>」→「<b>仍要运行</b>」即可。</li>
+      <li>这是系统的正常安全提示，本应用不含任何恶意行为。</li>
+    </ol>
+  </div>
+
+  <p class="sub">看完一次即可，下次启动不再弹出。</p>
+  <button id="ok">我已了解，开始使用</button>
+
+  <script>
+    var isMac = /Mac/i.test(navigator.platform) || /Mac/i.test(navigator.userAgent);
+    document.querySelector(isMac ? ".mac" : ".win").style.display = "block";
+    var seen = false;
+    try { seen = localStorage.getItem("dsai_guide_seen") === "1"; } catch (e) {}
+    if (seen) { window.close(); }
+    document.getElementById("ok").onclick = function () {
+      try { localStorage.setItem("dsai_guide_seen", "1"); } catch (e) {}
+      window.close();
+    };
+  </script>
+</body>
+</html>

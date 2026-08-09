@@ -57,6 +57,7 @@ except Exception:
         return ok, info, ("code" if ok else None)
 
 PORT = int(os.environ.get("PORT") or os.environ.get("WB_PORT", "8765"))
+DESKTOP_MODE = os.environ.get("DESKTOP_MODE") == "1"  # 桌面端模式：绑定 127.0.0.1 + 本机免访问码
 HERE = os.path.dirname(os.path.abspath(__file__))
 ASSETS_DIR = os.path.join(HERE, "assets")
 
@@ -102,7 +103,8 @@ def _resolve(name):
             return _p
     return os.path.join(HERE, name)
 
-LANDING = _resolve("landing.html")   # 根路径：营销落地页
+# 桌面端(DESKTOP_MODE)不打包落地页，置 None；do_GET 的 "/" 会重定向到 /tool
+LANDING = None if DESKTOP_MODE else _resolve("landing.html")
 HTML = _resolve("standalone.html")   # /tool：工具页
 
 POLL = 3
@@ -1545,6 +1547,12 @@ class H(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
+    def _cred(self, token):
+        # 桌面端(DESKTOP_MODE)且来自本机：本地信任，等价于总钥匙，跳过远程访问码校验
+        if DESKTOP_MODE and self.client_address[0] in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
+            return True, {"exp": None, "remaining_hours": None, "note": "桌面端本地放行", "mu": None, "master": True}, "master"
+        return resolve_credential(token)
+
     def do_OPTIONS(self):
         self.send_response(204)
         self._cors()
@@ -1584,6 +1592,11 @@ class H(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path in ("/", "/index.html"):
+            if DESKTOP_MODE and LANDING is None:
+                self.send_response(302)
+                self.send_header("Location", "/tool")
+                self.end_headers()
+                return
             self._serve_file(LANDING)
             return
         if self.path == "/tool":
@@ -1644,7 +1657,7 @@ class H(BaseHTTPRequestHandler):
         token = (self.headers.get("Authorization") or "").replace("Bearer ", "", 1).strip()
         if not token:
             token = (self.headers.get("X-Access-Token") or "").strip()
-        ok, info, kind = resolve_credential(token)
+        ok, info, kind = self._cred(token)
         if not ok:
             self._send_json(401, {"error": "访问码无效或已过期，请先在页面输入正确的动态访问码。（" + info.get("error", "") + "）"})
             return
@@ -1684,7 +1697,7 @@ class H(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "请求解析失败"})
             return
         code = (data.get("code") or "").strip()
-        ok, info, kind = resolve_credential(code)
+        ok, info, kind = self._cred(code)
         if ok:
             if kind == "master":
                 # 总钥匙：永久解锁，不消耗次数
@@ -1710,7 +1723,7 @@ class H(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "请求解析失败"})
             return
         code = (data.get("code") or "").strip()
-        ok, info, kind = resolve_credential(code)
+        ok, info, kind = self._cred(code)
         if not ok:
             self._send_json(200, {"valid": False, "error": self._enrich_err(info)})
             return
@@ -1748,7 +1761,7 @@ class H(BaseHTTPRequestHandler):
         token = (self.headers.get("Authorization") or "").replace("Bearer ", "", 1).strip()
         if not token:
             token = (self.headers.get("X-Access-Token") or "").strip()
-        ok, info, kind = resolve_credential(token)
+        ok, info, kind = self._cred(token)
         if not ok:
             self._send_json(401, {"error": "访问码无效或已过期，请先在页面输入正确的动态访问码。（" + info.get("error", "") + "）"})
             return
@@ -1807,7 +1820,7 @@ class H(BaseHTTPRequestHandler):
         token = (self.headers.get("Authorization") or "").replace("Bearer ", "", 1).strip()
         if not token:
             token = (self.headers.get("X-Access-Token") or "").strip()
-        ok, info, kind = resolve_credential(token)
+        ok, info, kind = self._cred(token)
         if not ok:
             self._send_json(401, {"error": "访问码无效或已过期，请先在页面输入正确的动态访问码。（" + info.get("error", "") + "）"})
             return
@@ -1845,7 +1858,7 @@ class H(BaseHTTPRequestHandler):
         token = (self.headers.get("Authorization") or "").replace("Bearer ", "", 1).strip()
         if not token:
             token = (self.headers.get("X-Access-Token") or "").strip()
-        ok, info, kind = resolve_credential(token)
+        ok, info, kind = self._cred(token)
         if not ok:
             self._send_json(401, {"error": "访问码无效或已过期，请先输入正确的动态访问码。（" + info.get("error", "") + "）"})
             return
@@ -1927,7 +1940,7 @@ class H(BaseHTTPRequestHandler):
         token = (self.headers.get("Authorization") or "").replace("Bearer ", "", 1).strip()
         if not token:
             token = (self.headers.get("X-Access-Token") or "").strip()
-        ok, info, kind = resolve_credential(token)
+        ok, info, kind = self._cred(token)
         if not ok:
             self._send_json(401, {"error": "访问码无效或已过期，请先在页面输入正确的动态访问码。（" + info.get("error", "") + "）"})
             return
@@ -1990,7 +2003,8 @@ if __name__ == "__main__":
         sys.exit(0)
     print("[启动] PORT=%s, HTML=%s, exists=%s" % (PORT, HTML, os.path.exists(HTML)))
     print("[启动] cwd=%s, files=%s" % (os.getcwd(), os.listdir(os.getcwd())[:10]))
-    srv = ThreadingHTTPServer(("0.0.0.0", PORT), H)
+    bind_host = "127.0.0.1" if DESKTOP_MODE else "0.0.0.0"
+    srv = ThreadingHTTPServer((bind_host, PORT), H)
     try:
         lan = socket.gethostbyname(socket.gethostname())
     except Exception:

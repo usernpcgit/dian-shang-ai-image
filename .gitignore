@@ -3,3 +3,8 @@ __pycache__/
 .DS_Store
 used_codes.json
 .env
+
+# 桌面端 Electron 构建产物（由 sync-app.js / PyInstaller / electron-builder 生成，不入库）
+electron/node_modules/
+electron/dist/
+electron/app/
