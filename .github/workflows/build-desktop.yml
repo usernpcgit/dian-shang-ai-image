@@ -134,13 +134,12 @@ jobs:
             APP=$(find . -maxdepth 4 -name "*.app" -type d 2>/dev/null | head -1)
           fi
           if [ -n "$APP" ]; then
+            # 修复：cd 后必须用 basename（dirname 用绝对路径），避免相对路径错位
+            APPDIR=$(cd "$(dirname "$APP")" && pwd)
             APPNAME=$(basename "$APP" .app)
-            # 确保 zip 输出在 electron/dist/
-            if [[ "$APP" == *"electron/dist"* ]]; then
-              cd electron/dist
-            fi
-            zip -r "${APPNAME}-mac.zip" "$APP"
-            echo "✅ ZIP 已生成"
+            cd "$APPDIR"
+            zip -r "${APPNAME}-mac.zip" "$APPNAME"
+            echo "✅ ZIP 已生成: $(pwd)/${APPNAME}-mac.zip"
             ls -lh "${APPNAME}-mac.zip"
           else
             echo "⚠️ 未找到 .app，跳过 ZIP 打包"
