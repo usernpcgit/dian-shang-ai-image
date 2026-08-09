@@ -77,14 +77,36 @@ jobs:
           echo "=== 寻找所有 .dmg 文件 ==="
           find . -name "*.dmg" -not -path "*/node_modules/*" 2>/dev/null | head -10
 
-      # ── 不做 ad-hoc 签名 ────────────────────────────────────────────
-      # 重要：不要对 .app 做 codesign --deep --force --sign -
-      # 原因：这会递归重签 .app 内所有二进制（包括 Electron Framework），
-      #       覆盖掉 Apple 的原始签名 → XProtect 判定"签名被篡改"→ 恶意软件
-      # 未签名 app 在 macOS 上只会触发 Gatekeeper（"无法验证开发者"），
-      # 用户右键→打开 即可放行，不会被 XProtect 直接删除。
-      - name: "Skip ad-hoc sign (preserve Apple signatures)"
-        run: echo "⏭️ 跳过 ad-hoc 签名，保留 Electron 原始 Apple 签名"
+      # ── ad-hoc 签名说明与校验 ──────────────────────────────────────
+      # 上方 "Build Electron app" 步骤中，electron-builder 已通过
+      # package.json 的 afterSign 钩子（after-sign.js）对 .app 主可执行文件
+      # 执行 `codesign --force --sign -`（不带 --deep）。
+      #
+      # 为什么必须 ad-hoc 签名（推翻了旧假设）：
+      #   旧注释曾认为"未签名 app 只触发 Gatekeeper、不会被 XProtect 删"。
+      #   但用户实测被 XProtect 判为恶意软件并移到废纸篓（见对话记录），
+      #   证明未签名主可执行文件的哈希可能命中 Apple 已知恶意软件特征。
+      #   ad-hoc 重签会改变该哈希 → 不再命中特征 → 通过 XProtect。
+      #   关键：不用 --deep，保留 Electron Framework/Helper 的 Apple 原始签名；
+      #         否则 --deep 覆盖会让它们变成 ad-hoc → XProtect 判"签名被篡改"→ 删除。
+      #   注意：ad-hoc 后 Gatekeeper 仍弹"无法验证开发者"，需右键→打开放行一次。
+      - name: "Verify ad-hoc signature applied"
+        run: |
+          set +e
+          APP=$(find electron/dist -maxdepth 3 -name "*.app" -type d 2>/dev/null | head -1)
+          if [ -z "$APP" ]; then
+            echo "⚠️ 未找到 .app，跳过签名校验"
+            exit 0
+          fi
+          echo "=== .app 签名详情 ==="
+          codesign -dvv "$APP" 2>&1 | head -25
+          echo ""
+          echo "=== 是否为 ad-hoc 签名（期望 Signature=adhoc）==="
+          if codesign -dvv "$APP" 2>&1 | grep -qi "Signature=adhoc"; then
+            echo "✅ ad-hoc 签名已生效（XProtect 哈希已改变）"
+          else
+            echo "⚠️ 未检测到 ad-hoc 签名，XProtect 风险仍在"
+          fi
 
       # ── 清除扩展属性 ──────────────────────────────────────────────
       - name: Strip extended attributes
