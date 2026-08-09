@@ -19,8 +19,7 @@
   body{color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei UI","Microsoft YaHei","PingFang SC","Hiragino Sans GB","Source Han Sans SC","Noto Sans CJK SC",sans-serif;font-size:15px;line-height:1.65;letter-spacing:.3px;padding-top:0;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}
   /* 尊重系统"减弱动态"设置：关掉装饰性动画 */
   @media (prefers-reduced-motion:reduce){
-    .cloud{animation:none;opacity:.85}
-    body.night #skyLayer .star{animation:none}
+    .orb,.spark{animation:none}
     .model-pill .dot{animation:none}
     nav.tabs .tab-indicator{transition:none}
     header.top,nav.tabs,button,.card,.ios-pill,.theme-toggle{transition-duration:.01ms!important}
@@ -37,27 +36,25 @@
                radial-gradient(900px 600px at 100% 0%, rgba(167,139,250,.10) 0%, transparent 50%),
                linear-gradient(180deg, #0D0D12 0%, #14141C 50%, #0D0D12 100%);
   }
-  /* 动态天空层：云朵 / 月亮 / 星星 */
+  /* 动态背景：星云漂移（极客紫黑 · 与毛玻璃面板同源质感，取代原卡通云/月/星） */
   #skyLayer{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
-  .cloud{position:absolute;background:rgba(255,255,255,.96);border-radius:60px;opacity:.95;animation:cloudDrift linear infinite;box-shadow:0 6px 24px rgba(120,170,210,.18)}
-  .cloud::before,.cloud::after{content:"";position:absolute;background:inherit;border-radius:50%}
-  .cloud::before{width:55%;height:130%;top:-55%;left:12%}
-  .cloud::after{width:42%;height:110%;top:-45%;right:12%}
-  @keyframes cloudDrift{
-    from{transform:translateX(-120vw)}
-    to{transform:translateX(120vw)}
-  }
-  .moon{position:absolute;top:9%;right:11%;width:86px;height:86px;border-radius:50%;background:#FFFBE8;box-shadow:0 0 28px 8px rgba(255,248,220,.55), inset -10px -6px 18px rgba(200,180,130,.25);opacity:0;transform:translateY(-20px);transition:opacity .6s, transform .6s}
-  .moon::after{content:"";position:absolute;top:22%;left:18%;width:16px;height:16px;border-radius:50%;background:rgba(210,190,140,.18)}
-  .moon::before{content:"";position:absolute;top:55%;left:55%;width:10px;height:10px;border-radius:50%;background:rgba(210,190,140,.13)}
-  .star{position:absolute;background:#fff;border-radius:50%;opacity:0;box-shadow:0 0 4px rgba(255,255,255,.8)}
-  body.night #skyLayer .star{opacity:.9;animation:twinkle linear infinite}
-  @keyframes twinkle{
-    0%,100%{opacity:.25;transform:scale(.8)}
-    50%{opacity:1;transform:scale(1.3)}
-  }
-  body.night #skyLayer .cloud{opacity:0;transition:opacity .5s}
-  body.night #skyLayer .moon{opacity:1;transform:translateY(0)}
+  /* 细微颗粒，增添高级触感（premium texture） */
+  #skyLayer::after{content:"";position:absolute;inset:-20%;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity:.05;mix-blend-mode:overlay;pointer-events:none}
+  .orb{position:absolute;border-radius:50%;filter:blur(70px);opacity:.55;mix-blend-mode:screen;will-change:transform}
+  .orb.a{width:48vw;height:48vw;left:-10vw;top:-14vw;background:radial-gradient(circle at 32% 32%,#7C3AED 0%,rgba(124,58,237,0) 68%);animation:orbA 28s ease-in-out infinite}
+  .orb.b{width:42vw;height:42vw;right:-12vw;top:6vh;background:radial-gradient(circle at 60% 40%,#A78BFA 0%,rgba(167,139,250,0) 68%);animation:orbB 34s ease-in-out infinite}
+  .orb.c{width:54vw;height:54vw;left:16vw;bottom:-24vw;background:radial-gradient(circle at 50% 50%,#6D28D9 0%,rgba(109,40,217,0) 70%);animation:orbC 40s ease-in-out infinite}
+  .orb.d{width:32vw;height:32vw;right:12vw;bottom:-10vw;background:radial-gradient(circle at 40% 60%,#C084FC 0%,rgba(192,132,252,0) 68%);animation:orbD 31s ease-in-out infinite}
+  @keyframes orbA{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(7vw,6vh,0) scale(1.12)}}
+  @keyframes orbB{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(-6vw,8vh,0) scale(.9)}}
+  @keyframes orbC{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(9vw,-5vh,0) scale(1.08)}}
+  @keyframes orbD{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(-8vw,-4vh,0) scale(1.15)}}
+  /* 夜间：叠加极淡星点，呼应「极客」氛围（非卡通白星） */
+  .spark{position:absolute;width:3px;height:3px;border-radius:50%;background:#C4B5FD;opacity:0;box-shadow:0 0 6px rgba(196,181,253,.8)}
+  body.night #skyLayer .spark{opacity:.7;animation:sparkTw 4s ease-in-out infinite}
+  @keyframes sparkTw{0%,100%{opacity:.15;transform:scale(.7)}50%{opacity:.8;transform:scale(1.2)}}
   /* 顶栏：毛玻璃冠栏（导航独立成行，不再合并） */
   /* 顶栏：iOS 26 液态玻璃冠栏（半透明毛玻璃，随页面滚动，非 fixed） */
   header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 22px;position:relative;background:transparent;border-bottom:none;box-shadow:none}
@@ -1101,26 +1098,19 @@ TT.onclick=()=>{ const cur=(function(){try{return localStorage.getItem('wb_theme
 try{ if(mq.addEventListener) mq.addEventListener('change',()=>{ if((localStorage.getItem('wb_theme')||'auto')==='auto') applyTheme('auto'); }); }catch(e){}
 function buildSky(){
   if(!SKY) return;
-  for(let i=0;i<12;i++){
-    const c=document.createElement('div'); c.className='cloud';
-    const w=90+Math.random()*160; const h=w*(0.38+Math.random()*0.18);
-    c.style.width=w+'px'; c.style.height=h+'px';
-    c.style.top=(4+Math.random()*32)+'%';
-    c.style.left=(-20+Math.random()*120)+'%';
-    c.style.opacity=0.82+Math.random()*0.13;
-    c.style.animationDuration=(50+Math.random()*70)+'s';
-    c.style.animationDelay=(-Math.random()*60)+'s';
-    SKY.appendChild(c);
-  }
-  const moon=document.createElement('div'); moon.className='moon'; SKY.appendChild(moon);
-  for(let i=0;i<42;i++){
-    const s=document.createElement('div'); s.className='star';
-    const size=1.2+Math.random()*2.2;
+  // 四团星云光球（CSS 已定义漂移/缩放动画，缓慢游移）
+  ['a','b','c','d'].forEach(c=>{
+    const o=document.createElement('div'); o.className='orb '+c; SKY.appendChild(o);
+  });
+  // 夜间极淡星点（仅在 body.night 下闪烁，非卡通白星）
+  for(let i=0;i<34;i++){
+    const s=document.createElement('div'); s.className='spark';
+    const size=2+Math.random()*2;
     s.style.width=size+'px'; s.style.height=size+'px';
-    s.style.top=(3+Math.random()*65)+'%';
+    s.style.top=(4+Math.random()*80)+'%';
     s.style.left=(2+Math.random()*96)+'%';
-    s.style.animationDuration=(2.5+Math.random()*4)+'s';
-    s.style.animationDelay=(-Math.random()*5)+'s';
+    s.style.animationDuration=(3+Math.random()*4)+'s';
+    s.style.animationDelay=(-Math.random()*6)+'s';
     SKY.appendChild(s);
   }
 }
