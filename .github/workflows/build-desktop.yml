@@ -75,7 +75,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
       # ── 调试输出：确认产物位置 ────────────────────────────────────
-      - name: Debug: list build output
+      - name: "Debug list build output"
         run: |
           echo "=== electron/dist/ 内容 ==="
           ls -la electron/dist/ 2>/dev/null || echo "(不存在)"
