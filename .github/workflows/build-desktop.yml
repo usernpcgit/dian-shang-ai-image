@@ -35,11 +35,41 @@ jobs:
       - name: Build proxy-bin (PyInstaller)
         run: cd electron && pyinstaller build-python/build.spec --distpath app/proxy-bin --workpath build-python/build --noconfirm
 
+      # 验证二进制确实产出（防止静默失败导致安装包缺文件）
+      - name: Verify proxy-bin exists
+        run: |
+          echo "=== proxy-bin 目录内容 ==="
+          ls -lh electron/app/proxy-bin/
+          BIN="electron/app/proxy-bin/proxy-bin"
+          if [ ! -f "$BIN" ]; then
+            echo "::error::proxy-bin 未生成！PyInstaller 可能失败"
+            exit 1
+          fi
+          SIZE=$(stat -f%z "$BIN")
+          echo "proxy-bin 大小: ${SIZE} bytes"
+          if [ "$SIZE" -lt 1000000 ]; then
+            echo "::warning::proxy-bin 异常小（<1MB），可能不完整"
+          fi
+
       - name: Build & publish dmg (unsigned)
         run: cd electron && npx electron-builder --mac --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      # 清除 .app 内所有扩展属性（quarantine/macl 等），
+      # 解决未签名 App 在 macOS 上被 Gatekeeper 反复拦截的问题
+      - name: Strip extended attributes from .app bundle
+        run: |
+          APP=$(ls electron/dist/*.app 2>/dev/null | head -1)
+          if [ -n "$APP" ]; then
+            echo "清除 $APP 的扩展属性..."
+            xattr -cr "$APP"
+            echo "=== 清除后 xattr 列表 ==="
+            xattr -lr "$APP" 2>/dev/null | head -20 || echo "(无扩展属性)"
+          else
+            echo "未找到 .app 文件，跳过"
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
@@ -70,6 +100,23 @@ jobs:
 
       - name: Build proxy-bin (PyInstaller)
         run: cd electron && pyinstaller build-python/build.spec --distpath app/proxy-bin --workpath build-python/build --noconfirm
+
+      # 验证二进制确实产出
+      - name: Verify proxy-bin.exe exists
+        shell: pwsh
+        run: |
+          Write-Host "=== proxy-bin 目录内容 ==="
+          Get-ChildItem electron\app\proxy-bin\ | Format-Table Name, Length
+          $bin = "electron\app\proxy-bin\proxy-bin.exe"
+          if (-not (Test-Path $bin)) {
+            Write-Host "::error::proxy-bin.exe 未生成！PyInstaller 可能失败"
+            exit 1
+          }
+          $size = (Get-Item $bin).Length
+          Write-Host "proxy-bin.exe 大小: $size bytes"
+          if ($size -lt 1000000) {
+            Write-Host "::warning::proxy-bin.exe 异常小（<1MB），可能不完整"
+          }
 
       - name: Build & publish exe (unsigned)
         run: cd electron && npx electron-builder --win --publish always
