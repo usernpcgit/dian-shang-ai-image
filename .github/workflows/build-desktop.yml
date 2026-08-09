@@ -25,21 +25,12 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install PyInstaller & requests
-        run: pip install pyinstaller requests
-
       - name: Install deps & sync app files
         run: cd electron && npm install && npm run sync
 
-      # ── 构建 proxy-bin（fallback 用，不是首选） ──────────────────
-      - name: Build proxy-bin fallback (PyInstaller)
-        run: cd electron && pyinstaller build-python/build.spec --distpath app/proxy-bin --workpath build-python/build --noconfirm
-        continue-on-error: true  # 失败不阻断——Mac 首选 Python 路径不需要它
-
-      # ── 确保 proxy-bin 目录存在（extraResources 引用了它） ─────────
-      # PyInstaller 失败时目录可能不存在 → electron-builder 读不到源路径直接报错
-      - name: Ensure proxy-bin dir exists for extraResources
-        run: mkdir -p electron/app/proxy-bin && echo "✅ proxy-bin 目录已确保存在"
+      # Mac 上不构建 proxy-bin：
+      # PyInstaller 产物会被 XProtect 误判为"恶意软件"导致整个 app 被移到废纸篓。
+      # Mac 系统都自带 python3，走 Python 路径即可（零原生二进制）。
 
       # ── 验证关键文件 ─────────────────────────────────────────────
       - name: Verify required files exist
@@ -60,12 +51,12 @@ jobs:
           echo "✅ standalone.html 存在"
 
           echo ""
-          echo "=== 检查 proxy-bin（可选 fallback）==="
-          if [ -f "electron/app/proxy-bin/proxy-bin" ]; then
-            SIZE=$(stat -f%z "electron/app/proxy-bin/proxy-bin")
-            echo "✅ proxy-bin 存在 (${SIZE} bytes)"
+          echo "=== 确认 proxy-bin 未被打包（避免 XProtect 误判）==="
+          if [ -d "electron/app/proxy-bin" ]; then
+            echo "⚠️ proxy-bin 目录存在，删除以避免打包进 app"
+            rm -rf electron/app/proxy-bin
           else
-            echo "⚠️ proxy-bin 不存在（将使用 Python 路径）"
+            echo "✅ proxy-bin 不存在（Mac 用 Python 路径）"
           fi
 
       # ── 构建 Electron 应用 ────────────────────────────────────────
