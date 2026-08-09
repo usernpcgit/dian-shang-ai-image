@@ -6,7 +6,6 @@ on:
       - "v*"
   workflow_dispatch:
 
-# 允许 electron-builder 将产物发布到 GitHub Releases
 permissions:
   contents: write
 
@@ -35,7 +34,7 @@ jobs:
       - name: Build proxy-bin (PyInstaller)
         run: cd electron && pyinstaller build-python/build.spec --distpath app/proxy-bin --workpath build-python/build --noconfirm
 
-      # 验证二进制确实产出（防止静默失败导致安装包缺文件）
+      # ── 验证 PyInstaller 产物 ──────────────────────────────────────
       - name: Verify proxy-bin exists
         run: |
           echo "=== proxy-bin 目录内容 ==="
@@ -51,30 +50,72 @@ jobs:
             echo "::warning::proxy-bin 异常小（<1MB），可能不完整"
           fi
 
-      - name: Build & publish dmg (unsigned)
+      # ── 构建 Electron 应用 ────────────────────────────────────────
+      - name: Build dmg (unsigned)
         run: cd electron && npx electron-builder --mac --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
-      # 清除 .app 内所有扩展属性（quarantine/macl 等），
-      # 解决未签名 App 在 macOS 上被 Gatekeeper 反复拦截的问题
-      - name: Strip extended attributes from .app bundle
+      # ── Ad-hoc 签名（关键：让 app 有签名标识，Gatekeeper 不再视为"恶意软件"） ──
+      # ad-hoc signature 使用 "-" 作为签名身份，不需要 Apple 开发者证书。
+      # 效果：app 从"未签名(被拦截)"变为"已签名但未公证(可右键打开放行)"。
+      - name: Ad-hoc sign the .app bundle
+        run: |
+          APP=$(ls electron/dist/*.app 2>/dev/null | head -1)
+          if [ -n "$APP" ]; then
+            echo "正在对 $APP 进行 ad-hoc 签名..."
+            # --deep: 递归签名所有内部二进制（包括 proxy-bin）
+            # --force: 强制重新签名
+            # --sign -: ad-hoc identity（本地自签名，无需证书）
+            codesign --deep --force --sign - "$APP"
+            echo "✅ 签名完成，验证中..."
+            codesign -vvv --deep "$APP" 2>&1 | head -20
+            echo ""
+            echo "=== 签名信息 ==="
+            codesign -d -vvv "$APP" 2>&1 | head -10 || true
+          else
+            echo "::error::未找到 .app 文件！"
+            exit 1
+          fi
+
+      # ── 清除所有扩展属性（quarantine / macl 等） ──────────────────
+      # macOS 从 DMG 拖拽 app 到 Applications 时会自动附加 quarantine。
+      # 这里在构建阶段预先清除；用户下载 zip 版本则完全不受此影响。
+      - name: Strip all extended attributes
         run: |
           APP=$(ls electron/dist/*.app 2>/dev/null | head -1)
           if [ -n "$APP" ]; then
             echo "清除 $APP 的扩展属性..."
             xattr -cr "$APP"
-            echo "=== 清除后 xattr 列表 ==="
+            echo "=== 清除后属性列表 ==="
             xattr -lr "$APP" 2>/dev/null | head -20 || echo "(无扩展属性)"
           else
-            echo "未找到 .app 文件，跳过"
+            echo "未找到 .app，跳过"
+          fi
+
+      # ── 额外产出 ZIP 格式（zip 解压不带 quarantine 属性） ─────────
+      - name: Build zip distribution (no quarantine on extract)
+        run: |
+          APP=$(ls electron/dist/*.app 2>/dev/null | head -1)
+          if [ -n "$APP" ]; then
+            APPNAME=$(basename "$APP" .app)
+            cd electron/dist
+            zip -r "${APPNAME}-mac.zip" "$(basename "$APP")"
+            echo "✅ 已生成 ${APPNAME}-mac.zip"
+            ls -lh "${APPNAME}-mac.zip"
           fi
 
       - uses: actions/upload-artifact@v4
         with:
           name: mac-dmg
           path: electron/dist/*.dmg
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-zip
+          path: electron/dist/*-mac.zip
           if-no-files-found: ignore
 
   build-win:
@@ -101,7 +142,6 @@ jobs:
       - name: Build proxy-bin (PyInstaller)
         run: cd electron && pyinstaller build-python/build.spec --distpath app/proxy-bin --workpath build-python/build --noconfirm
 
-      # 验证二进制确实产出
       - name: Verify proxy-bin.exe exists
         shell: pwsh
         run: |
