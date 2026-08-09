@@ -36,6 +36,11 @@ jobs:
         run: cd electron && pyinstaller build-python/build.spec --distpath app/proxy-bin --workpath build-python/build --noconfirm
         continue-on-error: true  # 失败不阻断——Mac 首选 Python 路径不需要它
 
+      # ── 确保 proxy-bin 目录存在（extraResources 引用了它） ─────────
+      # PyInstaller 失败时目录可能不存在 → electron-builder 读不到源路径直接报错
+      - name: Ensure proxy-bin dir exists for extraResources
+        run: mkdir -p electron/app/proxy-bin && echo "✅ proxy-bin 目录已确保存在"
+
       # ── 验证关键文件 ─────────────────────────────────────────────
       - name: Verify required files exist
         run: |
