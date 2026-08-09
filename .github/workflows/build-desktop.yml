@@ -126,26 +126,9 @@ jobs:
             echo "⚠️ 未找到 .app，跳过属性清除"
           fi
 
-      # ── 产出 ZIP（推荐格式，解压不带 quarantine） ─────────────────
-      - name: Build ZIP distribution
-        run: |
-          APP=$(find electron/dist -maxdepth 3 -name "*.app" -type d 2>/dev/null | head -1)
-          if [ -z "$APP" ]; then
-            APP=$(find . -maxdepth 4 -name "*.app" -type d 2>/dev/null | head -1)
-          fi
-          if [ -n "$APP" ]; then
-            # 修复：cd 后必须用 basename（dirname 用绝对路径），避免相对路径错位
-            APPDIR=$(cd "$(dirname "$APP")" && pwd)
-            APPNAME=$(basename "$APP" .app)
-            cd "$APPDIR"
-            zip -r "${APPNAME}-mac.zip" "$APPNAME"
-            echo "✅ ZIP 已生成: $(pwd)/${APPNAME}-mac.zip"
-            ls -lh "${APPNAME}-mac.zip"
-          else
-            echo "⚠️ 未找到 .app，跳过 ZIP 打包"
-          fi
-
       # ── 上传 Artifacts ────────────────────────────────────────────
+      # 注意：electron-builder 已经按 package.json 的 mac target:["dmg","zip"]
+      # 自动产出 .dmg 和 .zip 到 electron/dist/，无需手动 zip
       - uses: actions/upload-artifact@v4
         with:
           name: mac-dmg
