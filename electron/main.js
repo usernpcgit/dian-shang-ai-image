@@ -1,65 +1,115 @@
 "use strict";
-// 电商AI生图 —— Electron 主进程（免费侧载优先版）
-// 职责：拉起 Python 代理子进程(proxy-bin 或 python proxy.py) → 健康检查 → 加载 /tool → 首次引导 + 更新检测
+// 电商AI生图 —— Electron 主进程（免费侧载优先版 v3）
+//
+// 架构决策（v3 重要变更）：
+//   默认启动路径 = 系统 python3 + proxy.py（零编译型二进制）
+//   原因：macOS Gatekeeper 会递归检查 .app 内所有可执行文件，
+//         PyInstaller 打包的未签名 proxy-bin 是被拦截的根因。
+//   fallback 路径 = 内嵌 proxy-bin（仅当系统 Python 完全不可用时）
+//
 const { app, BrowserWindow, shell, dialog } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const http = require("http");
-const { spawn, execSync } = require("child_process");
+const { spawn, execSync, execFile } = require("child_process");
 
 const PORT = parseInt(process.env.WB_PORT || "8765", 10);
 let proxyProc = null;
 let mainWin = null;
 
-// ── 代理二进制路径解析 ──────────────────────────────────────────────
-// 打包后优先从 extraResources（resources/proxy-bin/）找，
-// 兼容旧路径 resources/app/proxy-bin/；开发模式返回 null（走 Python）。
-function proxyBinaryPath() {
-  if (!app.isPackaged) return null;
-  // 路径 A：extraResources（推荐，在 asar 外，二进制不会被遗漏）
-  const extraResPath = path.join(process.resourcesPath, "proxy-bin");
-  const binName = process.platform === "win32" ? "proxy-bin.exe" : "proxy-bin";
-  const pathA = path.join(extraResPath, binName);
-  if (fs.existsSync(pathA)) return pathA;
-  // 路径 B：兼容旧版 app/ 内嵌（asar 内）
-  const legacyPath = path.join(process.resourcesPath, "app", "proxy-bin");
-  const pathB = path.join(legacyPath, binName);
-  if (fs.existsSync(pathB)) return pathB;
-  // 都不存在返回 null，由 startProxy 回退到 Python
+// ── 路径常量 ──────────────────────────────────────────────────────
+// extraResources 中的文件在 process.resourcesPath 下（asar 外）
+// 开发模式下指向 electron/app/
+function resPath(...segments) {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, ...segments);
+  }
+  return path.join(__dirname, "app", ...segments);
+}
+
+const PROXY_PY_PATH = resPath("proxy.py");
+const PROXY_BIN_DIR = resPath("proxy-bin");
+
+// ── Python 解释器查找 ───────────────────────────────────────────────
+// 返回 { cmd: string, version: string | null }
+function findPython() {
+  const candidates = process.platform === "win32"
+    ? ["python", "python3", path.join(resPath(), "venv", "Scripts", "python.exe")]
+    : ["/usr/bin/python3", "/usr/local/bin/python3", "python3",
+       path.join(resPath(), "venv", "bin", "python")];
+
+  for (const cmd of candidates) {
+    try {
+      const result = execSync(cmd + " --version 2>&1", {
+        encoding: "utf8", timeout: 3000, stdio: ["pipe", "pipe", "pipe"]
+      });
+      const ver = (result.match(/Python (\d+\.\d+)/) || [])[1] || null;
+      // 需要 Python 3.8+（proxy.py 用了 walrus operator 等语法）
+      if (ver && parseFloat(ver) >= 3.8) {
+        return { cmd, version: ver };
+      }
+    } catch (e) { /* 不存在或不可执行 */ }
+  }
   return null;
 }
 
-// ── Python 解释器查找 ───────────────────────────────────────────────
-function findPython() {
-  const cand = [];
-  if (process.platform !== "win32") {
-    cand.push(path.join(__dirname, "app", "venv", "bin", "python"));
-    cand.push("python3");
-  } else {
-    cand.push(path.join(__dirname, "app", "venv", "Scripts", "python.exe"));
-    cand.push("python");
+// ── 检测 Python 是否有 requests 模块 ────────────────────────────────
+function checkPythonDeps(pyCmd) {
+  try {
+    execSync(pyCmd + ' -c "import requests; print(requests.__version__)"', {
+      encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"]
+    });
+    return true;
+  } catch (e) {
+    return false;
   }
-  for (const c of cand) {
-    try { fs.accessSync(c, fs.constants.X_OK); return c; } catch (e) { /* next */ }
-  }
-  return process.platform === "win32" ? "python" : "python3";
 }
 
-// ── macOS 扩展属性清除 ──────────────────────────────────────────────
-// 未签名 App 的内部二进制可能被 macOS 打上 quarantine / macl 等属性，
-// 导致 Gatekeeper 拦截或 spawn ENOENT。递归清除目标目录下所有扩展属性。
+// ── 自动安装 Python 依赖 ────────────────────────────────────────────
+// 仅安装到用户空间（--user），不需要 sudo
+function installPythonDeps(pyCmd) {
+  try {
+    console.log("[deps] 正在安装缺失的 Python 依赖...");
+    const pip = process.platform === "win32" ? pyCmd.replace(/python\.?/, "pip") : "pip3";
+    execSync(pip + ' install --user requests 2>&1', {
+      encoding: "utf8", timeout: 60000, stdio: "inherit"
+    });
+    console.log("[deps] ✅ 依赖安装完成");
+    return true;
+  } catch (e) {
+    console.warn("[deps] ⚠️ 自动安装失败:", e.message.slice(0, 150));
+    return false;
+  }
+}
+
+// ── proxy-bin 查找（fallback 用） ───────────────────────────────────
+function findProxyBin() {
+  if (!app.isPackaged) return null;
+  const binName = process.platform === "win32" ? "proxy-bin.exe" : "proxy-bin";
+  // extraResources 路径
+  const p1 = path.join(PROXY_BIN_DIR, binName);
+  if (fs.existsSync(p1)) return p1;
+  // 兼容旧 asar 内路径
+  const p2 = path.join(process.resourcesPath, "app", "proxy-bin", binName);
+  if (fs.existsSync(p2)) return p2;
+  return null;
+}
+
+// ── macOS：启动前清除扩展属性 ──────────────────────────────────────
+// 必须在 spawn 任何二进制之前调用
 function clearMacAttrs(targetPath) {
   if (process.platform !== "darwin") return;
   try {
-    // -r 递归；清掉所有属性（不限于 quarantine）
-    execSync("xattr -cr " + JSON.stringify(targetPath), { stdio: "pipe" });
-    console.log("[mac] 已清除扩展属性:", targetPath);
+    execSync('xattr -cr ' + JSON.stringify(targetPath), {
+      stdio: "pipe", timeout: 10000
+    });
+    console.log("[mac] 已清除属性:", targetPath);
   } catch (e) {
-    console.warn("[mac] 清除扩展属性失败（非致命）:", e.message.slice(0, 120));
+    // 非致命
   }
 }
 
-// ── 启动代理进程 ────────────────────────────────────────────────────
+// ── 启动代理进程（核心逻辑） ────────────────────────────────────────
 function startProxy() {
   const env = Object.assign({}, process.env, {
     DESKTOP_MODE: "1",
@@ -68,47 +118,103 @@ function startProxy() {
     PYTHONUNBUFFERED: "1",
   });
 
-  const bin = proxyBinaryPath();
-
-  // 方案一：用 PyInstaller 打包的单文件二进制（首选）
-  if (bin) {
-    console.log("[proxy] 使用二进制:", bin);
-    clearMacAttrs(bin);           // macOS：清掉所有 xattr
-    clearMacAttrs(path.dirname(bin)); // 连同目录也清一遍
-    proxyProc = spawn(bin, [], { env, stdio: "inherit" });
+  // ── macOS 预处理：清除 resources 目录属性 ──
+  if (app.isPackaged && process.platform === "darwin") {
+    clearMacAttrs(process.resourcesPath);
   }
-  // 方案二：回退到系统 Python + proxy.py（二进制缺失时）
-  else {
-    const py = findPython();
-    const proxyPy = path.join(__dirname, "app", "proxy.py");
 
-    // 检查 proxy.py 是否存在（打包后可能在 asar 内）
-    if (!fs.existsSync(proxyPy)) {
-      const msg =
-        "找不到代理程序文件。\n\n" +
-        "期望路径：" + proxyPy + "\n" +
-        "二进制路径：" + (bin || "(无)") + "\n\n" +
-        "安装包可能损坏，请重新下载安装。";
-      dialog.showErrorBox("启动失败", msg);
-      app.quit();
-      return;
+  // ════════════════════════════════════════════════
+  //  方案一（首选）：系统 Python + proxy.py
+  //  零二进制 → Gatekeeper 不会因为未签名可执行文件拦截
+  // ════════════════════════════════════════════════
+  if (fs.existsSync(PROXY_PY_PATH)) {
+    const pyInfo = findPython();
+    if (pyInfo) {
+      // 检查依赖
+      if (!checkPythonDeps(pyInfo.cmd)) {
+        console.log("[proxy] 缺少 requests 依赖，尝试自动安装...");
+        installPythonDeps(pyInfo.cmd);
+        // 再验证一次
+        if (!checkPythonDeps(pyInfo.cmd)) {
+          console.warn("[proxy] 依赖仍不可用，将尝试 fallback");
+        } else {
+          console.log("[proxy] ✅ 依赖就绪");
+        }
+      }
+
+      console.log(`[proxy] 🚀 使用 Python ${pyInfo.version} (${pyInfo.cmd})`);
+      console.log(`[proxy]    脚本: ${PROXY_PY_PATH}`);
+
+      try {
+        proxyProc = spawn(pyInfo.cmd, [PROXY_PY_PATH], {
+          env, stdio: "inherit", detached: false
+        });
+        bindProxyEvents(proxyProc, `Python (${pyInfo.cmd})`);
+        return; // ✅ 成功走 Python 路径
+      } catch (e) {
+        console.error("[proxy] Python 启动异常:", e.message);
+        // 继续尝试 fallback
+      }
+    } else {
+      console.log("[proxy] 未找到可用的 Python 3.8+");
     }
-
-    console.log("[proxy] 回退到 Python:", py, proxyPy);
-    proxyProc = spawn(py, [proxyPy], { env, stdio: "inherit" });
+  } else {
+    console.log("[proxy] proxy.py 不存在:", PROXY_PY_PATH);
   }
 
-  proxyProc.on("exit", (code, sig) => {
-    console.log("[proxy] exited code=%s sig=%s", code, sig);
+  // ════════════════════════════════════════════════
+  //  方案二（fallback）：PyInstaller 打包的二进制
+  //  仅当 Python 完全不可用时使用
+  // ══════════════════════════════════════════════
+  const bin = findProxyBin();
+  if (bin) {
+    console.log("[proxy] 🔄 Fallback 到二进制:", bin);
+    clearMacAttrs(bin);
+
+    try {
+      proxyProc = spawn(bin, [], {
+        env, stdio: "inherit", detached: false
+      });
+      bindProxyEvents(proxyProc, `Binary (${bin})`);
+      return;
+    } catch (e) {
+      console.error("[proxy] 二进制启动也失败:", e.message);
+    }
+  }
+
+  // ════════════════════════════════════════════════
+  //  所有方案都失败 → 报错退出
+  // ══════════════════════════════════════════════
+  const detail =
+    "无法启动内置代理服务。\n\n" +
+    "已尝试以下方式均失败：\n" +
+    "  • 系统 Python + proxy.py（" + (findPython() ? "找到 Python 但启动失败" : "未找到 Python 3.8+") + "）\n" +
+    "  • 内嵌二进制（" + (bin ? "找到但启动失败" : "不存在") + "）\n\n" +
+    "建议：\n" +
+    "  Mac: 确认终端运行 python3 --version 能看到 3.8+\n" +
+    "  Win: 安装 Python 3.8+ 并勾选 \"Add to PATH\"\n\n" +
+    "技术细节：\n" +
+    "  proxy.py 路径: " + PROXY_PY_PATH + " (" + (fs.existsSync(PROXY_PY_PATH) ? "存在" : "不存在") + ")\n" +
+    "  二进制路径: " + (bin || "(无)") + "\n";
+
+  dialog.showErrorBox("启动失败 - 无法启动代理", detail);
+  app.quit();
+}
+
+// ── 代理进程事件绑定 ────────────────────────────────────────────────
+function bindProxyEvents(proc, label) {
+  proc.on("exit", (code, sig) => {
+    console.log(`[${label}] exited code=${code} sig=${sig}`);
   });
 
-  proxyProc.on("error", (err) => {
-    const detail =
-      "无法启动内置代理。\n\n" +
-      "错误：" + err.message + "\n" +
-      "尝试的路径：" + (bin || "(使用Python回退)") + "\n\n" +
-      "如反复出现此问题，请确认系统已安装 Python 3，或重新下载安装包。";
-    dialog.showErrorBox("代理启动失败", detail);
+  proc.on("error", (err) => {
+    const msg =
+      `代理进程 (${label}) 启动失败。\n\n` +
+      `错误: ${err.message}\n\n` +
+      `如反复出现此问题请确认：\n` +
+      `  • Mac: 已安装 Python 3.8+ (python3 --version)\n` +
+      `  • Win: 已安装 Python 3.8+ 并加入 PATH`;
+    dialog.showErrorBox("代理启动失败", msg);
   });
 }
 
@@ -145,7 +251,6 @@ function createWindow() {
     },
   });
   mainWin.loadURL(`http://127.0.0.1:${PORT}/tool`);
-  // 外链一律用系统浏览器打开
   mainWin.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: "deny" };

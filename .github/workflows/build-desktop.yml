@@ -20,7 +20,7 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Setup Python
+      - name: Setup Python (system python3 is primary path)
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -31,81 +31,82 @@ jobs:
       - name: Install deps & sync app files
         run: cd electron && npm install && npm run sync
 
-      - name: Build proxy-bin (PyInstaller)
+      # ── 构建 proxy-bin（fallback 用，不是首选） ──────────────────
+      - name: Build proxy-bin fallback (PyInstaller)
         run: cd electron && pyinstaller build-python/build.spec --distpath app/proxy-bin --workpath build-python/build --noconfirm
+        continue-on-error: true  # 失败不阻断——Mac 首选 Python 路径不需要它
 
-      # ── 验证 PyInstaller 产物 ──────────────────────────────────────
-      - name: Verify proxy-bin exists
+      # ── 验证关键文件 ─────────────────────────────────────────────
+      - name: Verify required files exist
         run: |
-          echo "=== proxy-bin 目录内容 ==="
-          ls -lh electron/app/proxy-bin/
-          BIN="electron/app/proxy-bin/proxy-bin"
-          if [ ! -f "$BIN" ]; then
-            echo "::error::proxy-bin 未生成！PyInstaller 可能失败"
+          echo "=== 检查 proxy.py ==="
+          if [ ! -f "electron/app/proxy.py" ]; then
+            echo "::error::proxy.py 不存在！sync 可能失败"
             exit 1
           fi
-          SIZE=$(stat -f%z "$BIN")
-          echo "proxy-bin 大小: ${SIZE} bytes"
-          if [ "$SIZE" -lt 1000000 ]; then
-            echo "::warning::proxy-bin 异常小（<1MB），可能不完整"
+          echo "✅ proxy.py 存在 ($(wc -c < electron/app/proxy.py) bytes)"
+
+          echo ""
+          echo "=== 检查 standalone.html ==="
+          if [ ! -f "electron/app/standalone.html" ]; then
+            echo "::error::standalone.html 不存在！"
+            exit 1
+          fi
+          echo "✅ standalone.html 存在"
+
+          echo ""
+          echo "=== 检查 proxy-bin（可选 fallback）==="
+          if [ -f "electron/app/proxy-bin/proxy-bin" ]; then
+            SIZE=$(stat -f%z "electron/app/proxy-bin/proxy-bin")
+            echo "✅ proxy-bin 存在 (${SIZE} bytes)"
+          else
+            echo "⚠️ proxy-bin 不存在（将使用 Python 路径）"
           fi
 
       # ── 构建 Electron 应用 ────────────────────────────────────────
-      - name: Build dmg (unsigned)
-        run: cd electron && npx electron-builder --mac --publish always
+      - name: Build Electron app (dmg + zip)
+        run: cd electron && npx electron-builder --mac --publish never
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
-      # ── Ad-hoc 签名（关键：让 app 有签名标识，Gatekeeper 不再视为"恶意软件"） ──
-      # ad-hoc signature 使用 "-" 作为签名身份，不需要 Apple 开发者证书。
-      # 效果：app 从"未签名(被拦截)"变为"已签名但未公证(可右键打开放行)"。
+      # ── Ad-hoc 签名 ────────────────────────────────────────────────
       - name: Ad-hoc sign the .app bundle
         run: |
           APP=$(ls electron/dist/*.app 2>/dev/null | head -1)
           if [ -n "$APP" ]; then
-            echo "正在对 $APP 进行 ad-hoc 签名..."
-            # --deep: 递归签名所有内部二进制（包括 proxy-bin）
-            # --force: 强制重新签名
-            # --sign -: ad-hoc identity（本地自签名，无需证书）
+            echo "🔐 Ad-hoc 签名: $APP"
             codesign --deep --force --sign - "$APP"
-            echo "✅ 签名完成，验证中..."
-            codesign -vvv --deep "$APP" 2>&1 | head -20
-            echo ""
-            echo "=== 签名信息 ==="
-            codesign -d -vvv "$APP" 2>&1 | head -10 || true
+            echo "✅ 签名完成"
+            codesign -vvv "$APP" 2>&1 | head -5 || true
           else
-            echo "::error::未找到 .app 文件！"
+            echo "::error::未找到 .app！"
             exit 1
           fi
 
-      # ── 清除所有扩展属性（quarantine / macl 等） ──────────────────
-      # macOS 从 DMG 拖拽 app 到 Applications 时会自动附加 quarantine。
-      # 这里在构建阶段预先清除；用户下载 zip 版本则完全不受此影响。
-      - name: Strip all extended attributes
+      # ── 清除扩展属性 ──────────────────────────────────────────────
+      - name: Strip extended attributes
         run: |
           APP=$(ls electron/dist/*.app 2>/dev/null | head -1)
           if [ -n "$APP" ]; then
-            echo "清除 $APP 的扩展属性..."
-            xattr -cr "$APP"
-            echo "=== 清除后属性列表 ==="
-            xattr -lr "$APP" 2>/dev/null | head -20 || echo "(无扩展属性)"
-          else
-            echo "未找到 .app，跳过"
+            xattr -cr "$APP" 2>/dev/null || true
+            echo "✅ 属性已清除"
+            echo "=== 验证 proxy.py 在 resources 中 ==="
+            ls -lh "$APP/Contents/Resources/proxy.py" 2>/dev/null || echo "⚠️ proxy.py 不在 resources"
           fi
 
-      # ── 额外产出 ZIP 格式（zip 解压不带 quarantine 属性） ─────────
-      - name: Build zip distribution (no quarantine on extract)
+      # ── 产出 ZIP（推荐格式，解压不带 quarantine） ─────────────────
+      - name: Build ZIP distribution
         run: |
           APP=$(ls electron/dist/*.app 2>/dev/null | head -1)
           if [ -n "$APP" ]; then
             APPNAME=$(basename "$APP" .app)
             cd electron/dist
             zip -r "${APPNAME}-mac.zip" "$(basename "$APP")"
-            echo "✅ 已生成 ${APPNAME}-mac.zip"
+            echo "✅ ZIP 已生成"
             ls -lh "${APPNAME}-mac.zip"
           fi
 
+      # ── 上传 Artifacts ────────────────────────────────────────────
       - uses: actions/upload-artifact@v4
         with:
           name: mac-dmg
@@ -116,7 +117,7 @@ jobs:
         with:
           name: mac-zip
           path: electron/dist/*-mac.zip
-          if-no-files-found: ignore
+          if-no-files-found: warn
 
   build-win:
     runs-on: windows-latest
@@ -139,29 +140,37 @@ jobs:
       - name: Install deps & sync app files
         run: cd electron && npm install && npm run sync
 
-      - name: Build proxy-bin (PyInstaller)
+      # ── Windows 必须构建 proxy-bin（Win 用户可能没装 Python） ────
+      - name: Build proxy-bin.exe (PyInstaller, required for Win)
         run: cd electron && pyinstaller build-python/build.spec --distpath app/proxy-bin --workpath build-python/build --noconfirm
 
       - name: Verify proxy-bin.exe exists
         shell: pwsh
         run: |
-          Write-Host "=== proxy-bin 目录内容 ==="
-          Get-ChildItem electron\app\proxy-bin\ | Format-Table Name, Length
           $bin = "electron\app\proxy-bin\proxy-bin.exe"
           if (-not (Test-Path $bin)) {
-            Write-Host "::error::proxy-bin.exe 未生成！PyInstaller 可能失败"
+            Write-Host "::error::proxy-bin.exe 未生成！"
             exit 1
           }
           $size = (Get-Item $bin).Length
-          Write-Host "proxy-bin.exe 大小: $size bytes"
+          Write-Host "✅ proxy-bin.exe ($size bytes)"
           if ($size -lt 1000000) {
-            Write-Host "::warning::proxy-bin.exe 异常小（<1MB），可能不完整"
+            Write-Host "::warning::proxy-bin.exe 异常小"
           }
 
+      # ── 验证 proxy.py ──
+      - name: Verify proxy.py exists
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "electron\app\proxy.py")) {
+            Write-Host "::error::proxy.py 不存在！"
+            exit 1
+          }
+          Write-Host "✅ proxy.py 存在"
+
       - name: Build & publish exe (unsigned)
-        run: cd electron && npx electron-builder --win --publish always
+        run: cd electron && npx electron-builder --win --publish never
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
       - uses: actions/upload-artifact@v4
