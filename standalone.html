@@ -42,15 +42,15 @@
   #skyLayer::after{content:"";position:absolute;inset:-20%;
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
     opacity:.05;mix-blend-mode:overlay;pointer-events:none}
-  .orb{position:absolute;border-radius:50%;filter:blur(70px);opacity:.55;mix-blend-mode:screen;will-change:transform}
-  .orb.a{width:48vw;height:48vw;left:-10vw;top:-14vw;background:radial-gradient(circle at 32% 32%,#7C3AED 0%,rgba(124,58,237,0) 68%);animation:orbA 28s ease-in-out infinite}
-  .orb.b{width:42vw;height:42vw;right:-12vw;top:6vh;background:radial-gradient(circle at 60% 40%,#A78BFA 0%,rgba(167,139,250,0) 68%);animation:orbB 34s ease-in-out infinite}
-  .orb.c{width:54vw;height:54vw;left:16vw;bottom:-24vw;background:radial-gradient(circle at 50% 50%,#6D28D9 0%,rgba(109,40,217,0) 70%);animation:orbC 40s ease-in-out infinite}
-  .orb.d{width:32vw;height:32vw;right:12vw;bottom:-10vw;background:radial-gradient(circle at 40% 60%,#C084FC 0%,rgba(192,132,252,0) 68%);animation:orbD 31s ease-in-out infinite}
-  @keyframes orbA{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(7vw,6vh,0) scale(1.12)}}
-  @keyframes orbB{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(-6vw,8vh,0) scale(.9)}}
-  @keyframes orbC{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(9vw,-5vh,0) scale(1.08)}}
-  @keyframes orbD{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(-8vw,-4vh,0) scale(1.15)}}
+  .orb{position:absolute;border-radius:50%;filter:blur(55px);opacity:.6;mix-blend-mode:screen;will-change:transform,opacity}
+  .orb.a{width:46vw;height:46vw;left:-8vw;top:-12vw;background:radial-gradient(circle at 35% 35%,#7C3AED 0%,rgba(124,58,237,0) 66%);animation:orbA 22s ease-in-out infinite}
+  .orb.b{width:40vw;height:40vw;right:-10vw;top:4vh;background:radial-gradient(circle at 60% 40%,#A78BFA 0%,rgba(167,139,250,0) 66%);animation:orbB 27s ease-in-out infinite}
+  .orb.c{width:52vw;height:52vw;left:14vw;bottom:-22vw;background:radial-gradient(circle at 50% 50%,#6D28D9 0%,rgba(109,40,217,0) 68%);animation:orbC 32s ease-in-out infinite}
+  .orb.d{width:30vw;height:30vw;right:10vw;bottom:-8vw;background:radial-gradient(circle at 40% 60%,#C084FC 0%,rgba(192,132,252,0) 66%);animation:orbD 24s ease-in-out infinite}
+  @keyframes orbA{0%,100%{transform:translate3d(0,0,0) scale(1);opacity:.5}50%{transform:translate3d(16vw,12vh,0) scale(1.3);opacity:.82}}
+  @keyframes orbB{0%,100%{transform:translate3d(0,0,0) scale(1);opacity:.5}50%{transform:translate3d(-14vw,10vh,0) scale(.85);opacity:.72}}
+  @keyframes orbC{0%,100%{transform:translate3d(0,0,0) scale(1);opacity:.45}50%{transform:translate3d(18vw,-8vh,0) scale(1.22);opacity:.72}}
+  @keyframes orbD{0%,100%{transform:translate3d(0,0,0) scale(1);opacity:.5}50%{transform:translate3d(-12vw,-6vh,0) scale(1.35);opacity:.85}}
   /* 夜间：叠加极淡星点，呼应「极客」氛围（非卡通白星） */
   .spark{position:absolute;width:3px;height:3px;border-radius:50%;background:#C4B5FD;opacity:0;box-shadow:0 0 6px rgba(196,181,253,.8)}
   body.night #skyLayer .spark{opacity:.7;animation:sparkTw 4s ease-in-out infinite}
