@@ -77,29 +77,14 @@ jobs:
           echo "=== 寻找所有 .dmg 文件 ==="
           find . -name "*.dmg" -not -path "*/node_modules/*" 2>/dev/null | head -10
 
-      # ── Ad-hoc 签名 ────────────────────────────────────────────────
-      - name: Ad-hoc sign the .app bundle
-        run: |
-          echo "=== 调试: 列出可能的输出目录 ==="
-          echo "--- electron/dist/ ---"
-          ls -la electron/dist/ 2>/dev/null || echo "(不存在)"
-          echo "--- dist/ ---"
-          ls -la dist/ 2>/dev/null || echo "(不存在)"
-          echo ""
-          # 用 find 命令更稳健，避免 glob 展开问题（中文文件名/special chars）
-          APP=$(find electron/dist -maxdepth 3 -name "*.app" -type d 2>/dev/null | head -1)
-          if [ -z "$APP" ]; then
-            APP=$(find . -maxdepth 4 -name "*.app" -type d 2>/dev/null | head -1)
-          fi
-
-          if [ -n "$APP" ]; then
-            echo "🔐 找到 APP: $APP"
-            codesign --deep --force --sign - "$APP"
-            echo "✅ 签名完成"
-            codesign -vvv "$APP" 2>&1 | head -5 || true
-          else
-            echo "::warning::未找到 .app（但 dmg 仍可能正常产出）"
-          fi
+      # ── 不做 ad-hoc 签名 ────────────────────────────────────────────
+      # 重要：不要对 .app 做 codesign --deep --force --sign -
+      # 原因：这会递归重签 .app 内所有二进制（包括 Electron Framework），
+      #       覆盖掉 Apple 的原始签名 → XProtect 判定"签名被篡改"→ 恶意软件
+      # 未签名 app 在 macOS 上只会触发 Gatekeeper（"无法验证开发者"），
+      # 用户右键→打开 即可放行，不会被 XProtect 直接删除。
+      - name: "Skip ad-hoc sign (preserve Apple signatures)"
+        run: echo "⏭️ 跳过 ad-hoc 签名，保留 Electron 原始 Apple 签名"
 
       # ── 清除扩展属性 ──────────────────────────────────────────────
       - name: Strip extended attributes
