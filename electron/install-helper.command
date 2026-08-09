@@ -13,6 +13,7 @@ SEARCH_PATHS=(
     "$HOME/Applications/$APP_NAME"
     "/Applications/$APP_NAME"
     "$HOME/Desktop/$APP_NAME"
+    "$HOME/Downloads/$APP_NAME"
 )
 
 APP_PATH=""
@@ -27,11 +28,17 @@ done
 if [ -z "$APP_PATH" ]; then
     echo "❌ 未找到 $APP_NAME"
     echo ""
-    echo "请先将应用安装到以下位置之一："
+    echo "请先将应用放到以下位置之一，再运行本助手："
     echo "  • /Applications/"
     echo "  • ~/Applications/"
     echo "  • ~/Desktop/"
+    echo "  • ~/Downloads/"
     echo ""
+    echo "—— 也可以直接在终端手动放行（把路径换成你的实际位置）——"
+    echo "  xattr -dr com.apple.quarantine \"/Applications/$APP_NAME\""
+    echo "  open \"/Applications/$APP_NAME\""
+    echo ""
+    echo "—— 若本助手自身也打不开（\"来自身份不明的开发者\"），请右键本文件 →「打开」——"
     read -p "按回车键退出..." 
     exit 1
 fi

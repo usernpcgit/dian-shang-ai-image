@@ -31,32 +31,10 @@ const PROXY_PY_PATH = resPath("proxy.py");
 const PROXY_BIN_DIR = resPath("proxy-bin");
 
 // ── Python 解释器查找 ───────────────────────────────────────────────
-// 返回 { cmd: string, version: string | null }
-function findPython() {
-  const candidates = process.platform === "win32"
-    ? ["python", "python3", path.join(resPath(), "venv", "Scripts", "python.exe")]
-    : ["/usr/bin/python3", "/usr/local/bin/python3", "python3",
-       path.join(resPath(), "venv", "bin", "python")];
-
-  for (const cmd of candidates) {
-    try {
-      const result = execSync(cmd + " --version 2>&1", {
-        encoding: "utf8", timeout: 3000, stdio: ["pipe", "pipe", "pipe"]
-      });
-      const ver = (result.match(/Python (\d+\.\d+)/) || [])[1] || null;
-      // 需要 Python 3.8+（proxy.py 用了 walrus operator 等语法）
-      if (ver && parseFloat(ver) >= 3.8) {
-        return { cmd, version: ver };
-      }
-    } catch (e) { /* 不存在或不可执行 */ }
-  }
-  return null;
-}
-
-// ── 检测 Python 是否有 requests 模块 ────────────────────────────────
-function checkPythonDeps(pyCmd) {
+// 返回 { cmd, version, hasRequests } —— 优先挑「版本达标且已装 requests」的解释器
+function pythonHasRequests(cmd) {
   try {
-    execSync(pyCmd + ' -c "import requests; print(requests.__version__)"', {
+    execSync(cmd + ' -c "import requests"', {
       encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"]
     });
     return true;
@@ -65,21 +43,74 @@ function checkPythonDeps(pyCmd) {
   }
 }
 
-// ── 自动安装 Python 依赖 ────────────────────────────────────────────
-// 仅安装到用户空间（--user），不需要 sudo
-function installPythonDeps(pyCmd) {
-  try {
-    console.log("[deps] 正在安装缺失的 Python 依赖...");
-    const pip = process.platform === "win32" ? pyCmd.replace(/python\.?/, "pip") : "pip3";
-    execSync(pip + ' install --user requests 2>&1', {
-      encoding: "utf8", timeout: 60000, stdio: "inherit"
-    });
-    console.log("[deps] ✅ 依赖安装完成");
-    return true;
-  } catch (e) {
-    console.warn("[deps] ⚠️ 自动安装失败:", e.message.slice(0, 150));
-    return false;
+function findPython() {
+  const candidates = process.platform === "win32"
+    ? ["python", "python3", path.join(resPath(), "venv", "Scripts", "python.exe")]
+    : ["/usr/bin/python3", "/usr/local/bin/python3", "python3",
+       path.join(resPath(), "venv", "bin", "python")];
+
+  let fallback = null;
+  for (const cmd of candidates) {
+    try {
+      const result = execSync(cmd + " --version 2>&1", {
+        encoding: "utf8", timeout: 3000, stdio: ["pipe", "pipe", "pipe"]
+      });
+      const ver = (result.match(/Python (\d+\.\d+)/) || [])[1] || null;
+      // 需要 Python 3.8+（proxy.py 用了 walrus operator 等语法）
+      if (ver && parseFloat(ver) >= 3.8) {
+        const hasRequests = pythonHasRequests(cmd);
+        if (hasRequests) {
+          return { cmd, version: ver, hasRequests: true };
+        }
+        if (!fallback) fallback = { cmd, version: ver, hasRequests: false };
+      }
+    } catch (e) { /* 不存在或不可执行 */ }
   }
+  // 退而求其次：返回第一个版本达标但缺 requests 的解释器（稍后尝试自动安装）
+  return fallback;
+}
+
+// ── 确保 requests 可用（失败则不要启动必崩的后端） ───────────────────
+// 策略：python -m pip install →（PEP668 外部管理时）加 --break-system-packages
+//       →（pip 缺失时）python -m ensurepip 引导后再装
+function ensureRequests(pyCmd) {
+  if (pythonHasRequests(pyCmd)) return true;
+
+  console.log("[deps] 缺少 requests，尝试自动安装...");
+  const tries = [
+    pyCmd + " -m pip install --user requests",
+    pyCmd + " -m pip install --user --break-system-packages requests",
+  ];
+  for (const cmd of tries) {
+    try {
+      execSync(cmd, { encoding: "utf8", timeout: 120000, stdio: "inherit" });
+      if (pythonHasRequests(pyCmd)) {
+        console.log("[deps] ✅ requests 安装完成");
+        return true;
+      }
+    } catch (e) { /* 换下一种方式 */ }
+  }
+
+  // pip 可能未引导（如仅装了命令行工具 python）：用 ensurepip 拉起 pip 再装
+  try {
+    execSync(pyCmd + " -m ensurepip --user --upgrade", {
+      encoding: "utf8", timeout: 120000, stdio: "inherit"
+    });
+    for (const cmd of tries) {
+      try {
+        execSync(cmd, { encoding: "utf8", timeout: 120000, stdio: "inherit" });
+        if (pythonHasRequests(pyCmd)) {
+          console.log("[deps] ✅ requests 安装完成（经 ensurepip）");
+          return true;
+        }
+      } catch (e) { /* 换下一种方式 */ }
+    }
+  } catch (e) {
+    console.warn("[deps] ⚠️ ensurepip 失败:", e.message.slice(0, 120));
+  }
+
+  console.warn("[deps] ⚠️ 无法自动安装 requests");
+  return false;
 }
 
 // ── proxy-bin 查找（fallback 用） ───────────────────────────────────
@@ -130,30 +161,23 @@ function startProxy() {
   if (fs.existsSync(PROXY_PY_PATH)) {
     const pyInfo = findPython();
     if (pyInfo) {
-      // 检查依赖
-      if (!checkPythonDeps(pyInfo.cmd)) {
-        console.log("[proxy] 缺少 requests 依赖，尝试自动安装...");
-        installPythonDeps(pyInfo.cmd);
-        // 再验证一次
-        if (!checkPythonDeps(pyInfo.cmd)) {
-          console.warn("[proxy] 依赖仍不可用，将尝试 fallback");
-        } else {
-          console.log("[proxy] ✅ 依赖就绪");
-        }
-      }
-
       console.log(`[proxy] 🚀 使用 Python ${pyInfo.version} (${pyInfo.cmd})`);
       console.log(`[proxy]    脚本: ${PROXY_PY_PATH}`);
 
-      try {
-        proxyProc = spawn(pyInfo.cmd, [PROXY_PY_PATH], {
-          env, stdio: "inherit", detached: false
-        });
-        bindProxyEvents(proxyProc, `Python (${pyInfo.cmd})`);
-        return; // ✅ 成功走 Python 路径
-      } catch (e) {
-        console.error("[proxy] Python 启动异常:", e.message);
-        // 继续尝试 fallback
+      // 依赖就绪直接启动；缺 requests 则尝试自动安装，装不上就不启动（避免必崩）
+      if (pyInfo.hasRequests || ensureRequests(pyInfo.cmd)) {
+        try {
+          proxyProc = spawn(pyInfo.cmd, [PROXY_PY_PATH], {
+            env, stdio: "inherit", detached: false
+          });
+          bindProxyEvents(proxyProc, `Python (${pyInfo.cmd})`);
+          return; // ✅ 成功走 Python 路径
+        } catch (e) {
+          console.error("[proxy] Python 启动异常:", e.message);
+          // 继续尝试 fallback
+        }
+      } else {
+        console.warn("[proxy] ⚠️ 无法准备 Python 运行环境，转 fallback/报错");
       }
     } else {
       console.log("[proxy] 未找到可用的 Python 3.8+");
@@ -182,22 +206,35 @@ function startProxy() {
     }
   }
 
-  // ════════════════════════════════════════════════
-  //  所有方案都失败 → 报错退出
-  // ══════════════════════════════════════════════
-  const detail =
-    "无法启动内置代理服务。\n\n" +
-    "已尝试以下方式均失败：\n" +
-    "  • 系统 Python + proxy.py（" + (findPython() ? "找到 Python 但启动失败" : "未找到 Python 3.8+") + "）\n" +
-    "  • 内嵌二进制（" + (bin ? "找到但启动失败" : "不存在") + "）\n\n" +
-    "建议：\n" +
-    "  Mac: 确认终端运行 python3 --version 能看到 3.8+\n" +
-    "  Win: 安装 Python 3.8+ 并勾选 \"Add to PATH\"\n\n" +
-    "技术细节：\n" +
-    "  proxy.py 路径: " + PROXY_PY_PATH + " (" + (fs.existsSync(PROXY_PY_PATH) ? "存在" : "不存在") + ")\n" +
-    "  二进制路径: " + (bin || "(无)") + "\n";
 
-  dialog.showErrorBox("启动失败 - 无法启动代理", detail);
+  showLaunchHelp(bin ? "proxy-failed" : "no-runtime");
+}
+
+// ── 启动失败时的用户指引 ──────────────────────────────────────────
+function showLaunchHelp(reason) {
+  const reasonText = {
+    "no-runtime": "未找到可用的 Python 3.8+，后端无法运行。",
+    "proxy-failed": "已尝试 Python 与内嵌二进制，后端均未能启动。",
+  }[reason] || "启动失败。";
+
+  const detail =
+    reasonText + "\n\n" +
+    "── macOS ──\n" +
+    "1) 若是「无法验证开发者 / 已损坏」：清一次隔离标记再开\n" +
+    "   终端执行：xattr -dr com.apple.quarantine \"/Applications/电商AI生图.app\"\n" +
+    "   （App 在桌面就把路径改成 ~/Desktop/电商AI生图.app）\n" +
+    "2) 或：右键 App →「打开」→ 再点「打开」即可放行（仅需一次）\n" +
+    "3) 后端起不来：装 Python 3.8+（python.org 下载）\n" +
+    "   应用会自动装所需模块；仍失败就重开终端重试。\n\n" +
+    "── Windows ──\n" +
+    "1) SmartScreen 拦截时点「更多信息」→「仍要运行」\n" +
+    "2) 后端起不来：装 Python 3.8+ 并勾选 Add to PATH\n" +
+    "   （若杀软误删 proxy-bin.exe，请允许或加白名单）\n\n" +
+    "技术细节：\n" +
+    "  proxy.py: " + PROXY_PY_PATH + " (" + (fs.existsSync(PROXY_PY_PATH) ? "存在" : "缺失") + ")\n" +
+    "  二进制: " + (bin || "(无)");
+
+  dialog.showErrorBox("无法启动 - 需要一点手动设置", detail);
   app.quit();
 }
 

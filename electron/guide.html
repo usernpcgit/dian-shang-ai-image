@@ -85,21 +85,25 @@
   <div class="mac-only" id="mac-guide">
 
     <div class="warn">
-      ⚠️ 如果你的 App 被系统拦截（提示"已阻止恶意软件并移到废纸篓"），请按下面方法操作。<br>
-      <strong>推荐方法 A（ZIP 版本）</strong>：完全不会触发此问题。
+      ⚠️ 未签名应用从网上下载后会被 macOS 打上「隔离标记」，首次打开会被拦截（提示"无法验证开发者"或"已损坏"）。<br>
+      只需<strong>右键 App →「打开」</strong>放行一次（或用下方终端命令清标记），之后就能正常双击启动。
     </div>
 
     <div class="card">
       <h3><span class="icon">📦</span> 方法 A：下载 ZIP 版本（推荐）</h3>
       <p style="font-size:13px;margin-bottom:8px;">
-        ZIP 压缩包解压后的文件<strong>不带隔离标记</strong>，双击即可打开，无需任何终端操作。
+        ZIP 和 DMG <strong>都会被浏览器打上隔离标记</strong>，所以解压/拖出后首次打开都要放行一次（不是"双击就能用"）。步骤如下：
       </p>
       <ol>
         <li>去 GitHub Releases 页下载 <strong>xxx-mac.zip</strong>（不是 .dmg）</li>
         <li>解压得到「电商AI生图.app」</li>
-        <li><strong>直接双击打开</strong>，可能弹一次"无法验证开发者"</li>
-        <li>右键 App → <strong>「打开」</strong> → 确认「打开」→ 完成！</li>
+        <li><strong>不要直接双击</strong>——请<strong>右键 App →「打开」</strong> → 弹窗里再点「打开」</li>
+        <li>此后就会加入系统白名单，以后双击即可正常启动 ✅</li>
       </ol>
+      <p style="font-size:12px;opacity:.7;margin-top:8px;">
+        💡 进阶：用<strong>终端</strong>下载可彻底不带隔离标记（双击即开）：<br>
+        <code>curl -L -o 电商AI生图.zip &lt;发布页里的 zip 链接&gt; &amp;&amp; unzip 电商AI生图.zip</code>
+      </p>
     </div>
 
     <div class="card">
