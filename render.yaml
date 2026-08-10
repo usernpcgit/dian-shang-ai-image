@@ -24,4 +24,14 @@ services:
       # 此值会随仓库提交；若想保持私密，可改为 sync:false 并在 Render 控制台手动设置。
       - key: ACCESS_SECRET
         value: "Hzh660513"
+      # 授权证书（设备绑定）专用签名密钥。建议与 ACCESS_SECRET 不同；不填则默认等于 ACCESS_SECRET。
+      # 用 gentoken 同款思路：去控制台手动填一个随机长字符串即可。
+      - key: LICENSE_SECRET
+        sync: false
+      # 激活码「用过作废」持久化（强烈推荐）。不填则回退本地文件，Render 重启会清空导致记录丢失。
+      # 去 https://upstash.com 建一个免费 Redis，复制 REST URL / Token 填到下面（控制台手动填）。
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
 

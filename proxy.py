@@ -19,14 +19,16 @@
   GET  /api/providers -> 返回可选服务商及配置（前端下拉框用）
   POST /api/verify    -> 静默校验动态访问码（不消耗次数）：{code} -> {valid, exp?, remaining_hours?, note?, mu?, uses_left?, error?}
   POST /api/unlock    -> 正式解锁（消耗一次使用名额）：{code} -> {valid, exp?, remaining_hours?, note?, mu?, uses_left?, error?}
-  POST /api/gen       -> 生图（【需持有效动态访问码】）：{provider, key, image_b64, prompt, size, quality, n, fidelity, endpoint?}
+  POST /api/activate  -> 一次性激活（桌面端授权）：{code, dev_id} -> 校验激活码且未用过 -> 标记「已使用」-> 签发设备绑定证书 LIC.（单设备 + 用过作废）
+  POST /api/verify-license -> 校验设备授权证书（设备绑定）：{cert, dev_id} -> {valid}（前端启动用来确认证书仍有效/未被吊销）
+  POST /api/gen       -> 生图（【需持有效动态访问码 或 设备授权证书】）：{provider, key, image_b64, prompt, size, quality, n, fidelity, endpoint?}
                          请求头需带 Authorization: Bearer <码> 或 X-Access-Token: <码>
                          无码/无效/过期 -> 401 {"error":"访问码无效或已过期..."}
                          成功 -> {"images":["data:image/png;base64,..."]} 或 {"error":"原因"}
 """
 import os, sys, json, base64, time, io, hashlib, re, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urljoin
+from urllib.parse import urljoin, quote
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 
@@ -47,7 +49,7 @@ except FileNotFoundError:
 
 # 动态访问码（测试阶段分享保护）：签发/校验逻辑放在 access.py，与 gentoken.py 共用同一密钥。
 try:
-    from access import verify_access_token, resolve_credential
+    from access import verify_access_token, resolve_credential, make_license, verify_license
 except Exception:
     # 兜底：即便 access.py 缺失也不让整个代理崩溃，只是所有访问码都会被拒。
     def verify_access_token(code):
@@ -55,6 +57,10 @@ except Exception:
     def resolve_credential(cred):
         ok, info = verify_access_token(cred)
         return ok, info, ("code" if ok else None)
+    def make_license(dev_id, jti=None, secret=None):
+        return ""
+    def verify_license(cert, dev_id, secret=None):
+        return False, {"error": "access 模块缺失（请联系管理员）"}
 
 PORT = int(os.environ.get("PORT") or os.environ.get("WB_PORT", "8765"))
 DESKTOP_MODE = os.environ.get("DESKTOP_MODE") == "1"  # 桌面端模式：绑定 127.0.0.1 + 本机免访问码
@@ -78,6 +84,115 @@ PERSIST_USAGE = os.environ.get("PERSIST_USAGE") == "1"
 _usage = {}
 def _code_key(code):
     return hashlib.sha256(code.strip().upper().encode("utf-8")).hexdigest()
+
+
+# ===== 激活码 / 授权证书 持久化（实现「用过作废」与「吊销」）=====
+# 生产环境用 Upstash Redis REST（免费、跨重启持久）：设 UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN。
+# 未配置时回退到本地 license_state.json（仅本地测试；Render 磁盘临时，重启会清空，不建议线上用）。
+_UPSTASH_URL = os.environ.get("UPSTASH_REDIS_REST_URL")
+_UPSTASH_TOKEN = os.environ.get("UPSTASH_REDIS_REST_TOKEN")
+_LICENSE_STATE_FILE = os.path.join(HERE, "license_state.json")
+
+
+# ===== 激活码「用过作废」持久化 =====
+# 优先用 Upstash Redis REST（免费、跨重启持久，生产推荐）；未配置则回退本地 license_state.json。
+def _upstash(cmd, key, value=None, timeout=6):
+    """调用 Upstash Redis REST。cmd=命令小写(get/set/del)，返回 (ok, result_or_error)。"""
+    if not _UPSTASH_URL or not _UPSTASH_TOKEN:
+        return False, "未配置 Upstash"
+    base = _UPSTASH_URL.rstrip("/")
+    url = base + "/" + cmd + "/" + quote(key, safe="")
+    if value is not None:
+        url += "/" + quote(str(value), safe="")
+    try:
+        headers = {"Authorization": "Bearer " + _UPSTASH_TOKEN}
+        if cmd == "get":
+            r = requests.get(url, headers=headers, timeout=timeout)
+        else:
+            r = requests.post(url, headers=headers, timeout=timeout)
+        r.raise_for_status()
+        return True, r.json().get("result")
+    except Exception as e:
+        return False, "Upstash 请求失败：" + str(e)
+
+
+def _lic_state_load():
+    try:
+        if os.path.exists(_LICENSE_STATE_FILE):
+            return json.load(open(_LICENSE_STATE_FILE, encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
+
+
+def _lic_state_save(d):
+    try:
+        json.dump(d, open(_LICENSE_STATE_FILE, "w", encoding="utf-8"))
+    except Exception:
+        pass
+
+
+def _consumed_key(code):
+    return "lic:consumed:" + _code_key(code)
+
+
+def is_code_consumed(code):
+    """查询激活码是否已使用（已兑换授权）。返回 (consumed:bool, detail)。"""
+    key = _consumed_key(code)
+    if _UPSTASH_URL and _UPSTASH_TOKEN:
+        ok, res = _upstash("get", key)
+        if ok:
+            if res is None:
+                return False, None
+            try:
+                return True, json.loads(res)
+            except Exception:
+                return True, {}
+        # 网络失败则回退本地，避免把「查不到」误判为「可用」
+        return _lic_state_get(key)
+    return _lic_state_get(key)
+
+
+def mark_code_consumed(code, dev_id=None):
+    """标记激活码已使用。返回 (ok, where)。优先 Upstash，失败回退本地。"""
+    val = json.dumps({"iat": int(time.time()), "dev": dev_id or ""}, ensure_ascii=False)
+    key = _consumed_key(code)
+    if _UPSTASH_URL and _UPSTASH_TOKEN:
+        ok, _ = _upstash("set", key, val)
+        if ok:
+            return True, "upstash"
+        _lic_state_set(key, {"iat": int(time.time()), "dev": dev_id or ""})
+        return True, "local(fallback)"
+    _lic_state_set(key, {"iat": int(time.time()), "dev": dev_id or ""})
+    return True, "local"
+
+
+def revoke_code(code):
+    """解除「已使用」标记（管理员吊销后该码可重新激活）。"""
+    key = _consumed_key(code)
+    if _UPSTASH_URL and _UPSTASH_TOKEN:
+        _upstash("del", key)
+    _lic_state_del(key)
+    return True
+
+
+def _lic_state_get(key):
+    d = _lic_state_load()
+    return (key in d), d.get(key)
+
+
+def _lic_state_set(key, val):
+    d = _lic_state_load()
+    d[key] = val
+    _lic_state_save(d)
+
+
+def _lic_state_del(key):
+    d = _lic_state_load()
+    if key in d:
+        del d[key]
+        _lic_state_save(d)
+
 def _load_usage():
     global _usage
     _usage = {}
@@ -1547,10 +1662,17 @@ class H(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
-    def _cred(self, token):
+    def _cred(self, token, dev_id=None):
         # 桌面端(DESKTOP_MODE)且来自本机：本地信任，等价于总钥匙，跳过远程访问码校验
         if DESKTOP_MODE and self.client_address[0] in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
             return True, {"exp": None, "remaining_hours": None, "note": "桌面端本地放行", "mu": None, "master": True}, "master"
+        # 授权证书（设备绑定）：以 LIC. 开头，配合设备标识校验签名与绑定关系
+        if token and token.startswith("LIC.") and dev_id:
+            ok, info = verify_license(token, dev_id)
+            if ok:
+                return True, {"exp": None, "note": "设备授权证书", "mu": None,
+                              "license": True, "jti": info.get("jti"), "dev": info.get("dev")}, "license"
+            return False, info, None
         return resolve_credential(token)
 
     def do_OPTIONS(self):
@@ -1629,6 +1751,12 @@ class H(BaseHTTPRequestHandler):
         if self.path == "/api/unlock":
             self._handle_unlock()
             return
+        if self.path == "/api/activate":
+            self._handle_activate()
+            return
+        if self.path == "/api/verify-license":
+            self._handle_verify_license()
+            return
         if self.path == "/api/analyze-competitor":
             self._handle_analyze()
             return
@@ -1657,7 +1785,8 @@ class H(BaseHTTPRequestHandler):
         token = (self.headers.get("Authorization") or "").replace("Bearer ", "", 1).strip()
         if not token:
             token = (self.headers.get("X-Access-Token") or "").strip()
-        ok, info, kind = self._cred(token)
+        dev_id = (self.headers.get("X-Device-Id") or "").strip()
+        ok, info, kind = self._cred(token, dev_id)
         if not ok:
             self._send_json(401, {"error": "访问码无效或已过期，请先在页面输入正确的动态访问码。（" + info.get("error", "") + "）"})
             return
@@ -1748,6 +1877,60 @@ class H(BaseHTTPRequestHandler):
                               "remaining_hours": info.get("remaining_hours"),
                               "note": info.get("note"), "mu": mu, "uses_left": left})
 
+    def _handle_activate(self):
+        # 一次性激活：校验激活码 -> 标记「已使用」(单设备) -> 签发设备绑定授权证书。
+        # 单设备 + 用过作废 的核心就在这里：mark_code_consumed 把码记进 Upstash（跨重启持久）。
+        try:
+            ln = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(ln)
+            data = json.loads(body or b"{}")
+        except Exception:
+            self._send_json(400, {"error": "请求解析失败"})
+            return
+        code = (data.get("code") or "").strip()
+        dev_id = (data.get("dev_id") or "").strip()
+        if not code or not dev_id:
+            self._send_json(400, {"error": "缺少激活码或设备标识"})
+            return
+        ok, info, kind = resolve_credential(code)
+        if not ok:
+            self._send_json(200, {"valid": False, "error": self._enrich_err(info)})
+            return
+        if kind == "master":
+            self._send_json(200, {"valid": False, "error": "总钥匙不能用于激活，请使用卖家发给你的激活码"})
+            return
+        consumed, _ = is_code_consumed(code)
+        if consumed:
+            self._send_json(200, {"valid": False, "consumed": True,
+                                  "error": "该激活码已被使用（每个激活码仅限激活一台设备）。如系误报请联系卖家。"})
+            return
+        mark_code_consumed(code, dev_id)
+        cert = make_license(dev_id)
+        self._send_json(200, {"valid": True, "cert": cert, "dev_id": dev_id,
+                              "exp": info.get("exp"), "note": info.get("note"),
+                              "remaining_hours": info.get("remaining_hours")})
+
+    def _handle_verify_license(self):
+        # 校验客户端持有的授权证书（设备绑定）。前端启动时用来确认本地证书仍有效/未被吊销。
+        try:
+            ln = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(ln)
+            data = json.loads(body or b"{}")
+        except Exception:
+            self._send_json(400, {"error": "请求解析失败"})
+            return
+        cert = (data.get("cert") or "").strip()
+        dev_id = (data.get("dev_id") or "").strip()
+        if not cert or not dev_id:
+            self._send_json(400, {"error": "缺少证书或设备标识"})
+            return
+        ok, info = verify_license(cert, dev_id)
+        if ok:
+            self._send_json(200, {"valid": True, "jti": info.get("jti"), "dev": info.get("dev"),
+                                  "iat": info.get("iat")})
+        else:
+            self._send_json(200, {"valid": False, "error": info.get("error", "授权无效")})
+
     def _handle_analyze(self):
         # 竞品智能分析（轮询模式）：立即返回 job_id，后台线程跑分析。
         # 前端每 2-3 秒 GET /api/analysis-status 查状态，彻底避免 Render 超时杀长连接。
@@ -1761,7 +1944,8 @@ class H(BaseHTTPRequestHandler):
         token = (self.headers.get("Authorization") or "").replace("Bearer ", "", 1).strip()
         if not token:
             token = (self.headers.get("X-Access-Token") or "").strip()
-        ok, info, kind = self._cred(token)
+        dev_id = (self.headers.get("X-Device-Id") or "").strip()
+        ok, info, kind = self._cred(token, dev_id)
         if not ok:
             self._send_json(401, {"error": "访问码无效或已过期，请先在页面输入正确的动态访问码。（" + info.get("error", "") + "）"})
             return
@@ -1820,7 +2004,8 @@ class H(BaseHTTPRequestHandler):
         token = (self.headers.get("Authorization") or "").replace("Bearer ", "", 1).strip()
         if not token:
             token = (self.headers.get("X-Access-Token") or "").strip()
-        ok, info, kind = self._cred(token)
+        dev_id = (self.headers.get("X-Device-Id") or "").strip()
+        ok, info, kind = self._cred(token, dev_id)
         if not ok:
             self._send_json(401, {"error": "访问码无效或已过期，请先在页面输入正确的动态访问码。（" + info.get("error", "") + "）"})
             return
@@ -1858,7 +2043,8 @@ class H(BaseHTTPRequestHandler):
         token = (self.headers.get("Authorization") or "").replace("Bearer ", "", 1).strip()
         if not token:
             token = (self.headers.get("X-Access-Token") or "").strip()
-        ok, info, kind = self._cred(token)
+        dev_id = (self.headers.get("X-Device-Id") or "").strip()
+        ok, info, kind = self._cred(token, dev_id)
         if not ok:
             self._send_json(401, {"error": "访问码无效或已过期，请先输入正确的动态访问码。（" + info.get("error", "") + "）"})
             return
@@ -1940,7 +2126,8 @@ class H(BaseHTTPRequestHandler):
         token = (self.headers.get("Authorization") or "").replace("Bearer ", "", 1).strip()
         if not token:
             token = (self.headers.get("X-Access-Token") or "").strip()
-        ok, info, kind = self._cred(token)
+        dev_id = (self.headers.get("X-Device-Id") or "").strip()
+        ok, info, kind = self._cred(token, dev_id)
         if not ok:
             self._send_json(401, {"error": "访问码无效或已过期，请先在页面输入正确的动态访问码。（" + info.get("error", "") + "）"})
             return
@@ -1991,6 +2178,19 @@ class H(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     import socket
     # —— 维护命令：清空访问码使用计数（解决本地“解锁一次就永久失效”）——
+    if "--revoke" in sys.argv:
+        # 管理员吊销：解除某个激活码的「已使用」标记，使其可重新激活（用于误激活/退款等）。
+        try:
+            idx = sys.argv.index("--revoke")
+            code = sys.argv[idx + 1] if len(sys.argv) > idx + 1 else ""
+        except Exception:
+            code = ""
+        if not code:
+            print("[revoke] 用法: python proxy.py --revoke <激活码>")
+            sys.exit(1)
+        revoke_code(code.strip())
+        print("[revoke] 已解除该激活码的「已使用」标记，可重新激活：%s" % code.strip())
+        sys.exit(0)
     if "--reset-usage" in sys.argv:
         try:
             if os.path.exists(USAGE_FILE):

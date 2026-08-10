@@ -15,11 +15,15 @@
 - 修改 ACCESS_SECRET 会让所有已发访问码立即失效 —— 这本身就是一键吊销开关。
 - 兼容旧版长码（base32 包裹的 JSON 格式），已发出的旧码在过期前依然可用。
 """
-import os, time, json, base64, hmac, hashlib, re
+import os, time, json, base64, hmac, hashlib, re, secrets
 
 # 单一真相源：proxy.py 与 gentoken.py 必须共用同一个密钥。
 # 部署前请改成你自己的随机长字符串；生产环境推荐用环境变量 ACCESS_SECRET 注入（避免写进代码库）。
 ACCESS_SECRET = os.environ.get("ACCESS_SECRET", "test-access-secret-change-me-2026")
+
+# 授权证书（设备绑定）专用签名密钥。建议与 ACCESS_SECRET（总钥匙/访问码密钥）分开设置：
+# 即便 LICENSE_SECRET 在前端/日志中泄露，也不会暴露总钥匙（ACCESS_SECRET）。
+LICENSE_SECRET = os.environ.get("LICENSE_SECRET", ACCESS_SECRET)
 
 _B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 _B36 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -141,4 +145,42 @@ def resolve_credential(cred):
         return True, {"exp": None, "remaining_hours": None,
                       "note": "总钥匙(永久)", "mu": None, "master": True}, "master"
     return False, info, None
+
+
+# ===== 永久授权证书（设备绑定）=====
+# 用途：把"一次性激活码"兑换成"绑定本机的永久授权"，实现：
+#   - 客户填一次激活码 → 永久生效（证书存本地，无期限、不重输）；
+#   - 激活码一旦兑换即作废（服务端记 consumed），别人再输会被拒；
+#   - 证书与设备指纹绑定，拷贝到别的机器无法使用（防盗用）。
+# 证书格式：LIC.<base64url(payload)>.<hmac-hex>，payload = {v,type,dev,iat,jti}。
+def make_license(dev_id: str, jti: str = None, secret: str = None) -> str:
+    secret = secret if secret is not None else LICENSE_SECRET
+    jti = jti or secrets.token_hex(16)
+    payload = json.dumps({"v": 1, "type": "license", "dev": dev_id,
+                          "iat": int(time.time()), "jti": jti}, separators=(",", ":"))
+    b64 = base64.urlsafe_b64encode(payload.encode("utf-8")).decode("ascii").rstrip("=")
+    sig = hmac.new(secret.encode("utf-8"), b64.encode("utf-8"), hashlib.sha256).hexdigest()
+    return "LIC." + b64 + "." + sig
+
+
+def verify_license(cert: str, dev_id: str, secret: str = None):
+    """校验授权证书。返回 (ok:bool, info:dict)。设备不匹配/签名无效 → ok=False。"""
+    try:
+        if not cert or not cert.startswith("LIC."):
+            return False, {"error": "不是有效的授权证书"}
+        _, b64, sig = cert.split(".", 2)
+        secret = secret if secret is not None else LICENSE_SECRET
+        expect = hmac.new(secret.encode("utf-8"), b64.encode("utf-8"), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expect, sig):
+            return False, {"error": "授权签名无效（可能被篡改）"}
+        pad = (-len(b64)) % 4
+        payload = json.loads(base64.urlsafe_b64decode(b64 + "=" * pad).decode("utf-8"))
+        if payload.get("type") != "license":
+            return False, {"error": "授权类型错误"}
+        if payload.get("dev") != (dev_id or ""):
+            return False, {"error": "设备不匹配（授权已绑定其他设备）"}
+        return True, {"jti": payload.get("jti"), "dev": payload.get("dev"),
+                      "iat": payload.get("iat"), "type": "license"}
+    except Exception as e:
+        return False, {"error": "授权校验失败：" + str(e)}
 

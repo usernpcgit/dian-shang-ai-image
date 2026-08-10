@@ -8,3 +8,6 @@ used_codes.json
 electron/node_modules/
 electron/dist/
 electron/app/
+
+# 激活码「用过作废」本地回退存储（仅本地/未配 Upstash 时生成，不入库）
+license_state.json

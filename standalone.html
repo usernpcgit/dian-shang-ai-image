@@ -37,7 +37,10 @@
                linear-gradient(180deg, #0D0D12 0%, #14141C 50%, #0D0D12 100%);
   }
   /* 动态背景：星云漂移（极客紫黑 · 与毛玻璃面板同源质感，取代原卡通云/月/星） */
-  #skyLayer{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
+  /* 性能优化（不改变动画/外观）：把光球层圈成独立合成层，
+     限制 mix-blend-mode:screen 的每帧全屏混合范围 + 防止光球动画触发整页重绘 */
+  #skyLayer{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden;
+            isolation:isolate;contain:layout paint;transform:translateZ(0)}
   /* 细微颗粒，增添高级触感（premium texture） */
   #skyLayer::after{content:"";position:absolute;inset:-20%;
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
@@ -1236,6 +1239,7 @@ function authHeaders(){
   const h={'Content-Type':'application/json'};
   const tk=(window.__accessToken&&window.__accessToken())||'';
   if(tk){h['Authorization']='Bearer '+tk;h['X-Access-Token']=tk;}
+  if(window.__deviceId){h['X-Device-Id']=window.__deviceId;}
   return h;
 }
 function dataURLtoBlob(u){const h=u.split(',')[0];const m=h.match(/:(.*?);/)[1];const bin=atob(u.split(',')[1]);const arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return new Blob([arr],{type:m});}
@@ -1425,6 +1429,7 @@ $('#btnBatchGen').onclick = async function(){
   const tk = (window.__accessToken && window.__accessToken()) || '';
   const gh = {'Content-Type':'application/json'};
   if (tk) { gh['Authorization'] = 'Bearer ' + tk; gh['X-Access-Token'] = tk; }
+  if(window.__deviceId)gh['X-Device-Id']=window.__deviceId;
   const pm0 = PROVIDERS_LOCAL.find(x => x.id === provider);
 
   let successCount = 0, failCount = 0;
@@ -1938,6 +1943,7 @@ function genOne(){
   const tk=(window.__accessToken&&window.__accessToken())||'';
   const gh={'Content-Type':'application/json'};
   if(tk){gh['Authorization']='Bearer '+tk;gh['X-Access-Token']=tk;}
+  if(window.__deviceId)gh['X-Device-Id']=window.__deviceId;
   fetch(PROXY_URL,{method:'POST',headers:gh,body:JSON.stringify(payload)})
     .then(r=>r.json().catch(()=>null))
     .then(j=>{
@@ -2103,6 +2109,7 @@ $('#btnGenPrompts').onclick=async function(){
     const tk=(window.__accessToken&&window.__accessToken())||'';
     const gh={'Content-Type':'application/json'};
     if(tk){gh['Authorization']='Bearer '+tk;gh['X-Access-Token']=tk;}
+  if(window.__deviceId)gh['X-Device-Id']=window.__deviceId;
     const res=await fetch(PROMPT_GEN_URL,{method:'POST',headers:gh,body:JSON.stringify({image_b64:pgImageB64,selling_points:sp,styles})});
     const j=await res.json().catch(()=>null);
 
@@ -2268,14 +2275,67 @@ document.addEventListener('DOMContentLoaded', function(){
   const codeEl=document.getElementById('gateCode');
   const btn=document.getElementById('gateBtn');
   const errEl=document.getElementById('gateErr');
-  // 暴露给 genOne：取当前访问码
+  const isDesktop=!!(window.electronAPI && window.electronAPI.isDesktop);
+  const devId=(window.electronAPI && window.electronAPI.deviceId) || '';
+  window.__deviceId=devId; // 供 authHeaders()/各处请求附带，云端据此校验设备绑定
+  // 暴露给 genOne：取当前令牌（网页端=访问码；桌面端=设备授权证书）
   window.__accessToken=function(){try{return localStorage.getItem(TOKEN_KEY)||'';}catch(e){return '';}};
   // 暴露给 genOne：生图返回 401 时重新弹出门禁
-  window.__showGate=function(msg){if(gate)gate.style.display='flex';if(errEl){errEl.textContent=msg||'请先在上方输入动态访问码';errEl.style.display='block';}};
+  window.__showGate=function(msg){if(gate)gate.style.display='flex';if(errEl){errEl.textContent=msg||'请先激活本机授权';errEl.style.display='block';}};
   function closeGate(){if(gate)gate.style.display='none';}
   function unlock(t){try{localStorage.setItem(TOKEN_KEY,t);}catch(e){}closeGate();}
   function showErr(m){if(errEl){ if(!m){errEl.style.display='none';errEl.textContent='';return;} errEl.textContent=m;errEl.style.display='block';}}
   const baseUrl=location.origin.startsWith('http')?'':'http://localhost:8765';
+
+  if(isDesktop){
+    // ===== 桌面端：设备绑定授权（一次性激活码 -> 永久设备证书）=====
+    const gTitle=document.getElementById('gateTitle'); if(gTitle)gTitle.textContent='激活你的授权';
+    const gDesc=document.getElementById('gateDesc'); if(gDesc)gDesc.innerHTML='本机已安装电商AI生图。<br>请输入卖家发给你的<b>激活码</b>，激活后永久绑定本机、无需再输。';
+    const gHint=document.getElementById('gateHint'); if(gHint)gHint.textContent='激活码填一次即永久生效；该码一经使用即作废，不可用于其他设备。';
+    if(codeEl)codeEl.placeholder='激活码（如 TJM487-1-DLWNUI2JCFQ76）';
+    if(btn)btn.textContent='激活并进入';
+    async function verifyLicense(cert){
+      try{
+        const r=await fetch(baseUrl+'/api/verify-license',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cert,dev_id:devId})});
+        const j=await r.json().catch(()=>null);
+        return (j&&j.valid)?true:false;
+      }catch(e){ return null; } // 离线：交由调用方决定
+    }
+    async function activate(code){
+      if(!btn)return;btn.disabled=true;btn.textContent='激活中…';showErr('');
+      try{
+        const r=await fetch(baseUrl+'/api/activate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,dev_id:devId})});
+        const j=await r.json().catch(()=>null);
+        if(j&&j.valid&&j.cert){
+          unlock(j.cert);
+          toast('🔓 授权已激活，永久绑定本机，开始使用吧');
+        } else if(j&&j.consumed){
+          showErr('该激活码已被使用（每个激活码仅限激活一台设备）。如系误报，请联系卖家处理。');
+        } else {
+          showErr((j&&j.error)||'激活失败，请检查激活码是否正确');
+        }
+      }catch(e){ showErr('激活请求失败（无法连接激活服务器）：'+e); }
+      finally{ if(btn){btn.disabled=false;btn.textContent='激活并进入';} }
+    }
+    if(btn)btn.onclick=function(){
+      const c=(codeEl.value||'').trim();
+      if(!c){showErr('请输入卖家发给你的激活码');return;}
+      activate(c);
+    };
+    if(codeEl)codeEl.addEventListener('keydown',function(e){if(e.key==='Enter'&&btn)btn.click();});
+    const t=window.__accessToken();
+    if(t && t.indexOf('LIC.')===0){
+      // 已激活过：启动时用云端校验证书是否仍有效/未被吊销；离线则放行（生图仍需联网，云端会再校验）
+      verifyLicense(t).then(function(v){
+        if(v===true){ closeGate(); }
+        else if(v===false){ try{localStorage.removeItem(TOKEN_KEY);}catch(e){} showErr('本机授权无效或已被吊销，请重新输入激活码，或联系卖家。'); }
+        else { closeGate(); }
+      });
+    }
+    return; // 桌面端逻辑结束，跳过下方网页端访问码流程
+  }
+
+  // ===== 网页端：原有动态访问码门禁（不变）=====
   // 静默校验（不消耗次数）：用于已有码的页面重载，仅确认是否过期
   async function verifyOnly(code){
     try{
@@ -2329,10 +2389,10 @@ document.addEventListener('DOMContentLoaded', function(){
 <div id="gate" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(13,13,18,.85);padding:20px">
   <div style="width:100%;max-width:380px;background:linear-gradient(160deg,#1F1F2A,#16161D);border:1px solid rgba(124,58,237,.35);border-radius:22px;padding:28px 24px;box-shadow:0 20px 60px rgba(0,0,0,.7), 0 0 0 1px rgba(124,58,237,.10);text-align:center;font-family:inherit">
     <div style="font-size:30px;margin-bottom:6px">🔐</div>
-    <div style="font-size:19px;font-weight:800;color:#F0EFFF;margin-bottom:4px">测试版 · 访问码验证</div>
-    <div style="font-size:13px;color:#9088A8;line-height:1.5;margin-bottom:18px">本工具处于测试阶段，仅限受邀用户体验。<br>请输入收到的动态访问码以解锁全部功能。</div>
+    <div id="gateTitle" style="font-size:19px;font-weight:800;color:#F0EFFF;margin-bottom:4px">测试版 · 访问码验证</div>
+    <div id="gateDesc" style="font-size:13px;color:#9088A8;line-height:1.5;margin-bottom:18px">本工具处于测试阶段，仅限受邀用户体验。<br>请输入收到的动态访问码以解锁全部功能。</div>
     <input id="gateCode" type="text" autocomplete="off" spellcheck="false" aria-label="访问码或总钥匙" placeholder="访问码（如 TJM487-1-DLWNUI2JCFQ76）或总钥匙" style="width:100%;box-sizing:border-box;padding:13px 14px;border:1.5px solid #2A2A3A;background:#0D0D12;border-radius:13px;font-size:15px;color:#F0EFFF;outline:none;letter-spacing:1px;text-align:center">
-    <div style="margin-top:6px;font-size:11px;color:#6D6585">填「访问码」（发给别人用，有时效）或「总钥匙」（你自己永久使用）</div>
+    <div id="gateHint" style="margin-top:6px;font-size:11px;color:#6D6585">填「访问码」（发给别人用，有时效）或「总钥匙」（你自己永久使用）</div>
     <button id="gateBtn" style="width:100%;margin-top:12px;padding:13px;border:none;border-radius:13px;background:linear-gradient(135deg,#7C3AED,#A78BFA);color:#fff;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 4px 18px rgba(124,58,237,.5)">解锁并使用</button>
     <div id="gateErr" style="display:none;margin-top:12px;font-size:13px;color:#FCA5A5;background:rgba(248,113,113,.10);border:1px solid rgba(248,113,113,.30);border-radius:8px;padding:8px;font-weight:600"></div>
     <div style="margin-top:14px;font-size:11px;color:#6D6585">每串码限设定人数使用，过期或次数用尽即失效，请联系发放人续期或换新码</div>
