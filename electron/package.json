@@ -14,10 +14,12 @@
   "build": {
     "appId": "com.usernpcgit.dianshangai",
     "productName": "电商AI生图",
+    "icon": "build/icon.icns",
     "directories": { "output": "dist" },
     "files": ["main.js", "preload.js", "update-check.js", "after-sign.js"],
     "afterSign": "after-sign.js",
     "mac": {
+      "icon": "build/icon.icns",
       "target": ["dmg", "zip"],
       "category": "public.app-category.photography",
       "identity": "-",
@@ -27,6 +29,7 @@
       "entitlementsInherit": "entitlements.mac.plist"
     },
     "win": {
+      "icon": "build/icon.ico",
       "target": "nsis"
     },
     "publish": { "provider": "github", "owner": "usernpcgit", "repo": "dian-shang-ai-image" }
