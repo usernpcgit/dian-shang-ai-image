@@ -2276,7 +2276,18 @@ document.addEventListener('DOMContentLoaded', function(){
   const btn=document.getElementById('gateBtn');
   const errEl=document.getElementById('gateErr');
   const isDesktop=!!(window.electronAPI && window.electronAPI.isDesktop);
-  const devId=(window.electronAPI && window.electronAPI.deviceId) || '';
+  // 设备标识：优先用 Electron preload 暴露的硬件指纹；旧版 App 无此属性时，
+  // 用浏览器端特征生成降级指纹（保证不阻塞激活流程）。
+  let devId=(window.electronAPI && window.electronAPI.deviceId) || '';
+  if(isDesktop && !devId){
+    try{
+      const raw=navigator.userAgent+'|'+screen.width+'x'+screen.height+'|'+(navigator.hardwareConcurrency||'')+'|'+(navigator.language||'');
+      // 简单 hash → 取前 24 位作为降级设备 ID（格式与 preload 一致）
+      let h=2166136261>>>0;
+      for(let i=0;i<raw.length;i++){h^=raw.charCodeAt(i);h=(h*16777619)>>>0;}
+      devId='web-'+('00000000'+h.toString(16)).slice(-8)+'-'+('00000000'+((h>>8)&0xffffffff).toString(16)).slice(-8);
+    }catch(e){devId='unknown';}
+  }
   window.__deviceId=devId; // 供 authHeaders()/各处请求附带，云端据此校验设备绑定
   // 暴露给 genOne：取当前令牌（网页端=访问码；桌面端=设备授权证书）
   window.__accessToken=function(){try{return localStorage.getItem(TOKEN_KEY)||'';}catch(e){return '';}};
@@ -2311,11 +2322,27 @@ document.addEventListener('DOMContentLoaded', function(){
           toast('🔓 授权已激活，永久绑定本机，开始使用吧');
         } else if(j&&j.consumed){
           showErr('该激活码已被使用（每个激活码仅限激活一台设备）。如系误报，请联系卖家处理。');
+        } else if(j && /总钥匙不能用于激活/.test(j.error)){
+          // 总钥匙走旧解锁通道（管理员/开发者直通）
+          await unlockWithMaster(code);
         } else {
           showErr((j&&j.error)||'激活失败，请检查激活码是否正确');
         }
       }catch(e){ showErr('激活请求失败（无法连接激活服务器）：'+e); }
       finally{ if(btn){btn.disabled=false;btn.textContent='激活并进入';} }
+    }
+    // 旧式解锁（总钥匙 / 网页端访问码 兼容路径）
+    async function unlockWithMaster(code){
+      try{
+        const r=await fetch(baseUrl+'/api/unlock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
+        const j=await r.json().catch(()=>null);
+        if(j&&j.valid){
+          unlock(code.trim());
+          toast('🔓 '+((j&&j.master)?'总钥匙已永久解锁':'已解锁')+'，开始使用吧');
+        } else {
+          showErr((j&&j.error)||'无效');
+        }
+      }catch(e){ showErr('校验请求失败：'+e); }
     }
     if(btn)btn.onclick=function(){
       const c=(codeEl.value||'').trim();
