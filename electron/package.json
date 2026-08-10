@@ -1,6 +1,6 @@
 {
   "name": "dianshang-ai-image",
-  "version": "0.2.1",
+  "version": "0.2.3",
   "description": "电商AI生图桌面端（Electron 轻壳，加载云端网页端，不捆绑 Python）",
   "main": "main.js",
   "author": "usernpcgit",
@@ -17,7 +17,7 @@
     "directories": { "output": "dist" },
     "files": ["main.js", "preload.js", "update-check.js"],
     "mac": {
-      "target": ["dmg", "zip"],
+      "target": ["zip"],
       "category": "public.app-category.photography",
       "identity": null
     },

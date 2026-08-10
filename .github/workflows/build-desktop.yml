@@ -11,7 +11,9 @@ permissions:
 
 jobs:
   build-mac:
-    runs-on: macos-latest
+    # 关键：用 Linux runner。Linux 没有 codesign，electron-builder 无法重签，
+    # 从而原样保留 Electron 二进制自带的 Apple 公证签名 → 规避 XProtect "revoked"。
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -20,8 +22,8 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Install deps & build
-        run: cd electron && npm install && npx electron-builder --mac --publish never
+      - name: Install deps & build (mac arm64, 不签名)
+        run: cd electron && npm install && npx electron-builder --mac --arm64 --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
