@@ -78,17 +78,21 @@ jobs:
           find . -name "*.dmg" -not -path "*/node_modules/*" 2>/dev/null | head -10
 
       # ── ad-hoc 签名说明与校验 ──────────────────────────────────────
-      # 上方 "Build Electron app" 步骤中，electron-builder 已通过
-      # package.json 的 afterSign 钩子（after-sign.js）对 .app 主可执行文件
-      # 执行 `codesign --force --sign -`（不带 --deep）。
+      # 上方 "Build Electron app" 步骤中，electron-builder 通过
+      # package.json 的 `mac.identity: "-"` 做**原生 ad-hoc 签名**。
+      # （不要再用自定义 afterSign 钩子手动 codesign —— 手动 `codesign --force
+      #  --sign -` 整个 .app 会与 Electron Framework 的 Apple 签名冲突，导致
+      #  `spctl` 报 "code has no resources but signature indicates they must
+      #  be present" → Gatekeeper 判"已损坏"。这是之前反复失败的根因。）
       #
       # 为什么必须 ad-hoc 签名（推翻了旧假设）：
       #   旧注释曾认为"未签名 app 只触发 Gatekeeper、不会被 XProtect 删"。
       #   但用户实测被 XProtect 判为恶意软件并移到废纸篓（见对话记录），
       #   证明未签名主可执行文件的哈希可能命中 Apple 已知恶意软件特征。
       #   ad-hoc 重签会改变该哈希 → 不再命中特征 → 通过 XProtect。
-      #   关键：不用 --deep，保留 Electron Framework/Helper 的 Apple 原始签名；
-      #         否则 --deep 覆盖会让它们变成 ad-hoc → XProtect 判"签名被篡改"→ 删除。
+      #   关键：交给 electron-builder 原生 ad-hoc（它只签我们自己的代码、保留
+      #         Electron Framework/Helper 的 Apple 原始签名），产出自洽签名，
+      #         既过 XProtect、又不会"已损坏"。
       #   注意：ad-hoc 后 Gatekeeper 仍弹"无法验证开发者"，需右键→打开放行一次。
       - name: "Verify ad-hoc signature applied"
         run: |
