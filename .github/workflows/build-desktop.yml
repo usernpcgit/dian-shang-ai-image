@@ -11,10 +11,11 @@ permissions:
 
 jobs:
   build-mac:
-    # 关键结论：electron-builder 在 macOS 和 Linux 上，只要没有 Developer ID 证书，
-    # 都会强制 ad-hoc 重签（identity:null 也拦不住），这会冲掉 Electron 自带公证 → XProtect "revoked"。
-    # 所以改为：macOS 上构建 → 用 codesign 把签名彻底剥离成「未签名」→ 重新打包。
-    # 未签名 app 不会被 XProtect 当恶意软件删除，用户只需在「系统设置→隐私与安全性」点一次"仍要打开"。
+    # 用 ad-hoc 签名 + disable-library-validation 权限。
+    # 之前 identity:null 仍被强制 ad-hoc 重签且缺权限 → 启动崩溃(SIGKILL,Team ID 不匹配)；
+    # 去签名方案也被 macOS 拒绝(完全未签名进程不被允许)。
+    # 正确做法：显式 identity:"-" + entitlements.mac.plist(com.apple.security.cs.disable-library-validation)，
+    # 让 ad-hoc 签名的 app 能正常加载 Electron 框架（框架带 Apple Team ID，app 是 ad-hoc 无 Team ID）。
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,28 +25,8 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Install deps & build (--dir，仅产出 .app，不打包)
-        run: cd electron && npm install && npx electron-builder --mac --arm64 --dir --publish never
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
-
-      - name: 剥离 ad-hoc 签名（使 app 变成「未签名」，规避 XProtect revoked）
-        run: |
-          APP="electron/dist/mac-arm64/电商AI生图.app"
-          echo "移除主 app 及嵌套 helper 的签名"
-          codesign --remove-signature "$APP" || true
-          find "$APP/Contents" -name "*.app" -exec codesign --remove-signature {} \; 2>/dev/null || true
-          echo "--- 校验：应无 Signature=adhoc ---"
-          codesign -dvv "$APP" 2>&1 | grep -iE "Signature|adhoc" || echo "（无 Signature 行 = 已彻底去签名，符合预期）"
-
-      - name: 重新打包为 zip 与 dmg
-        run: |
-          VERSION=$(node -p "require('./electron/package.json').version")
-          cd electron/dist
-          APP="mac-arm64/电商AI生图.app"
-          ditto -c -k --keepParent "$APP" "电商AI生图-${VERSION}-mac.zip"
-          hdiutil create -volname "电商AI生图" -srcfolder "$APP" -ov "电商AI生图-${VERSION}-mac.dmg"
-          echo "产物:"; ls -la 电商AI生图-*
+      - name: Install deps & build
+        run: cd electron && npm install && npx electron-builder --mac --arm64 --publish never
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
