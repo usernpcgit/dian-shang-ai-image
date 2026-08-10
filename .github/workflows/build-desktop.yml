@@ -26,7 +26,9 @@ jobs:
           node-version: "20"
 
       - name: Install deps & build
-        run: cd electron && npm install && npx electron-builder --mac --arm64 --publish never
+        run: cd electron && npm install && npx electron-builder --mac --arm64
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -45,10 +47,9 @@ jobs:
           node-version: "20"
 
       - name: Install deps & build
-        run: cd electron && npm install && npx electron-builder --win
+        run: cd electron && npm install && npx electron-builder --win --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
