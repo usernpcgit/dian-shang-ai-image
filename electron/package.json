@@ -19,9 +19,7 @@
     "mac": {
       "target": ["dmg", "zip"],
       "category": "public.app-category.photography",
-      "identity": "-",
-      "gatekeeperAssess": false,
-      "hardenedRuntime": false
+      "identity": null
     },
     "win": {
       "target": "nsis"
