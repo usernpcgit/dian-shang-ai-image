@@ -1240,6 +1240,12 @@ function authHeaders(){
   const tk=(window.__accessToken&&window.__accessToken())||'';
   if(tk){h['Authorization']='Bearer '+tk;h['X-Access-Token']=tk;}
   if(window.__deviceId){h['X-Device-Id']=window.__deviceId;}
+  // 桌面端买断制：自动附加桌面端标识 + 约定密钥，后端据此放行（无需访问码）
+  const isDesk=!!(window.electronAPI&&window.electronAPI.isDesktop);
+  if(isDesk&&window.electronAPI&&window.electronAPI.desktopKey){
+    h['X-Desktop']='1';
+    h['X-Desktop-Key']=window.electronAPI.desktopKey;
+  }
   return h;
 }
 function dataURLtoBlob(u){const h=u.split(',')[0];const m=h.match(/:(.*?);/)[1];const bin=atob(u.split(',')[1]);const arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return new Blob([arr],{type:m});}
@@ -2291,75 +2297,21 @@ document.addEventListener('DOMContentLoaded', function(){
   window.__deviceId=devId; // 供 authHeaders()/各处请求附带，云端据此校验设备绑定
   // 暴露给 genOne：取当前令牌（网页端=访问码；桌面端=设备授权证书）
   window.__accessToken=function(){try{return localStorage.getItem(TOKEN_KEY)||'';}catch(e){return '';}};
-  // 暴露给 genOne：生图返回 401 时重新弹出门禁
-  window.__showGate=function(msg){if(gate)gate.style.display='flex';if(errEl){errEl.textContent=msg||'请先激活本机授权';errEl.style.display='block';}};
+  // 暴露给 genOne：生图返回 401 时重新弹出门禁（桌面端买断制无码可输，改为提示而非弹门禁）
+  window.__showGate=function(msg){
+    if(isDesktop){ toast(msg||'授权异常，请重启应用或联系卖家'); return; }
+    if(gate)gate.style.display='flex';if(errEl){errEl.textContent=msg||'请先输入访问码';errEl.style.display='block';}
+  };
   function closeGate(){if(gate)gate.style.display='none';}
   function unlock(t){try{localStorage.setItem(TOKEN_KEY,t);}catch(e){}closeGate();}
   function showErr(m){if(errEl){ if(!m){errEl.style.display='none';errEl.textContent='';return;} errEl.textContent=m;errEl.style.display='block';}}
   const baseUrl=location.origin.startsWith('http')?'':'http://localhost:8765';
 
   if(isDesktop){
-    // ===== 桌面端：设备绑定授权（一次性激活码 -> 永久设备证书）=====
-    const gTitle=document.getElementById('gateTitle'); if(gTitle)gTitle.textContent='激活你的授权';
-    const gDesc=document.getElementById('gateDesc'); if(gDesc)gDesc.innerHTML='本机已安装电商AI生图。<br>请输入卖家发给你的<b>激活码</b>，激活后永久绑定本机、无需再输。';
-    const gHint=document.getElementById('gateHint'); if(gHint)gHint.textContent='激活码填一次即永久生效；该码一经使用即作废，不可用于其他设备。';
-    if(codeEl)codeEl.placeholder='激活码（如 TJM487-1-DLWNUI2JCFQ76）';
-    if(btn)btn.textContent='激活并进入';
-    async function verifyLicense(cert){
-      try{
-        const r=await fetch(baseUrl+'/api/verify-license',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cert,dev_id:devId})});
-        const j=await r.json().catch(()=>null);
-        return (j&&j.valid)?true:false;
-      }catch(e){ return null; } // 离线：交由调用方决定
-    }
-    async function activate(code){
-      if(!btn)return;btn.disabled=true;btn.textContent='激活中…';showErr('');
-      try{
-        const r=await fetch(baseUrl+'/api/activate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,dev_id:devId})});
-        const j=await r.json().catch(()=>null);
-        if(j&&j.valid&&j.cert){
-          unlock(j.cert);
-          toast('🔓 授权已激活，永久绑定本机，开始使用吧');
-        } else if(j&&j.consumed){
-          showErr('该激活码已被使用（每个激活码仅限激活一台设备）。如系误报，请联系卖家处理。');
-        } else if(j && /总钥匙不能用于激活/.test(j.error)){
-          // 总钥匙走旧解锁通道（管理员/开发者直通）
-          await unlockWithMaster(code);
-        } else {
-          showErr((j&&j.error)||'激活失败，请检查激活码是否正确');
-        }
-      }catch(e){ showErr('激活请求失败（无法连接激活服务器）：'+e); }
-      finally{ if(btn){btn.disabled=false;btn.textContent='激活并进入';} }
-    }
-    // 旧式解锁（总钥匙 / 网页端访问码 兼容路径）
-    async function unlockWithMaster(code){
-      try{
-        const r=await fetch(baseUrl+'/api/unlock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
-        const j=await r.json().catch(()=>null);
-        if(j&&j.valid){
-          unlock(code.trim());
-          toast('🔓 '+((j&&j.master)?'总钥匙已永久解锁':'已解锁')+'，开始使用吧');
-        } else {
-          showErr((j&&j.error)||'无效');
-        }
-      }catch(e){ showErr('校验请求失败：'+e); }
-    }
-    if(btn)btn.onclick=function(){
-      const c=(codeEl.value||'').trim();
-      if(!c){showErr('请输入卖家发给你的激活码');return;}
-      activate(c);
-    };
-    if(codeEl)codeEl.addEventListener('keydown',function(e){if(e.key==='Enter'&&btn)btn.click();});
-    const t=window.__accessToken();
-    if(t && t.indexOf('LIC.')===0){
-      // 已激活过：启动时用云端校验证书是否仍有效/未被吊销；离线则放行（生图仍需联网，云端会再校验）
-      verifyLicense(t).then(function(v){
-        if(v===true){ closeGate(); }
-        else if(v===false){ try{localStorage.removeItem(TOKEN_KEY);}catch(e){} showErr('本机授权无效或已被吊销，请重新输入激活码，或联系卖家。'); }
-        else { closeGate(); }
-      });
-    }
-    return; // 桌面端逻辑结束，跳过下方网页端访问码流程
+    // 桌面端买断制：打开即用，无需任何访问码/激活码。
+    // 鉴权由 authHeaders() 自动附加 X-Desktop + X-Desktop-Key 完成（后端信任桌面端放行）。
+    closeGate();
+    return; // 跳过下方网页端访问码流程
   }
 
   // ===== 网页端：原有动态访问码门禁（不变）=====

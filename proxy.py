@@ -64,6 +64,9 @@ except Exception:
 
 PORT = int(os.environ.get("PORT") or os.environ.get("WB_PORT", "8765"))
 DESKTOP_MODE = os.environ.get("DESKTOP_MODE") == "1"  # 桌面端模式：绑定 127.0.0.1 + 本机免访问码
+# 桌面端买断制：纯云壳的桌面 App 经 preload 注入此约定密钥，后端据此信任放行（无需访问码）。
+# 可在 Render 控制台用环境变量 DESKTOP_KEY 覆盖以轮换；不匹配则拒绝，防止伪造免码滥用。
+DESKTOP_KEY = os.environ.get("DESKTOP_KEY", "dian-shang-desktop-buyout-9Kx2mP7qR4tV8wY1z")
 HERE = os.path.dirname(os.path.abspath(__file__))
 ASSETS_DIR = os.path.join(HERE, "assets")
 
@@ -1663,6 +1666,13 @@ class H(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
     def _cred(self, token, dev_id=None):
+        # 桌面端买断制：纯云壳的桌面 App 会带 X-Desktop + 约定的桌面端密钥，
+        # 后端直接信任放行（无需访问码/激活码）。密钥不匹配则拒绝，防止伪造免码滥用。
+        if (self.headers.get("X-Desktop") or "").strip() == "1":
+            dk = (self.headers.get("X-Desktop-Key") or "").strip()
+            if dk and dk == DESKTOP_KEY:
+                return True, {"exp": None, "remaining_hours": None, "note": "桌面端买断授权", "mu": None, "master": True}, "desktop"
+            return False, {"error": "桌面端授权密钥无效"}, None
         # 桌面端(DESKTOP_MODE)且来自本机：本地信任，等价于总钥匙，跳过远程访问码校验
         if DESKTOP_MODE and self.client_address[0] in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
             return True, {"exp": None, "remaining_hours": None, "note": "桌面端本地放行", "mu": None, "master": True}, "master"

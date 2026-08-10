@@ -27,4 +27,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   isDesktop: true,
   platform: process.platform,
   deviceId: computeDeviceId(),
+  // 桌面端买断制密钥：前端随请求自动附加 X-Desktop + 此密钥，后端信任放行（无需访问码）。
+  // 与 proxy.py 的 DESKTOP_KEY 默认值保持一致；如要轮换，两端需同步更新。
+  desktopKey: "dian-shang-desktop-buyout-9Kx2mP7qR4tV8wY1z",
 });
