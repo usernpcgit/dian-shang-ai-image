@@ -10,67 +10,52 @@ permissions:
   contents: write
 
 jobs:
-  build-mac:
-    # 用 ad-hoc 签名 + disable-library-validation 权限（见 build-mac.sh）。
-    # 不依赖 electron-builder 的 dmg 目标（本机/部分环境会跳过），改用 codesign + hdiutil 手动打包，更稳。
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Install deps & build
-        run: cd electron && npm install && npm run dist:mac
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: mac-build
-          path: electron/dist/*.dmg
-
-  build-win:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Install deps & build
-        shell: bash
-        run: cd electron && npm install && npm run dist:win
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: win-build
-          path: electron/dist/*.zip
-
-  release:
-    needs: [build-mac, build-win]
+  create-release:
     runs-on: ubuntu-latest
     steps:
-      - name: Download mac artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: mac-build
-          path: release-assets
-      - name: Download win artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: win-build
-          path: release-assets
+      - uses: actions/checkout@v4
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cd release-assets
-          gh release create "${{ github.ref_name }}" \
-            --title "电商AI生图 ${{ github.ref_name }}（离线真买断版）" \
-            --notes "桌面端离线真买断版：前端 + 本地代理全打包，买家自配 API Key，零服务端依赖。Mac 为 dmg（拖入应用即可），Windows 为便携 zip（解压双击 exe）。更新走应用内 GitHub 通道。" \
-            *
+          if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
+            echo "release ${{ github.ref_name }} 已存在，跳过创建"
+          else
+            gh release create "${{ github.ref_name }}" \
+              --title "电商AI生图 ${{ github.ref_name }}（离线真买断版）" \
+              --notes "桌面端离线真买断版：前端 + 本地代理全打包，买家自配 API Key，零服务端依赖。Mac 为 dmg（拖入应用即可），Windows 为便携 zip（解压双击 exe）。更新走应用内 GitHub 通道。"
+          fi
+
+  build-mac:
+    needs: create-release
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install deps & build
+        run: cd electron && npm install && npm run dist:mac
+      - name: Upload to Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: cd electron && gh release upload "${{ github.ref_name }}" dist/*.dmg --clobber
+
+  build-win:
+    needs: create-release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install deps & build
+        shell: bash
+        run: cd electron && npm install && npm run dist:win
+      - name: Upload to Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: cd electron && gh release upload "${{ github.ref_name }}" "dist/dianshang-ai-image-win-*.zip" --clobber
