@@ -11,11 +11,8 @@ permissions:
 
 jobs:
   build-mac:
-    # 用 ad-hoc 签名 + disable-library-validation 权限。
-    # 之前 identity:null 仍被强制 ad-hoc 重签且缺权限 → 启动崩溃(SIGKILL,Team ID 不匹配)；
-    # 去签名方案也被 macOS 拒绝(完全未签名进程不被允许)。
-    # 正确做法：显式 identity:"-" + entitlements.mac.plist(com.apple.security.cs.disable-library-validation)，
-    # 让 ad-hoc 签名的 app 能正常加载 Electron 框架（框架带 Apple Team ID，app 是 ad-hoc 无 Team ID）。
+    # 用 ad-hoc 签名 + disable-library-validation 权限（见 build-mac.sh）。
+    # 不依赖 electron-builder 的 dmg 目标（本机/部分环境会跳过），改用 codesign + hdiutil 手动打包，更稳。
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,16 +23,13 @@ jobs:
           node-version: "20"
 
       - name: Install deps & build
-        run: cd electron && npm install && npx electron-builder --mac --arm64
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true
+        run: cd electron && npm install && npm run dist:mac
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: mac-build
-          path: electron/dist/*
+          path: electron/dist/*.dmg
 
   build-win:
     runs-on: windows-latest
@@ -48,14 +42,35 @@ jobs:
           node-version: "20"
 
       - name: Install deps & build
-        run: cd electron && npm install && npx electron-builder --win
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true
+        shell: bash
+        run: cd electron && npm install && npm run dist:win
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: win-build
-          path: electron/dist/*
+          path: electron/dist/*.zip
+
+  release:
+    needs: [build-mac, build-win]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download mac artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mac-build
+          path: release-assets
+      - name: Download win artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: win-build
+          path: release-assets
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd release-assets
+          gh release create "${{ github.ref_name }}" \
+            --title "电商AI生图 ${{ github.ref_name }}（离线真买断版）" \
+            --notes "桌面端离线真买断版：前端 + 本地代理全打包，买家自配 API Key，零服务端依赖。Mac 为 dmg（拖入应用即可），Windows 为便携 zip（解压双击 exe）。更新走应用内 GitHub 通道。" \
+            *

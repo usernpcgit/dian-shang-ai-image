@@ -1,28 +1,40 @@
 {
   "name": "dianshang-ai-image",
-  "version": "0.2.7",
-  "description": "电商AI生图桌面端（Electron 轻壳，加载云端网页端，不捆绑 Python）",
+  "version": "0.2.8",
+  "description": "电商AI生图桌面端（离线真买断版：前端 + 本地代理全打包，买家自配 Key，零服务端依赖）",
   "main": "main.js",
   "author": "usernpcgit",
   "private": true,
   "scripts": {
-    "start": "electron .",
-    "dist:mac": "electron-builder --mac",
-    "dist:win": "electron-builder --win",
-    "dist": "electron-builder --mac --win"
+    "start": "npm run copy-html && electron .",
+    "copy-html": "cp ../standalone.html ./standalone.html",
+    "dist:mac": "sh build-mac.sh",
+    "dist:win": "sh build-win.sh",
+    "dist": "sh build-mac.sh && sh build-win.sh"
   },
   "build": {
     "appId": "com.usernpcgit.dianshangai",
     "productName": "电商AI生图",
     "icon": "build/icon.icns",
-    "directories": { "output": "dist" },
-    "files": ["main.js", "preload.js", "update-check.js", "after-sign.js"],
-    "afterSign": "after-sign.js",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "update-check.js",
+      "after-sign.js",
+      "local-proxy.js",
+      "standalone.html"
+    ],
+    "afterSign": "./after-sign.js",
     "mac": {
       "icon": "build/icon.icns",
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "category": "public.app-category.photography",
-      "identity": "-",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "entitlements.mac.plist",
@@ -32,7 +44,11 @@
       "icon": "build/icon.ico",
       "target": "nsis"
     },
-    "publish": { "provider": "github", "owner": "usernpcgit", "repo": "dian-shang-ai-image" }
+    "publish": {
+      "provider": "github",
+      "owner": "usernpcgit",
+      "repo": "dian-shang-ai-image"
+    }
   },
   "devDependencies": {
     "electron": "^31.5.0",

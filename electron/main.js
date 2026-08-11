@@ -1,16 +1,20 @@
 "use strict";
-// 电商AI生图 · 桌面端（纯 Electron 轻壳）
-// 设计原则：桌面端不捆绑 Python。AI 生图 / 竞品分析的后端跑在云端（Render），
-// 桌面 app 只负责用原生窗口加载云端网页端 /tool，所有 /api/* 调用同域直达云端。
-// 这样彻底规避了「未签名 Electron 内嵌 Python 解释器 → XProtect / 签名冲突」这一整类问题。
+// 电商AI生图 · 桌面端（离线真买断版）
+// 架构：前端 standalone.html + 本地代理 local-proxy.js 全部打包进 App。
+//   买家用自己的 API Key（或 Pollinations 免 Key）直连各服务商，卖家零成本、工具离线可用。
+//   更新通道走 GitHub Releases（与卖家业务服务器解耦，见 update-check.js）。
 const { app, BrowserWindow } = require("electron");
 const path = require("path");
 const { checkForUpdates } = require("./update-check");
+const { startLocalProxy } = require("./local-proxy");
 
-// 云端网页端地址。换成你自己 Render 部署的 /tool 链接即可
-// （默认取自 render.yaml 的 service name: self-ai-image）。
-const CLOUD_APP_URL =
-  process.env.CLOUD_APP_URL || "https://self-ai-image.onrender.com/tool";
+// 启动本地代理（监听 127.0.0.1:8765，离线生图/竞品分析转发）
+let proxyServer = null;
+try {
+  proxyServer = startLocalProxy();
+} catch (e) {
+  console.error("[main] 本地代理启动失败：", e);
+}
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -27,13 +31,15 @@ function createWindow() {
     },
   });
 
-  win.loadURL(CLOUD_APP_URL);
+  // 离线模式：加载打包进 App 的本地前端（file:// 下，前端自动把 /api/* 指向 http://localhost:8765）
+  const indexPath = path.join(__dirname, "standalone.html");
+  win.loadFile(indexPath);
 
-  // 云端免费实例首次会冷启动（约数十秒），加载完再显示，避免白屏误会。
+  // 本地前端无需冷启动等待，加载完即显示
   win.once("ready-to-show", () => win.show());
 
   win.webContents.on("did-fail-load", (_e, errorCode, errorDescription) => {
-    console.warn("[load] 加载云端失败:", errorCode, errorDescription);
+    console.warn("[load] 加载本地前端失败:", errorCode, errorDescription);
   });
 }
 
@@ -48,4 +54,8 @@ app.on("window-all-closed", () => {
 
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});
+
+app.on("before-quit", () => {
+  if (proxyServer) { try { proxyServer.close(); } catch (e) {} }
 });
