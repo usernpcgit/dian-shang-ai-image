@@ -8,8 +8,9 @@ cd "$(dirname "$0")"
 
 VER=$(node -p "require('./package.json').version")
 APP_NAME=$(node -p "require('./package.json').build.productName")
-DMG="dist/${APP_NAME}-${VER}.dmg"
-ZIP="dist/${APP_NAME}-${VER}-mac.zip"
+# 用 ASCII 文件名，规避 macOS runner 上传 artifact 时中文 NFD 编码到 Linux 解包被损坏（曾变成 AI.-0.2.8.dmg）
+DMG="dist/dianshang-ai-image-mac-${VER}.dmg"
+ZIP="dist/dianshang-ai-image-mac-${VER}.zip"
 ENT="entitlements.mac.plist"
 
 npm run copy-html
