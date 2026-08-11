@@ -57,6 +57,19 @@ jobs:
         with:
           name: win-zip
           path: artifacts/win
+      - name: Remove existing release for tag (idempotent, 防同标签多草稿冲突)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          echo "cleaning any existing release for $TAG"
+          RELS=$(curl -s -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$GITHUB_REPOSITORY/releases?per_page=100")
+          IDS=$(echo "$RELS" | /usr/bin/python3 -c "import sys,json; d=json.load(sys.stdin); print(' '.join(str(r['id']) for r in d if r.get('tag_name')=='$TAG'))" 2>/dev/null)
+          for ID in $IDS; do
+            echo "deleting release $ID"
+            curl -s -X DELETE -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/$ID"
+          done
+          echo "cleanup done"
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
