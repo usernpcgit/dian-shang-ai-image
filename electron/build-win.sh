@@ -1,6 +1,6 @@
 #!/bin/sh
 # 离线版 Windows 构建：electron-builder 打包未签名 app，再压成便携 zip（免安装，双击即用）。
-# 用 Python 的 shutil.make_archive 压缩（跨平台，不依赖外部 zip 命令），文件名用 ASCII 避免编码问题。
+# 压缩：Windows 上用 PowerShell 的 Compress-Archive（原生可用）；其他平台回退 python3。
 set -e
 cd "$(dirname "$0")"
 
@@ -12,16 +12,21 @@ ZIP="dist/dianshang-ai-image-win-${VER}.zip"
 npm run copy-html
 echo "==> packaging win (--dir)"
 npx electron-builder --win --x64 --dir --publish never
+echo "==> win-unpacked 已生成，内容预览："
+ls -la dist/win-unpacked | head
 
 rm -f "$ZIP"
-python3 - "$VER" "$APP_NAME" "$ZIP" <<'PY'
+if command -v powershell.exe >/dev/null 2>&1; then
+  echo "==> 用 PowerShell Compress-Archive 压缩"
+  powershell.exe -NoProfile -Command "Compress-Archive -Path 'dist/win-unpacked' -DestinationPath '$ZIP' -Force"
+else
+  echo "==> 用 python3 压缩"
+  python3 - "$ZIP" <<'PY'
 import shutil, sys, os
-ver, app_name, zip_path = sys.argv[1], sys.argv[2], sys.argv[3]
-src = os.path.join("dist", "win-unpacked")
-if not os.path.isdir(src):
-    raise SystemExit("win-unpacked 未生成，构建失败")
-# make_archive 会在 zip_path 基础上加 .zip，这里先去掉再交给它
-base = zip_path[:-4] if zip_path.endswith(".zip") else zip_path
-shutil.make_archive(base, "zip", "dist", "win-unpacked")
-print("==> 产物:", zip_path, "大小", os.path.getsize(zip_path), "字节")
+zip_path = sys.argv[1]
+base = zip_path[:-4] if zip_path.endswith('.zip') else zip_path
+shutil.make_archive(base, 'zip', 'dist', 'win-unpacked')
+print('==> 产物:', zip_path, os.path.getsize(zip_path), '字节')
 PY
+fi
+ls -la "$ZIP"
