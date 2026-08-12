@@ -2323,7 +2323,15 @@ document.addEventListener('DOMContentLoaded', function(){
     return; // 跳过下方网页端访问码流程
   }
 
+  // 第三重保险：file:// 协议说明是本地离线版（桌面端 loadFile），无论 preload 是否注入都跳过门禁
+  if(location.protocol==='file:'){
+    closeGate();
+    return;
+  }
+
   // ===== 网页端：原有动态访问码门禁（不变）=====
+  // 网页端需要门禁：显式显示（HTML 默认 display:none，桌面端已 return 跳过）
+  if(gate) gate.style.display='flex';
   // 静默校验（不消耗次数）：用于已有码的页面重载，仅确认是否过期
   async function verifyOnly(code){
     try{
@@ -2374,7 +2382,7 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 </script>
 <!-- ===== 动态访问码门禁（测试阶段分享保护） ===== -->
-<div id="gate" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(13,13,18,.85);padding:20px">
+<div id="gate" style="position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;background:rgba(13,13,18,.85);padding:20px">
   <div style="width:100%;max-width:380px;background:linear-gradient(160deg,#1F1F2A,#16161D);border:1px solid rgba(124,58,237,.35);border-radius:22px;padding:28px 24px;box-shadow:0 20px 60px rgba(0,0,0,.7), 0 0 0 1px rgba(124,58,237,.10);text-align:center;font-family:inherit">
     <div style="font-size:30px;margin-bottom:6px">🔐</div>
     <div id="gateTitle" style="font-size:19px;font-weight:800;color:#F0EFFF;margin-bottom:4px">测试版 · 访问码验证</div>
