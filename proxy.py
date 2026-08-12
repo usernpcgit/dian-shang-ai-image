@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-电商AI Image —— 本地小代理（多服务商版）
+生图Agent —— 本地小代理（多服务商版）
 在浏览器（standalone.html）和各家生图接口之间转发请求，并补 CORS 头。
 
 支持的服务商（provider）：
@@ -2094,7 +2094,7 @@ class H(BaseHTTPRequestHandler):
         style_list = "、".join(styles)
         gen_messages = [
             {"role": "system", "content": (
-                "你是电商AI生图提示词专家。根据产品分析结果和用户提供的卖点，"
+                "你是生图Agent提示词专家。根据产品分析结果和用户提供的卖点，"
                 "为指定风格/场景分别生成专业的AI绘画提示词（英文prompt为主，中文说明为辅）。"
                 "每条提示词要具体到：场景描述、光线、色调、构图、氛围、产品摆放方式。"
                 "输出必须为严格JSON数组格式，每个元素包含 style(风格名)、prompt(英文生图提示词)、description(中文说明)。"
@@ -2219,7 +2219,7 @@ if __name__ == "__main__":
         lan = socket.gethostbyname(socket.gethostname())
     except Exception:
         lan = "本机局域网IP"
-    print("电商AI Image 已启动（页面 + 多服务商生图代理一体）")
+    print("生图Agent 已启动（页面 + 多服务商生图代理一体）")
     print("  本机打开  : http://localhost:%d/" % PORT)
     print("  手机/同网络: http://%s:%d/   （手机浏览器打开即可直接用 AI 生图）" % (lan, PORT))
     print("按 Ctrl+C 停止")

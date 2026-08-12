@@ -1,5 +1,5 @@
 "use strict";
-// 电商AI生图 · 桌面端（离线真买断版）
+// 生图Agent · 桌面端（离线真买断版）
 // 架构：前端 standalone.html + 本地代理 local-proxy.js 全部打包进 App。
 //   买家用自己的 API Key（或 Pollinations 免 Key）直连各服务商，卖家零成本、工具离线可用。
 //   更新通道走 GitHub Releases（与卖家业务服务器解耦，见 update-check.js）。
@@ -22,7 +22,7 @@ function createWindow() {
     height: 800,
     minWidth: 960,
     minHeight: 640,
-    title: "电商AI生图",
+    title: "生图Agent",
     show: false,
     webPreferences: {
       contextIsolation: true,

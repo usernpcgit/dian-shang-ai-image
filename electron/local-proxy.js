@@ -1,5 +1,5 @@
 "use strict";
-// 电商AI生图 · 离线本地代理（local-proxy）
+// 生图Agent · 离线本地代理（local-proxy）
 // 运行在桌面端 Electron 主进程内，监听 127.0.0.1:8765。
 // 作用：把云端 proxy.py 的「多服务商生图 / 竞品分析 / 抓取 / 提示词」转发逻辑搬到本地，
 //       买家用自己的 API Key（或 Pollinations 免 Key），卖家零成本、工具离线可用（真·买断）。
@@ -571,7 +571,7 @@ async function promptGen(data) {
   if (err1) return [null, "产品图分析失败：" + err1];
   const styleList = styles.join("、");
   const genMessages = [
-    { role: "system", content: "你是电商AI生图提示词专家。根据产品分析结果和用户提供的卖点，为指定风格/场景分别生成专业的AI绘画提示词（英文prompt为主，中文说明为辅）。每条提示词要具体到：场景描述、光线、色调、构图、氛围、产品摆放方式。输出必须为严格JSON数组格式，每个元素包含 style(风格名)、prompt(英文生图提示词)、description(中文说明)。" },
+    { role: "system", content: "你是生图Agent提示词专家。根据产品分析结果和用户提供的卖点，为指定风格/场景分别生成专业的AI绘画提示词（英文prompt为主，中文说明为辅）。每条提示词要具体到：场景描述、光线、色调、构图、氛围、产品摆放方式。输出必须为严格JSON数组格式，每个元素包含 style(风格名)、prompt(英文生图提示词)、description(中文说明)。" },
     { role: "user", content: `【产品视觉分析】\n${analysis}\n\n【用户提供的卖点】\n${sellingPoints}\n\n【需要生成的提示词风格】\n${styleList}\n\n请为以上每种风格各生成1条高质量AI生图提示词。直接输出JSON数组，不要加其他文字。` }
   ];
   const [resultText, err2] = await callZhipu(key, "glm-4-flash", genMessages, 70000);
