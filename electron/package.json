@@ -1,13 +1,13 @@
 {
   "name": "dianshang-ai-image",
-  "version": "0.2.20",
+  "version": "0.2.21",
   "description": "生图Agent桌面端（离线真买断版：前端 + 本地代理全打包，买家自配 Key，零服务端依赖）",
   "main": "main.js",
   "author": "usernpcgit",
   "private": true,
   "scripts": {
     "start": "npm run copy-html && electron .",
-    "copy-html": "cp ../standalone.html ./standalone.html",
+    "copy-html": "cp ../standalone.html ./standalone.html && cp -r ../assets ./assets",
     "dist:mac": "sh build-mac.sh",
     "dist:win": "sh build-win.sh",
     "dist": "sh build-mac.sh && sh build-win.sh"
@@ -25,7 +25,8 @@
       "update-check.js",
       "after-sign.js",
       "local-proxy.js",
-      "standalone.html"
+      "standalone.html",
+      "assets/**"
     ],
     "afterSign": "./after-sign.js",
     "mac": {

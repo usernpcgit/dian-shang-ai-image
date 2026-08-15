@@ -19,7 +19,7 @@ jobs:
         with:
           node-version: "20"
       - name: Install deps & build
-        run: cd electron && npm install && npm run dist:mac
+        run: cd electron && cp -r ../assets ./assets && npm install && npm run dist:mac
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -36,7 +36,7 @@ jobs:
           node-version: "20"
       - name: Install deps & build
         shell: bash
-        run: cd electron && npm install && npm run dist:win
+        run: cd electron && cp -r ../assets ./assets && npm install && npm run dist:win
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
