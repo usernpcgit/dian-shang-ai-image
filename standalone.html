@@ -36,17 +36,17 @@
     nav.tabs .tab-indicator{transition:none}
     header.top,nav.tabs,button,.card,.ios-pill,.theme-btn{transition-duration:.01ms!important}
   }
-  /* 极客紫黑渐变底层 */
+  /* 哆啦A梦日间渐变底层（浅蓝白系，与面板自然融合） */
   body::before{content:"";position:fixed;inset:0;z-index:-2;pointer-events:none;
-    background:radial-gradient(1200px 700px at 15% -10%, rgba(var(--brand-rgb),.18) 0%, transparent 55%),
-               radial-gradient(900px 600px at 100% 0%, rgba(var(--brand2-rgb),.10) 0%, transparent 50%),
-               linear-gradient(180deg, #0A0F0D 0%, #14141C 50%, #0A0F0D 100%);
+    background:radial-gradient(1000px 600px at 20% -5%, rgba(var(--brand-rgb),.14) 0%, transparent 55%),
+               radial-gradient(700px 500px at 95% 5%, rgba(var(--brand2-rgb),.08) 0%, transparent 50%),
+               linear-gradient(175deg, #D9EBFD 0%, #E9F2FB 35%, #F2F7FC 70%, #FFFFFF 100%);
     transition:opacity .5s;
   }
   body.night::before{
     background:radial-gradient(1200px 700px at 15% -10%, rgba(var(--brand-rgb),.18) 0%, transparent 55%),
                radial-gradient(900px 600px at 100% 0%, rgba(var(--brand2-rgb),.10) 0%, transparent 50%),
-               linear-gradient(180deg, #0A0F0D 0%, #14141C 50%, #0A0F0D 100%);
+               linear-gradient(180deg, #060E1A 0%, #0A1626 45%, #0D1A30 100%);
   }
   /* 动态背景：极轻量单色柔光（缓慢漂移 + 低 blur + 无混合模式，GPU 友好） */
   #skyLayer{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden;
@@ -64,15 +64,46 @@
   /* 夜间：极淡静态星点（无动画，避免逐帧重绘） */
   .spark{position:absolute;width:2px;height:2px;border-radius:50%;background:var(--brand2);opacity:0;box-shadow:0 0 5px rgba(167,243,208,.5)}
   body.night #skyLayer .spark{opacity:.35}
+  /* ===== 竹蜻蜓装饰（哆啦A梦道具，右上角浮动） ===== */
+  .take-copter{position:fixed;top:14px;right:180px;z-index:100;pointer-events:none;opacity:.45;filter:drop-shadow(0 2px 4px rgba(0,80,160,.15));animation:copterFloat 5s ease-in-out infinite}
+  body.night .take-copter{opacity:.25}
+  .tc-rotor{width:38px;height:38px;position:relative;animation:copterSpin .55s linear infinite}
+  .tc-blade{position:absolute;width:100%;height:100%;left:0;top:0}
+  .tc-blade::before,.tc-blade::after{content:'';position:absolute;left:50%;top:50%;width:18px;height:6px;background:linear-gradient(90deg,#FFD500,#FFA000);border-radius:3px;transform-origin:center}
+  .tc-blade::before{transform:translate(-50%,-50%) rotate(0deg)}
+  .tc-blade::after{transform:translate(-50%,-50%) rotate(90deg)}
+  .tc-hub{position:absolute;width:7px;height:7px;background:radial-gradient(circle at 40% 35%,#FFD500,#E6A200);border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%);z-index:1;box-shadow:0 1px 3px rgba(200,140,0,.3)}
+  .tc-stem{width:2.5px;height:16px;background:linear-gradient(180deg,#D4A855,#B8923E);margin:-1px auto 0;border-radius:1px}
+  @keyframes copterSpin{to{transform:rotate(360deg)}}
+  @keyframes copterFloat{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-6px) rotate(3deg)}}
   /* 顶栏：毛玻璃冠栏（导航独立成行，不再合并） */
   /* 顶栏：iOS 26 液态玻璃冠栏（半透明毛玻璃，随页面滚动，非 fixed） */
   header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 22px;position:relative;background:transparent;border-bottom:none;box-shadow:none}
   header.top::before{content:none}
   header.top .brand{display:flex;align-items:center;gap:12px;flex-shrink:0}
-  header.top .logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--brand),var(--brand2));display:flex;align-items:center;justify-content:center;font-size:23px;box-shadow:var(--shadow)}
-  header.top h1{font-size:18px;margin:0;font-weight:800;letter-spacing:.5px;color:var(--ink);text-shadow:0 1px 0 rgba(0,0,0,.3)}
+  header.top .logo{width:44px;height:44px;border-radius:14px;background:linear-gradient(145deg,#0096D6,#34C5F0);display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);position:relative;overflow:hidden;flex-shrink:0}
+  /* ===== 哆啦A梦脸部（CSS 绘制，自用不售卖） ===== */
+  .dm-face{width:36px;height:34px;position:relative}
+  /* 白色眼部区域 */
+  .dm-eye{position:absolute;width:11px;height:13px;background:#FFF;border-radius:50%;top:5px;border:1.2px solid rgba(0,80,140,.3);box-shadow:inset 0 -1px 2px rgba(0,60,120,.12)}
+  .dm-eye-l{left:4px;transform:rotate(-8deg)}
+  .dm-eye-r{right:4px;transform:rotate(8deg)}
+  /* 黑色瞳孔（偏内，可爱感） */
+  .dm-pupil{position:absolute;width:5.5px;height:6px;background:#111;border-radius:50%;top:4px;left:3.5px}
+  .dm-eye-l .dm-pupil{left:4px}
+  .dm-eye-r .dm-pupil{right:auto;left:2px}
+  /* 红鼻子 */
+  .dm-nose{position:absolute;width:7px;height:7px;background:radial-gradient(circle at 35% 35%,#FF7B7B,#E63E43);border-radius:50%;top:14px;left:50%;transform:translateX(-50%);box-shadow:0 1px 3px rgba(200,40,45,.35),inset 0 -1px 2px rgba(150,20,25,.2)}
+  /* 白色嘴部/脸颊区 */
+  .dm-mouth{position:absolute;width:18px;height:10px;background:#FFF;border-radius:50%;bottom:5px;left:50%;transform:translateX(-50%);border:1px solid rgba(0,80,140,.18)}
+  /* 红项圈 */
+  .dm-collar{position:absolute;width:100%;height:4px;background:linear-gradient(90deg,#FF5A5F,#FF8A5F,#FF5A5F);bottom:2px;border-radius:2px}
+  /* 小铃铛 */
+  .dm-bell-sm{position:absolute;width:7px;height:6.5px;background:linear-gradient(180deg,#FFE066,#FFD500);border-radius:1.5px 1.5px 3px 3px;bottom:-1px;left:50%;transform:translateX(-50%);border:.8px solid rgba(200,160,0,.4);z-index:1}
+  .dm-bell-line{position:absolute;width:1.2px;height:3.5px;background:#FF5A5F;border-radius:1px;left:50%;top:-2.5px;transform:translateX(-50%)}
+  header.top h1{font-size:19px;margin:0;font-weight:900;letter-spacing:.5px;color:var(--ink);text-shadow:0 1px 2px rgba(0,0,0,.15)}
   header.top .brand-txt{display:flex;flex-direction:column;gap:1px}
-  header.top .sub{color:var(--muted);font-size:12.5px}
+  header.top .sub{color:var(--brand);font-size:14px;font-weight:600;opacity:.78}
   header.top .top-actions{display:flex;align-items:center;gap:10px;flex-shrink:0}
   /* 品牌 BETA 标签（融合千问办公的 BETA 标记，强化"产品名+状态"层级） */
   header.top .brand-tag{display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--bell-core),#FF8A5F);color:#fff;font-size:10px;font-weight:800;line-height:1;padding:3px 7px;border-radius:999px;margin-left:7px;vertical-align:middle;letter-spacing:.4px;box-shadow:0 2px 6px rgba(255,90,95,.5)}
@@ -171,6 +202,7 @@
     header.top h1{font-size:16px}
     header.top .sub{display:none}
     header.top .model-pill{display:none}
+    .take-copter{display:none}
     nav.tabs{max-width:calc(100% - 16px)}
     body{padding-top:0}
     .left-col{top:0}
@@ -195,7 +227,7 @@
   /* 视图 */
   .view{display:none;max-width:1080px;margin:0 auto;padding:22px 20px 60px}
   .view.active{display:block}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;margin-bottom:18px;box-shadow:var(--shadow)}
+  .card{background:rgba(255,255,255,.78);border:1px solid rgba(var(--brand-rgb),.12);border-radius:16px;padding:20px;margin-bottom:18px;box-shadow:0 4px 20px rgba(14,42,71,.06),0 1px 0 rgba(0,150,214,.04);backdrop-filter:saturate(120%) blur(.5px)}
   .card h3{margin:0 0 6px;font-size:17px;font-weight:800}
   .card .desc{color:var(--muted);font-size:13.5px;font-weight:500;margin:0 0 14px}
   /* 引导卡 */
@@ -341,6 +373,8 @@
   body.night .muted,body.night nav.tabs button .d,body.night .help .tip{color:var(--muted)}
   body.night header.top .theme-btn{background:rgba(var(--brand-rgb),.18);border-color:rgba(var(--brand-rgb),.40)}
   body.night header.top .theme-btn:hover{background:rgba(var(--brand-rgb),.28)}
+  /* 夜间面板不透明（避免透出底层） */
+  body.night .card{background:var(--panel);border-color:var(--line);backdrop-filter:none;box-shadow:var(--shadow)}
   /* ===== 主题换肤面板 ===== */
   .theme-panel{position:fixed;top:64px;right:18px;z-index:9998;width:250px;display:none;flex-direction:column;gap:12px;padding:16px;border-radius:18px;background:var(--panel);border:1.5px solid var(--line);box-shadow:0 18px 50px rgba(0,0,0,.45),0 0 0 1px rgba(var(--brand-rgb),.12);color:var(--ink)}
   .theme-panel.show{display:flex}
@@ -423,7 +457,18 @@
 <div id="skyLayer"></div>
 <header class="top">
   <div class="brand">
-    <div class="logo">🛍️</div><span class="brand-bell" title="哆啦A梦铃铛"></span>
+    <div class="logo" title="生图Agent · 哆啦A梦主题">
+      <div class="dm-face">
+        <div class="dm-eye dm-eye-l"><div class="dm-pupil"></div></div>
+        <div class="dm-eye dm-eye-r"><div class="dm-pupil"></div></div>
+        <div class="dm-nose"></div>
+        <div class="dm-mouth"></div>
+        <div class="dm-collar"></div>
+        <div class="dm-bell-sm">
+          <div class="dm-bell-line"></div>
+        </div>
+      </div>
+    </div><span class="brand-bell" title="哆啦A梦铃铛"></span>
     <div class="brand-txt">
       <h1>生图Agent <span class="brand-tag">BETA</span></h1>
       <span class="sub">上传即出 · 文生图 / 图生图 · 一键导出</span>
@@ -434,6 +479,15 @@
     <button class="theme-btn" id="themeBtn" title="主题与外观">🎨 主题</button>
     </div>
 </header>
+
+<!-- 竹蜻蜓装饰（哆啦A梦道具） -->
+<div class="take-copter" title="竹蜻蜓 · 哆啦A梦">
+  <div class="tc-rotor">
+    <div class="tc-blade"></div>
+    <div class="tc-hub"></div>
+  </div>
+  <div class="tc-stem"></div>
+</div>
 
 <!-- 主题换肤面板 -->
 <div class="theme-panel" id="themePanel">
