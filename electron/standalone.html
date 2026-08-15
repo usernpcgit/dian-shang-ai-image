@@ -116,7 +116,7 @@
   /* 顶栏：iOS 26 液态玻璃冠栏（半透明毛玻璃，随页面滚动，非 fixed） */
   header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 22px;position:relative;background:transparent;border-bottom:none;box-shadow:none}
   header.top::before{content:none}
-  header.top .brand{display:flex;align-items:center;gap:12px;flex-shrink:0}
+  header.top .brand{display:flex;align-items:center;gap:6px;flex-shrink:0}
   header.top .logo{width:52px;height:52px;border-radius:16px;background:linear-gradient(145deg,#0099E8,#00BBF9);display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);position:relative;overflow:hidden;flex-shrink:0}
   /* ===== 哆啦A梦 Logo（真实图片，自用不售卖） ===== */
   .dm-logo-img{width:46px;height:46px;object-fit:contain;border-radius:12px}
@@ -138,7 +138,12 @@
   /* iOS 26 风格阻尼弹簧：先过冲、轻微回摆、再稳落，制造夸张 q 弹（仅 transform/opacity，GPU 合成零重排） */
   @keyframes navCollapseSpring{0%{transform:scale(1);opacity:1}35%{transform:scale(.6);opacity:.8}58%{transform:scale(0);opacity:0}100%{transform:scale(0);opacity:0}}
   @keyframes ballSpringIn{0%{transform:scale(.2);opacity:0}48%{transform:scale(1.32);opacity:1}68%{transform:scale(.88);opacity:.94}84%{transform:scale(1.08);opacity:.95}100%{transform:scale(1);opacity:.95}}
-  nav.tabs{position:sticky;top:90px;margin:14px auto 10px;display:flex;gap:2px;width:calc(100% - 32px);max-width:560px;padding:5px;flex-wrap:nowrap;background:linear-gradient(135deg,rgba(var(--brand-rgb),.18),rgba(var(--brand-rgb),.08));border:1px solid rgba(var(--brand-rgb),.35);border-radius:999px;box-shadow:0 8px 28px rgba(0,0,0,.5), 0 0 0 1px rgba(var(--brand-rgb),.12), inset 0 1px 0 rgba(var(--brand2-rgb),.18), inset 0 -1px 0 rgba(var(--brand-rgb),.08);z-index:49;-webkit-tap-highlight-color:transparent}
+  nav.tabs{position:sticky;top:90px;margin:14px auto 10px;display:flex;gap:2px;width:calc(100% - 32px);max-width:560px;padding:6px 6px 6px 36px;flex-wrap:nowrap;background:linear-gradient(135deg,rgba(var(--brand-rgb),.18),rgba(var(--brand-rgb),.08));border:1px solid rgba(var(--brand-rgb),.35);border-radius:999px;box-shadow:0 8px 28px rgba(0,0,0,.5), 0 0 0 1px rgba(var(--brand-rgb),.12), inset 0 1px 0 rgba(var(--brand2-rgb),.18), inset 0 -1px 0 rgba(var(--brand-rgb),.08);z-index:49;-webkit-tap-highlight-color:transparent;position:relative}
+  /* Tab栏左侧小铃铛装饰（哆啦A梦） */
+  nav.tabs::before{content:'';position:absolute;left:13px;top:50%;transform:translateY(-50%);width:14px;height:13px;background:linear-gradient(180deg,#FFE066,#FFD500);border-radius:3px 3px 4px 4px;border:1px solid rgba(200,160,0,.35);z-index:3;pointer-events:none;box-shadow:0 1px 3px rgba(200,140,0,.25)}
+  /* 铃铛内部红线+圆点 */
+  nav.tabs .tab-bell-line{position:absolute;left:19px;top:50%;transform:translateY(-50%) translateY(-5px);width:1.5px;height:4px;background:var(--bell-core);border-radius:1px;z-index:4;pointer-events:none}
+  nav.tabs .tab-bell-dot{position:absolute;left:20px;top:50%;transform:translateY(-50%) translateY(2px);width:2.5px;height:2.5px;background:var(--bell-core);border-radius:50%;z-index:4;pointer-events:none}
   nav.tabs::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:2;background:radial-gradient(140% 100% at 18% -20%,rgba(var(--brand2-rgb),.22),rgba(var(--brand2-rgb),0) 48%),linear-gradient(90deg,rgba(var(--brand2-rgb),.08),rgba(var(--brand2-rgb),0) 38%,rgba(var(--brand2-rgb),0) 62%,rgba(var(--brand2-rgb),.05))}
   /* 拖动时用 left/width 改位置（rAF 节流防止掉帧，比 transform 稳定不出 bug） */
   nav.tabs .tab-indicator{position:absolute;top:5px;bottom:5px;left:0;width:0;background:rgba(var(--brand-rgb),.28);border:1px solid rgba(var(--brand2-rgb),.55);border-radius:999px;box-shadow:0 2px 14px rgba(var(--brand-rgb),.30), inset 0 1px 2px rgba(var(--brand2-rgb),.35);transition:left .65s cubic-bezier(0.34,1.56,0.64,1), width .65s cubic-bezier(0.34,1.56,0.64,1), background .32s, border-color .32s, box-shadow .32s;z-index:0;pointer-events:none;will-change:left,width;contain:layout paint}
@@ -277,14 +282,20 @@
   button.danger{background:var(--panel);color:var(--danger);border:1.5px solid var(--danger);padding:8px 15px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700}
   button.sm{font-size:12.5px;padding:7px 13px}
   /* 详情页 */
-  .work-area{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+  .work-area{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start;position:relative}
+  /* 工作区角落哆啦A梦装饰（右上角小元素） */
+  .work-area::after{content:'';position:absolute;top:-8px;right:-4px;width:28px;height:28px;z-index:1;pointer-events:none;opacity:.5;background:url('assets/Doraemon_character_head_close__2026-08-15T13-10-15.png') center/contain no-repeat;filter:grayscale(.3)}
   .left-col{flex:0 0 320px;display:flex;flex-direction:column;gap:14px;position:sticky;top:0;align-self:flex-start}
-  .right-col{flex:1;min-width:300px}
+  .right-col{flex:1;min-width:300px;position:relative}
+  /* 右侧面板哆啦A梦角落装饰 */
+  .right-col::after{content:'';position:absolute;top:-12px;right:-6px;width:36px;height:36px;z-index:1;pointer-events:none;opacity:.35;background:url('assets/Cute_Doraemon_sitting_happily__2026-08-15T13-10-49.png') center/contain no-repeat}
   .preview-scroller{width:100%;overflow:hidden;border-radius:12px;box-shadow:var(--shadow);background:var(--panel);scroll-behavior:smooth;position:relative}
+  /* 预览区空状态哆啦A梦水印 */
+  .preview-scroller::before{content:'';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,rgba(var(--brand-rgb),.03),transparent);z-index:0;pointer-events:none;opacity:.6}
+  .preview-stack{display:flex;flex-direction:column;gap:0;position:relative;z-index:1}
   /* 单张模式：高度只够一张图；批量模式：恢复长图滚动 */
   .preview-scroller.mode-single{max-height:460px;overflow:hidden}
   .preview-scroller.mode-batch{max-height:calc(100vh - 220px);overflow-y:auto}
-  .preview-stack{display:flex;flex-direction:column;gap:0}
   .preview-stack canvas,.preview-stack img{width:100%;height:auto;display:block;background:#eee}
   /* 单张模式：只显示当前屏的一项 */
   .preview-scroller.mode-single .preview-item:not(.current){display:none}
@@ -293,8 +304,8 @@
   .ios-pill{position:relative;display:flex;gap:4px;padding:5px;background:rgba(var(--brand-rgb),.12);border:1px solid rgba(var(--brand-rgb),.30);border-radius:999px;box-shadow:0 4px 16px rgba(0,0,0,.4), inset 0 1px 0 rgba(var(--brand2-rgb),.12)}
   .func-tabs{width:100%;margin-bottom:10px}
   .func-tabs button{position:relative;flex:1;background:transparent;border:none;border-radius:999px;padding:9px 12px;cursor:pointer;text-align:center;color:var(--muted);z-index:1;transition:color .42s cubic-bezier(.16,1,.3,1);font-weight:800;font-size:15px;letter-spacing:.4px}
-  .func-tabs button.active{color:var(--brand)}
-  .pill-indicator{position:absolute;top:5px;bottom:5px;left:0;width:0;background:rgba(var(--brand-rgb),.32);border:1px solid rgba(var(--brand2-rgb),.65);border-radius:999px;box-shadow:0 2px 14px rgba(var(--brand-rgb),.35), inset 0 1px 2px rgba(var(--brand2-rgb),.4);transition:left .58s cubic-bezier(.16,1,.3,1), width .58s cubic-bezier(.16,1,.3,1), background .32s;z-index:0;pointer-events:none;will-change:left,width;contain:layout paint}
+  .func-tabs button.active{color:var(--brand);font-weight:800}
+  .pill-indicator{position:absolute;top:5px;bottom:5px;left:0;width:0;background:linear-gradient(135deg,rgba(var(--brand-rgb),.32),rgba(230,0,18,.12));border:1px solid rgba(var(--brand2-rgb),.65);border-radius:999px;box-shadow:0 2px 14px rgba(var(--brand-rgb),.35), inset 0 1px 2px rgba(var(--brand2-rgb),.4);transition:left .58s cubic-bezier(.16,1,.3,1), width .58s cubic-bezier(.16,1,.3,1), background .32s;z-index:0;pointer-events:none;will-change:left,width;contain:layout paint}
   /* 左栏二级 tab 也支持长按拖动（initDragTabs 内部会设置 touch-action + .dragging） */
   .ios-pill.dragging{cursor:grabbing}
   .ios-pill.dragging .pill-indicator{transition:none!important}
@@ -488,7 +499,6 @@
     <div class="logo" title="生图Agent · 哆啦A梦主题">
       <img src="assets/Doraemon_character_head_close__2026-08-15T13-10-15.png" alt="哆啦A梦" class="dm-logo-img">
     </div><span class="brand-bell" title="哆啦A梦铃铛"></span>
-    </div><span class="brand-bell" title="哆啦A梦铃铛"></span>
     <div class="brand-txt">
       <h1>生图Agent <span class="brand-tag">BETA</span></h1>
       <span class="sub">上传即出 · 文生图 / 图生图 · 一键导出</span>
@@ -542,10 +552,12 @@
 
 <nav class="tabs">
   <div class="tab-indicator" id="tabIndicator"></div>
+  <!-- 哆啦A梦铃铛装饰 -->
+  <span class="tab-bell-line"></span><span class="tab-bell-dot"></span>
   <button data-tab="detail" data-short="做图" class="active" aria-label="做详情页"><span class="ic">🎨</span><span class="t">做详情页</span></button>
-  <button data-tab="prompts" data-short="词库" aria-label="提示词库"><span class="ic">📝</span><span class="t">提示词库</span></button>
-  <button data-tab="gallery" data-short="素材" aria-label="素材库"><span class="ic">🖼️</span><span class="t">素材库</span></button>
-  <button data-tab="help" data-short="帮助" aria-label="使用说明"><span class="ic">❓</span><span class="t">使用说明</span></button>
+  <button data-tab="prompts" data-short="词库" aria-label="提示词库"><span class="ic">🔔</span><span class="t">提示词库</span></button>
+  <button data-tab="gallery" data-short="素材" aria-label="素材库"><span class="ic">📦</span><span class="t">素材库</span></button>
+  <button data-tab="help" data-short="帮助" aria-label="使用说明"><span class="ic">🍥</span><span class="t">使用说明</span></button>
 </nav>
 <!-- Tab 导航毛玻璃球（收缩态显示，点击展开浮层） -->
 <button class="tabs-ball" id="tabsBall" type="button" aria-label="展开导航菜单"><span class="ic">🎨</span></button>
@@ -578,7 +590,7 @@
   </div>
 
   <div class="card">
-    <h3>制作这一屏</h3>
+    <h3>🔔 制作这一屏</h3>
     <div class="work-area">
       <div class="left-col">
         <div class="preview-scroller" id="previewScroller">
