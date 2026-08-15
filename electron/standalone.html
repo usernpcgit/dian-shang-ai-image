@@ -6,29 +6,31 @@
 <title>生图Agent</title>
 <style>
   :root{
-    /* 哆啦A梦主题 · 日间（白底蓝调，最还原） */
-    --bg:#E9F2FB; --panel:#FFFFFF; --panel2:#F1F7FE; --line:#D3E3F4;
-    --ink:#0E2A47; --muted:#5E7A9B; --brand:#0096D6; --brand2:#34C5F0;
-    --brand-rgb:0,150,214; --brand2-rgb:52,197,240;
-    --ok:#16C784; --danger:#FF5A5F; --chip:#F1F7FE;
-    --shadow:0 8px 24px rgba(14,42,71,.12), 0 1px 0 rgba(0,150,214,.10);
-    --scrim:rgba(233,242,251,.62);
-    --bell:#FFD500; --bell-core:#FF5A5F;   /* 哆啦A梦铃铛：黄 + 珊瑚红 */
-    --doraemon-blue:#0096D6;       /* 哆啦A梦身体蓝 */
-    --doraemon-white:#FFFFFF;      /* 脸/眼白 */
-    --grass-green:#7CB342;         /* 草地绿 */
-    --grass-dark:#558B2F;          /* 草地深绿 */
-    --dorayaki:#D87A4F;            /* 铜锣烧橙棕 */
-    --cloud-white:rgba(255,255,255,.75); /* 云朵 */
+    /* 哆啦A梦主题 · 日间（精确匹配官方配色） */
+    --bg:#E8F4FC; --panel:#FFFFFF; --panel2:#F0F8FF; --line:#B8D4E8;
+    --ink:#0A3A5C; --muted:#4A7A9C; --brand:#0099E8; --brand2:#00BBF9;
+    --brand-rgb:0,153,232; --brand2-rgb:0,187,249;
+    --ok:#16C784; --danger:#E60012; --chip:#E8F4FC;
+    --shadow:0 8px 24px rgba(10,58,92,.10), 0 1px 0 rgba(0,153,232,.08);
+    --scrim:rgba(232,244,252,.60);
+    --bell:#FFD700; --bell-core:#E60012;   /* 铃铛黄 + 哆啦A梦红 */
+    /* 真实图片素材路径 */
+    --dm-logo:url('assets/Doraemon_character_head_close__2026-08-15T13-10-15.png');
+    --dm-body:url('assets/Cute_Doraemon_sitting_happily__2026-08-15T13-10-49.png');
+    --dm-pattern:url('assets/Seamless_cute_pattern_of_small_2026-08-15T13-11-40.png');
+    --doraemon-blue:#0099E8;
+    --doraemon-red:#E60012;
+    --cloud-white:rgba(255,255,255,.80);
   }
-  /* 哆啦A梦主题 · 夜间（深海军蓝 + 电光蓝，护眼） */
+  }
+  /* 哆啦A梦主题 · 夜间（深空蓝 + 电光蓝） */
   body.night{
-    --bg:#0A1626; --panel:#11203A; --panel2:#16294A; --line:#26406A;
-    --ink:#EAF3FF; --muted:#9DB4D6; --brand:#2BC4F5; --brand2:#5FD8FF;
-    --brand-rgb:43,196,245; --brand2-rgb:95,216,255;
-    --chip:#16294A;
-    --shadow:0 8px 24px rgba(0,0,0,.55), 0 1px 0 rgba(43,196,245,.10);
-    --scrim:rgba(10,22,38,.58);
+    --bg:#0A1E33; --panel:#0D2540; --panel2:#132D4A; --line:#1E4A6E;
+    --ink:#E0F0FF; --muted:#8EB4D8; --brand:#00BBF9; --brand2:#40DDFF;
+    --brand-rgb:0,187,249; --brand2-rgb:64,221,255;
+    --chip:#132D4A;
+    --shadow:0 8px 24px rgba(0,0,0,.55), 0 1px 0 rgba(0,187,249,.10);
+    --scrim:rgba(10,30,51,.60);
   }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0}
@@ -42,11 +44,11 @@
     nav.tabs .tab-indicator{transition:none}
     header.top,nav.tabs,button,.card,.ios-pill,.theme-btn{transition-duration:.01ms!important}
   }
-  /* 哆啦A梦日间渐变底层（浅蓝白系，与面板自然融合） */
+  /* 哆啦A梦日间渐变底层（参考图天空蓝 #0099E8 → 浅蓝白） */
   body::before{content:"";position:fixed;inset:0;z-index:-2;pointer-events:none;
-    background:radial-gradient(1000px 600px at 20% -5%, rgba(var(--brand-rgb),.14) 0%, transparent 55%),
-               radial-gradient(700px 500px at 95% 5%, rgba(var(--brand2-rgb),.08) 0%, transparent 50%),
-               linear-gradient(175deg, #D9EBFD 0%, #E9F2FB 35%, #F2F7FC 70%, #FFFFFF 100%);
+    background:radial-gradient(1000px 600px at 20% -5%, rgba(var(--brand-rgb),.12) 0%, transparent 55%),
+               radial-gradient(700px 500px at 95% 5%, rgba(var(--brand2-rgb),.06) 0%, transparent 50%),
+               linear-gradient(175deg, #C4E6FC 0%, #E0F2FF 35%, #E8F4FC 70%, #FFFFFF 100%);
     transition:opacity .5s;
   }
   body.night::before{
@@ -104,50 +106,20 @@
     background:linear-gradient(180deg,transparent 0%,rgba(124,179,66,.08) 40%,rgba(85,139,47,.12) 100%);
     opacity:.6}
   body.night .dm-cloud,body.night .dm-grass{display:none}
+  /* ===== 哆啦A梦全身装饰（右下角浮动，参考图第2/3张） ===== */
+  .dm-mascot{position:fixed;bottom:20px;right:20px;z-index:50;pointer-events:none;opacity:.75;filter:drop-shadow(0 4px 12px rgba(0,80,160,.15));animation:mascotBounce 4s ease-in-out infinite;transition:opacity .4s}
+  body.night .dm-mascot{opacity:.25}
+  .dm-mascot-img{width:180px;height:auto;border-radius:16px}
+  @keyframes mascotBounce{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-10px) rotate(2deg)}}
+  @media (max-width:720px){.dm-mascot{width:120px;bottom:10px;right:10px}.dm-mascot-img{width:120px}}
   /* 顶栏：毛玻璃冠栏（导航独立成行，不再合并） */
   /* 顶栏：iOS 26 液态玻璃冠栏（半透明毛玻璃，随页面滚动，非 fixed） */
   header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 22px;position:relative;background:transparent;border-bottom:none;box-shadow:none}
   header.top::before{content:none}
   header.top .brand{display:flex;align-items:center;gap:12px;flex-shrink:0}
-  header.top .logo{width:52px;height:52px;border-radius:18px;background:linear-gradient(145deg,#0096D6,#34C5F0);display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);position:relative;overflow:hidden;flex-shrink:0}
-  /* ===== 哆啦A梦脸部 v2（CSS 绘制，参考官方形象，自用不售卖） ===== */
-  .dm-face{width:44px;height42px;position:relative}
-  /* 蓝色头部（大圆脸轮廓） */
-  .dm-head{position:absolute;width:40px;height:38px;background:var(--doraemon-blue);border-radius:50% 50% 45% 45%;top:2px;left:2px;overflow:hidden}
-  /* 白色脸部区域（覆盖头部下半） */
-  .dm-cheek{position:absolute;width:34px;height:22px;background:var(--doraemon-white);border-radius:50%;bottom:1px;left:3px}
-  /* 眼睛：大椭圆形白底，参考图第2张的椭圆大眼 */
-  .dm-eye{position:absolute;width:14px;height:16px;background:var(--doraemon-white);border-radius:50% 50% 50% 50%/55% 55% 45% 45%;top:4px;border:1.5px solid rgba(0,80,140,.25);box-shadow:inset 0 -2px 3px rgba(0,60,120,.10)}
-  .dm-eye-l{left:5px;transform:rotate(-10deg)}
-  .dm-eye-r{right:5px;transform:rotate(10deg)}
-  /* 黑色瞳孔（大而圆，偏内下，可爱感） */
-  .dm-pupil{position:absolute;width:7px;height:7.5px;background:#111;border-radius:50%;top:5px;left:4px}
-  .dm-eye-l .dm-pupil{left:4.5px;top:5.5px}
-  .dm-eye-r .dm-pupil{right:auto;left:2.5px;top:5.5px}
-  /* 瞳孔高光（小反光点让眼睛更生动） */
-  .dm-pupil::after{content:'';position:absolute;width:2.5px;height:2.5px;background:#FFF;border-radius:50%;top:1px;left:1px}
-  /* 红鼻子（圆形带高光，参考图） */
-  .dm-nose{position:absolute;width:9px;height:9px;background:radial-gradient(circle at 35% 30%,#FF8A8A,#E63E43);border-radius:50%;top:16px;left:50%;transform:translateX(-50%);box-shadow:0 2px 4px rgba(200,40,45,.35),inset 0 -2px 3px rgba(150,20,25,.18),inset 2px 2px 3px rgba(255,180,180,.4)}
-  /* 嘴巴：弧形张开笑嘴（参考图第1张的大笑） */
-  .dm-mouth{position:absolute;width:20px;height:11px;background:var(--doraemon-white);border-radius:0 0 50% 50%;bottom:5px;left:50%;transform:translateX(-50%);border:1.5px solid rgba(0,80,140,.15);overflow:hidden}
-  /* 嘴巴内部（舌头/口腔暗示） */
-  .dm-mouth::after{content:'';position:absolute;width:14px;height:6px;background:linear-gradient(180deg,#FF8A5F,#E67E50);border-radius:50%;bottom:0;left:3px}
-  /* ===== 胡须（6根，左右各3根，标志性元素！） ===== */
-  .dm-whisker{position:absolute;background:#111;border-radius:2px;height:1.8px;transform-origin:left center}
-  /* 左侧3根 */
-  .dm-w-l1{width:10px;top:17px;left:-2px;transform:rotate(-8deg)}
-  .dm-w-l2{width:12px;top:21px;left:-3px;transform:rotate(0deg)}
-  .dm-w-l3{width:10px;top:25px;left:-2px;transform:rotate(8deg)}
-  /* 右侧3根 */
-  .dm-w-r1{width:10px;top:17px;right:-2px;transform:rotate(8deg);transform-origin:right center}
-  .dm-w-r2{width:12px;top:21px;right:-3px;transform:rotate(0deg);transform-origin:right center}
-  .dm-w-r3{width:10px;top:25px;right:-2px;transform:rotate(-8deg);transform-origin:right center}
-  /* 红项圈 */
-  .dm-collar{position:absolute;width:100%;height:5px;background:linear-gradient(90deg,#FF5A5F,#FF7B5F,#FF5A5F);bottom:0;left:0;border-radius:0 0 3px 3px}
-  /* 小铃铛（项圈中央） */
-  .dm-bell-sm{position:absolute;width:8px;height:7.5px;background:linear-gradient(180deg,#FFE066,#FFD500);border-radius:2px 2px 4px 4px;bottom:-1.5px;left:50%;transform:translateX(-50%);border:1px solid rgba(200,160,0,.45);z-index:2;box-shadow:0 1px 2px rgba(200,140,0,.3)}
-  .dm-bell-line{position:absolute;width:1.5px;height:4px;background:var(--bell-core);border-radius:1px;left:50%;top:-3px;transform:translateX(-50%)}
-  .dm-bell-dot{position:absolute;width:2px;height:2px;background:var(--bell-core);border-radius:50%;bottom:1.5px;left:50%;transform:translateX(-50%)}
+  header.top .logo{width:52px;height:52px;border-radius:16px;background:linear-gradient(145deg,#0099E8,#00BBF9);display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);position:relative;overflow:hidden;flex-shrink:0}
+  /* ===== 哆啦A梦 Logo（真实图片，自用不售卖） ===== */
+  .dm-logo-img{width:46px;height:46px;object-fit:contain;border-radius:12px}
   header.top h1{font-size:19px;margin:0;font-weight:900;letter-spacing:.5px;color:var(--ink);text-shadow:0 1px 2px rgba(0,0,0,.15)}
   header.top .brand-txt{display:flex;flex-direction:column;gap:1px}
   header.top .sub{color:var(--brand);font-size:14px;font-weight:600;opacity:.78}
@@ -224,7 +196,8 @@
   body.idle #skyLayer .spark,
   body.idle .model-pill .dot,
   body.idle .dm-cloud,
-  body.idle .take-copter{animation-play-state:paused !important}
+  body.idle .take-copter,
+  body.idle .dm-mascot{animation-play-state:paused !important}
   /* 拖动时用 left/width 改位置（rAF 节流防止掉帧，比 transform 稳定不出 bug） */
   nav.tabs .tab-indicator{position:absolute;top:5px;bottom:5px;left:0;width:0;background:rgba(var(--brand-rgb),.28);border:1px solid rgba(var(--brand2-rgb),.55);border-radius:999px;box-shadow:0 2px 14px rgba(var(--brand-rgb),.30), inset 0 1px 2px rgba(var(--brand2-rgb),.35);transition:left .65s cubic-bezier(0.34,1.56,0.64,1), width .65s cubic-bezier(0.34,1.56,0.64,1), background .32s, border-color .32s, box-shadow .32s;z-index:0;pointer-events:none;will-change:left,width;contain:layout paint}
   nav.tabs.dragging .tab-indicator{transition:none!important;background:rgba(var(--brand-rgb),.42);border-color:rgba(var(--brand2-rgb),.85)}
@@ -251,7 +224,7 @@
     header.top h1{font-size:16px}
     header.top .sub{display:none}
     header.top .model-pill{display:none}
-    .take-copter,.dm-cloud,.dm-grass{display:none}
+    .take-copter,.dm-cloud,.dm-grass,.dm-mascot{display:none}
     .card::before{display:none}
     nav.tabs{max-width:calc(100% - 16px)}
     body{padding-top:0}
@@ -282,9 +255,9 @@
   .card::before{content:'';position:absolute;top:-1px;left:16px;width:6px;height:6px;background:var(--bell);border-radius:50%;opacity:.35}
   .card h3{margin:0 0 6px;font-size:17px;font-weight:800}
   .card .desc{color:var(--muted);font-size:13.5px;font-weight:500;margin:0 0 14px}
-  /* 引导卡：哆啦A梦口袋波点图案 */
-  .guide{background:linear-gradient(120deg,rgba(var(--brand-rgb),.10),rgba(var(--brand2-rgb),.06)),radial-gradient(circle at 20% 50%,rgba(0,150,214,.05) 2px,transparent 2px),radial-gradient(circle at 60% 30%,rgba(0,150,214,.04) 1.5px,transparent 1.5px),radial-gradient(circle at 80% 70%,rgba(0,150,214,.05) 2.5px,transparent 2.5px);background-size:100% 100%,40px 40px,30px 30px,50px 50px;border:1px solid rgba(var(--brand-rgb),.25);border-radius:16px;padding:16px 18px;margin-bottom:18px;position:relative;overflow:hidden}
-  /* 引导卡角落小铃铛装饰 */
+  /* 引导卡：哆啦A梦波点图案（用生成的pattern图） */
+  .guide{background:linear-gradient(120deg,rgba(var(--brand-rgb),.08),rgba(var(--brand2-rgb),.04)),var(--dm-pattern) center/80px; border:1px solid rgba(var(--brand-rgb),.25);border-radius:16px;padding:16px 18px;margin-bottom:18px;position:relative;overflow:hidden}
+  /* 引导角角落小铃铛装饰 */
   .guide::after{content:'🔔';position:absolute;top:8px;right:12px;font-size:16px;opacity:.15;pointer-events:none}
   .guide h4{margin:0 0 10px;font-size:15px;font-weight:800;color:var(--brand)}
   .steps{display:flex;gap:10px;flex-wrap:wrap}
@@ -299,7 +272,7 @@
   .row{display:flex;gap:14px;flex-wrap:wrap}
   .row>*{flex:1;min-width:170px}
   button.btn{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;border:none;padding:12px 22px;border-radius:11px;cursor:pointer;font-size:15px;font-weight:800;box-shadow:0 4px 14px rgba(var(--brand-rgb),.4);letter-spacing:.3px;transition:transform .15s,box-shadow .15s}
-  button.btn:hover{transform:translateY(-1.5px);box-shadow:0 6px 20px rgba(var(--brand-rgb),.5),0 0 0 2px var(--dorayaki)}
+  button.btn:hover{transform:translateY(-1.5px);box-shadow:0 6px 20px rgba(var(--brand-rgb),.5),0 0 0 2px var(--doraemon-red)}
   button.ghost{background:var(--panel);color:var(--ink);border:1.5px solid var(--line);padding:11px 19px;border-radius:11px;cursor:pointer;font-size:15px;font-weight:700}
   button.danger{background:var(--panel);color:var(--danger);border:1.5px solid var(--danger);padding:8px 15px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700}
   button.sm{font-size:12.5px;padding:7px 13px}
@@ -513,24 +486,8 @@
 <header class="top">
   <div class="brand">
     <div class="logo" title="生图Agent · 哆啦A梦主题">
-      <div class="dm-face">
-        <div class="dm-head">
-          <div class="dm-cheek"></div>
-          <div class="dm-eye dm-eye-l"><div class="dm-pupil"></div></div>
-          <div class="dm-eye dm-eye-r"><div class="dm-pupil"></div></div>
-          <div class="dm-nose"></div>
-          <div class="dm-mouth"></div>
-        </div>
-        <!-- 胡须（6根） -->
-        <div class="dm-whisker dm-w-l1"></div><div class="dm-whisker dm-w-l2"></div><div class="dm-whisker dm-w-l3"></div>
-        <div class="dm-whisker dm-w-r1"></div><div class="dm-whisker dm-w-r2"></div><div class="dm-whisker dm-w-r3"></div>
-        <!-- 项圈+铃铛 -->
-        <div class="dm-collar"></div>
-        <div class="dm-bell-sm">
-          <div class="dm-bell-line"></div>
-          <div class="dm-bell-dot"></div>
-        </div>
-      </div>
+      <img src="assets/Doraemon_character_head_close__2026-08-15T13-10-15.png" alt="哆啦A梦" class="dm-logo-img">
+    </div><span class="brand-bell" title="哆啦A梦铃铛"></span>
     </div><span class="brand-bell" title="哆啦A梦铃铛"></span>
     <div class="brand-txt">
       <h1>生图Agent <span class="brand-tag">BETA</span></h1>
@@ -557,6 +514,11 @@
 <div class="dm-cloud dm-c2"></div>
 <div class="dm-cloud dm-c3"></div>
 <div class="dm-grass"></div>
+
+<!-- 哆啦A梦全身装饰（参考图第2/3张的坐姿/跳跃姿态） -->
+<div class="dm-mascot" title="哆啦A梦">
+  <img src="assets/Cute_Doraemon_sitting_happily__2026-08-15T13-10-49.png" alt="哆啦A梦" class="dm-mascot-img">
+</div>
 
 <!-- 主题换肤面板 -->
 <div class="theme-panel" id="themePanel">
