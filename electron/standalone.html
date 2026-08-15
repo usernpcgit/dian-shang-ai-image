@@ -132,6 +132,10 @@
     nav.tabs.nav-enter,.tabs-ball,.tabs-ball.show{animation:none;transition:none}
     .tabs-ball.show{opacity:.95;transform:scale(1);pointer-events:auto}
   }
+  /* ===== 空闲降耗：闲置时暂停装饰动画并释放合成层，显著降低 GPU 占用（恢复交互即继续） ===== */
+  body.idle .orb{animation-play-state:paused !important;will-change:auto !important}
+  body.idle #skyLayer .spark,
+  body.idle .model-pill .dot{animation-play-state:paused !important}
   /* 拖动时用 left/width 改位置（rAF 节流防止掉帧，比 transform 稳定不出 bug） */
   nav.tabs .tab-indicator{position:absolute;top:5px;bottom:5px;left:0;width:0;background:rgba(124,58,237,.28);border:1px solid rgba(167,139,250,.55);border-radius:999px;box-shadow:0 2px 14px rgba(124,58,237,.30), inset 0 1px 2px rgba(167,139,250,.35);transition:left .65s cubic-bezier(0.34,1.56,0.64,1), width .65s cubic-bezier(0.34,1.56,0.64,1), background .32s, border-color .32s, box-shadow .32s;z-index:0;pointer-events:none;will-change:left,width;contain:layout paint}
   nav.tabs.dragging .tab-indicator{transition:none!important;background:rgba(124,58,237,.42);border-color:rgba(167,139,250,.85)}
@@ -1127,6 +1131,16 @@ try{ applyTheme((localStorage.getItem('wb_theme')||'auto')); }catch(e){}
 requestAnimationFrame(updateAllIndicators);
 window.addEventListener('load',updateAllIndicators);
 
+/* ===== 空闲降耗：6s 无交互则暂停装饰动画，降低 GPU 占用；页面隐藏也暂停 ===== */
+(function(){
+  const IDLE_MS=6000; let idleTimer=null;
+  const goIdle=()=>{ if(!document.body.classList.contains('idle')) document.body.classList.add('idle'); };
+  const wake=()=>{ document.body.classList.remove('idle'); if(idleTimer)clearTimeout(idleTimer); idleTimer=setTimeout(goIdle,IDLE_MS); };
+  ['mousemove','mousedown','keydown','click','scroll','wheel','touchstart','pointerdown','pointermove','resize'].forEach(ev=>window.addEventListener(ev,wake,{passive:true}));
+  document.addEventListener('visibilitychange',()=>{ if(document.hidden) goIdle(); else wake(); });
+  wake(); // 启动空闲倒计时
+})();
+
 /* ============ 详情页叠文案 ============ */
 const F={title:48,title_main:56,subtitle:30,body:28,tag:24};
 const PAD=64,TITLE_LH=64,SUB_LH=40,BODY_LH=40,TAG_H=40;
@@ -1983,6 +1997,17 @@ const ENDPOINT_KEY='wb_endpoint';
 function applyProviderUI(p){
   const desc=$('#providerDesc'),keyWrap=$('#keyWrap'),endpointWrap=$('#endpointWrap'),modelWrap=$('#modelWrap'),keyLabel=$('#keyLabel'),keyLink=$('#keyLink'),modelSel=$('#apiModel');
   desc.textContent=p.desc||'';
+  // 按 provider 分别记忆 key / endpoint（切换模型不再相互覆盖、无需重填）
+  try{
+    const kKey='wb_apikey_'+p.id;
+    let k=localStorage.getItem(kKey)||'';
+    if(!k){ const g=localStorage.getItem('wb_apikey'); if(g){k=g; try{localStorage.setItem(kKey,g);}catch(e){}} } // 兼容旧版全局 key
+    if($('#apiKey')) $('#apiKey').value=k;
+    const eKey='wb_endpoint_'+p.id;
+    let ep=localStorage.getItem(eKey)||'';
+    if(!ep){ const g=localStorage.getItem(ENDPOINT_KEY); if(g){ep=g; try{localStorage.setItem(eKey,g);}catch(e){}} }
+    if($('#apiEndpoint')) $('#apiEndpoint').value=ep;
+  }catch(e){}
   if(p.needsKey){
     keyWrap.style.display='';
     if(keyLabel){ keyLabel.textContent=p.id==='custom'?'鉴权 Token（可选）':'API Key（'+p.name+'）'; }
@@ -2028,7 +2053,7 @@ function loadProviders(){
       if(saved&&list.some(p=>p.id===saved))sel.value=saved;
       applyProviderUI(list.find(p=>p.id===sel.value)||list[0]);
     })
-    .catch(()=>{ /* 离线/无代理时给个最小兜底 */ sel.innerHTML='<option value="redfox">redfox.hk（gpt-image-2 转发）</option>'; });
+    .catch(()=>{ const fb=[{id:'redfox',name:'redfox.hk（gpt-image-2 转发）',needsKey:true,desc:'redfox.hk 转发 gpt-image-2',getKey:'https://redfox.hk/settings/api-keys?source=skillhub'}]; sel.innerHTML=''; fb.forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=p.name;sel.appendChild(o);}); applyProviderUI(fb[0]); });
 }
 const PROVIDERS_LOCAL=[
   {id:'pollinations',name:'Pollinations（免 Key 免费）',needsKey:false,desc:'完全免费、免注册、免 Key，直接出图。适合快速试效果；仅文生图，图生图能力弱，且不稳定（无 SLA）。',getKey:''},
@@ -2054,14 +2079,12 @@ const PROVIDERS_LOCAL=[
 ];
 $('#apiProvider').onchange=e=>{const p=PROVIDERS_LOCAL.find(x=>x.id===e.target.value)||PROVIDERS_LOCAL[0];try{localStorage.setItem(PROVIDER_KEY,e.target.value);}catch(x){}applyProviderUI(p);saveModel();};
 try{$('#apiModel').onchange=saveModel;}catch(e){}
-$('#apiEndpoint').oninput=e=>{try{localStorage.setItem(ENDPOINT_KEY,e.target.value.trim());}catch(x){}};
-/* API Key 记忆 */
-try{const k=localStorage.getItem('wb_apikey');if(k)$('#apiKey').value=k;}catch(e){}
-$('#apiKey').oninput=e=>{try{localStorage.setItem('wb_apikey',e.target.value.trim());}catch(x){}};
+$('#apiEndpoint').oninput=e=>{try{localStorage.setItem('wb_endpoint_'+$('#apiProvider').value,e.target.value.trim());}catch(x){}};
+/* API Key 记忆（按 provider 分别保存，切换不再重填） */
+$('#apiKey').oninput=e=>{try{localStorage.setItem('wb_apikey_'+$('#apiProvider').value,e.target.value.trim());}catch(x){}};
 /* 智谱 Key 记忆（离线版用于竞品分析 / 提示词） */
 try{const zk=localStorage.getItem('wb_zhitu_key');if(zk)$('#zhituKey').value=zk;}catch(e){}
 $('#zhituKey').oninput=e=>{try{localStorage.setItem('wb_zhitu_key',e.target.value.trim());}catch(x){}};
-try{const ep=localStorage.getItem(ENDPOINT_KEY);if(ep)$('#apiEndpoint').value=ep;}catch(e){}
 loadProviders();
 rebuildPreviewStack();refreshDetail();showProductPreview();
 setPreviewMode(GEN_MODE);   // 初始化预览模式（默认单张）
