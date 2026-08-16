@@ -63,19 +63,17 @@
   #skyLayer::after{content:"";position:absolute;inset:-20%;
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
     opacity:.05;mix-blend-mode:overlay;pointer-events:none}
-  /* 仅一团缓慢漂移的柔光，替代原先 4 团 blur(55px) 全屏光球，显著降 GPU */
-  .orb{position:absolute;border-radius:50%;filter:blur(34px);opacity:.38;will-change:transform,opacity;
-       background:radial-gradient(circle at 50% 50%, rgba(var(--brand2-rgb),.55) 0%, rgba(var(--brand-rgb),0) 68%);
-       animation:glowDrift 54s ease-in-out infinite}
+  /* 仅一团静态柔光（无模糊/无动画），替代原先 4 团 blur(55px) 全屏光球，极致省 GPU */
+  .orb{position:absolute;border-radius:50%;opacity:.40;
+       background:radial-gradient(circle at 50% 50%, rgba(var(--brand2-rgb),.42) 0%, rgba(var(--brand-rgb),0) 70%)}
   .orb.glow{width:54vw;height:54vw;left:6vw;top:-16vw}
-  @keyframes glowDrift{0%,100%{transform:translate3d(0,0,0) scale(1);opacity:.30}50%{transform:translate3d(10vw,9vh,0) scale(1.12);opacity:.46}}
   /* 夜间：极淡静态星点（无动画，避免逐帧重绘） */
   .spark{position:absolute;width:2px;height:2px;border-radius:50%;background:var(--brand2);opacity:0;box-shadow:0 0 5px rgba(167,243,208,.5)}
   body.night #skyLayer .spark{opacity:.35}
   /* ===== 竹蜻蜓装饰（哆啦A梦道具，右上角浮动）v2 ===== */
   .take-copter{position:fixed;top:14px;right:200px;z-index:100;pointer-events:none;opacity:.6;filter:drop-shadow(0 3px 6px rgba(0,80,160,.18));animation:copterFloat 5s ease-in-out infinite}
   body.night .take-copter{opacity:.3}
-  .tc-rotor{width:46px;height:46px;position:relative;animation:copterSpin .45s linear infinite}
+  .tc-rotor{width:46px;height:46px;position:relative;animation:copterSpin 2.4s linear infinite}
   .tc-blade{position:absolute;width:100%;height:100%;left:0;top:0}
   .tc-blade::before,.tc-blade::after{content:'';position:absolute;left:50%;top:50%;width:22px;height:7px;background:linear-gradient(90deg,#FFD500,#FFA000);border-radius:3.5px;transform-origin:center}
   .tc-blade::before{transform:translate(-50%,-50%) rotate(0deg)}
@@ -138,7 +136,7 @@
   /* iOS 26 风格阻尼弹簧：先过冲、轻微回摆、再稳落，制造夸张 q 弹（仅 transform/opacity，GPU 合成零重排） */
   @keyframes navCollapseSpring{0%{transform:scale(1);opacity:1}35%{transform:scale(.6);opacity:.8}58%{transform:scale(0);opacity:0}100%{transform:scale(0);opacity:0}}
   @keyframes ballSpringIn{0%{transform:scale(.2);opacity:0}48%{transform:scale(1.32);opacity:1}68%{transform:scale(.88);opacity:.94}84%{transform:scale(1.08);opacity:.95}100%{transform:scale(1);opacity:.95}}
-  nav.tabs{position:sticky;top:90px;margin:14px auto 100px;display:flex;gap:2px;width:calc(100% - 32px);max-width:560px;padding:6px 10px;flex-wrap:nowrap;background:linear-gradient(135deg,rgba(255,255,255,.82),rgba(255,255,255,.65)),linear-gradient(135deg,rgba(var(--brand-rgb),.12),rgba(var(--brand-rgb),.05));border:1px solid rgba(var(--brand-rgb),.28);border-radius:999px;box-shadow:0 4px 16px rgba(0,80,160,.10),0 1px 3px rgba(0,60,120,.06),inset 0 1px 0 rgba(255,255,255,.7);z-index:49;-webkit-tap-highlight-color:transparent;position:relative;backdrop-filter:saturate(180%) blur(8px)}
+  nav.tabs{position:sticky;top:90px;margin:14px auto 100px;display:flex;gap:2px;width:calc(100% - 32px);max-width:560px;padding:6px 10px;flex-wrap:nowrap;background:linear-gradient(135deg,rgba(255,255,255,.95),rgba(255,255,255,.9));border:1px solid rgba(var(--brand-rgb),.28);border-radius:999px;box-shadow:0 4px 16px rgba(0,80,160,.10),0 1px 3px rgba(0,60,120,.06),inset 0 1px 0 rgba(255,255,255,.7);z-index:49;-webkit-tap-highlight-color:transparent;position:relative}
   /* Tab栏左上角小铃铛装饰（哆啦A梦，不占用tab空间） */
   nav.tabs::before{content:'';position:absolute;left:-4px;top:-6px;width:18px;height:17px;background:linear-gradient(180deg,#FFE066,#FFD500);border-radius:4px 4px 6px 6px;border:1.2px solid rgba(200,160,0,.4);z-index:3;pointer-events:none;box-shadow:0 2px 5px rgba(200,140,0,.3)}
   /* 铃铛内部红线+圆点 */
@@ -203,6 +201,10 @@
   body.idle .dm-cloud,
   body.idle .take-copter,
   body.idle .dm-mascot{animation-play-state:paused !important}
+  /* 系统开启"减少动态效果"时，彻底关闭装饰动画（无障碍 + 极致省 GPU） */
+  @media (prefers-reduced-motion: reduce){
+    .orb,.spark,.dm-cloud,.take-copter,.dm-mascot,.model-pill .dot,.tc-rotor{animation:none !important}
+  }
   /* 拖动时用 left/width 改位置（rAF 节流防止掉帧，比 transform 稳定不出 bug） */
   nav.tabs .tab-indicator{position:absolute;top:5px;bottom:5px;left:0;width:0;background:linear-gradient(135deg,rgba(var(--brand-rgb),.35),rgba(var(--brand2-rgb),.25));border:1px solid rgba(var(--brand-rgb),.50);border-radius:999px;box-shadow:0 2px 10px rgba(var(--brand-rgb),.20), inset 0 1px 2px rgba(255,255,255,.4);transition:left .65s cubic-bezier(0.34,1.56,0.64,1), width .65s cubic-bezier(0.34,1.56,0.64,1), background .32s, border-color .32s, box-shadow .32s;z-index:0;pointer-events:none;will-change:left,width;contain:layout paint}
   nav.tabs.dragging .tab-indicator{transition:none!important;background:rgba(var(--brand-rgb),.42);border-color:rgba(var(--brand2-rgb),.85)}
@@ -255,7 +257,7 @@
   /* 视图 */
   .view{display:none;max-width:1080px;margin:0 auto;padding:22px 20px 60px}
   .view.active{display:block}
-  .card{background:rgba(255,255,255,.78);border:1px solid rgba(var(--brand-rgb),.12);border-radius:16px;padding:20px;margin-bottom:18px;box-shadow:0 4px 20px rgba(14,42,71,.06),0 1px 0 rgba(0,150,214,.04);backdrop-filter:saturate(120%) blur(.5px);position:relative}
+  .card{background:rgba(255,255,255,.78);border:1px solid rgba(var(--brand-rgb),.12);border-radius:16px;padding:20px;margin-bottom:18px;box-shadow:0 4px 20px rgba(14,42,71,.06),0 1px 0 rgba(0,150,214,.04);position:relative}
   /* 卡片左上角小铃铛装饰 */
   .card::before{content:'';position:absolute;top:-1px;left:16px;width:6px;height:6px;background:var(--bell);border-radius:50%;opacity:.35}
   .card h3{margin:0 0 6px;font-size:17px;font-weight:800}
@@ -1354,7 +1356,7 @@ try{
 }catch(e){}
 function buildSky(){
   if(!SKY) return;
-  // 单团极轻量柔光（CSS glowDrift 缓慢漂移，GPU 友好）
+  // 单团极轻量静态柔光（纯 radial-gradient，无模糊无动画，GPU 友好）
   const o=document.createElement('div'); o.className='orb glow'; SKY.appendChild(o);
   // 夜间极淡静态星点（纯装饰，无动画）
   for(let i=0;i<34;i++){
@@ -1374,11 +1376,14 @@ window.addEventListener('load',updateAllIndicators);
 
 /* ===== 空闲降耗：6s 无交互则暂停装饰动画，降低 GPU 占用；页面隐藏也暂停 ===== */
 (function(){
-  const IDLE_MS=6000; let idleTimer=null;
+  const IDLE_MS=3000; let idleTimer=null;
   const goIdle=()=>{ if(!document.body.classList.contains('idle')) document.body.classList.add('idle'); };
   const wake=()=>{ document.body.classList.remove('idle'); if(idleTimer)clearTimeout(idleTimer); idleTimer=setTimeout(goIdle,IDLE_MS); };
   ['mousemove','mousedown','keydown','click','scroll','wheel','touchstart','pointerdown','pointermove','resize'].forEach(ev=>window.addEventListener(ev,wake,{passive:true}));
   document.addEventListener('visibilitychange',()=>{ if(document.hidden) goIdle(); else wake(); });
+  // 窗口失焦（切到别的 App）立即暂停装饰动画，省 GPU
+  window.addEventListener('blur',goIdle);
+  window.addEventListener('focus',wake);
   wake(); // 启动空闲倒计时
 })();
 
