@@ -1,6 +1,6 @@
 {
   "name": "dianshang-ai-image",
-  "version": "0.2.33",
+  "version": "0.2.34",
   "description": "生图Agent桌面端（离线真买断版：前端 + 本地代理全打包，买家自配 Key，零服务端依赖）",
   "main": "main.js",
   "author": "usernpcgit",
